@@ -59,10 +59,10 @@
                     "valve_position_sensor": "Valve Position (Optional)",
                     "max_preheat_hours": "Max Preheat Duration (Hours)"
                 }
-            },
-            "error": {
-                "invalid_time_format": "Invalid time format (must be HH:MM:SS)"
             }
+        },
+        "error": {
+            "invalid_time_format": "Invalid time format (must be HH:MM:SS)"
         }
     },
     "selector": {

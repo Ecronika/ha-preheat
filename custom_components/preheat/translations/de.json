@@ -59,10 +59,10 @@
           "valve_position_sensor": "Ventil-Position (Optional)",
           "max_preheat_hours": "Max. Vorheizdauer (Stunden)"
         }
-      },
-      "error": {
-        "invalid_time_format": "Ungültiges Zeitformat (muss HH:MM:SS sein)"
       }
+    },
+    "error": {
+      "invalid_time_format": "Ungültiges Zeitformat (muss HH:MM:SS sein)"
     }
   },
   "selector": {
