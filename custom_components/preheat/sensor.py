@@ -80,6 +80,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "sample_count": physics.sample_count,
             "window_open": data.window_open,
             "learned_setpoint": data.last_comfort_setpoint,
+            "deadtime_min": round(data.deadtime, 1),
         }
 
 class NextEventSensor(PreheatBaseSensor):
