@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.2.1)
+# Intelligent Preheating for Home Assistant (v2.2.2)
 
 A smart, learning-based preheating controller that ensures your room is at the target temperature exactly when you arrive.
 

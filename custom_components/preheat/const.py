@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION: Final = "2.2.1"
+VERSION: Final = "2.2.2"
 
 # Technical Constants
 INVALID_TEMP: Final = -273.15

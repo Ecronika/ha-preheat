@@ -48,6 +48,10 @@ from .const import (
     CONF_ARRIVAL_WINDOW_START,
     CONF_ARRIVAL_WINDOW_END,
     CONF_VALVE_POSITION,
+    CONF_COMFORT_MIN,
+    CONF_COMFORT_FALLBACK,
+    DEFAULT_COMFORT_MIN,
+    DEFAULT_COMFORT_FALLBACK,
     # CONF_DISABLE_SCHOOL,
     # CONF_SCHOOL_KEYWORD,
     PRESETS,
@@ -88,6 +92,7 @@ class PreheatData:
     valve_signal: float | None = None
     window_open: bool = False
     outdoor_temp: float | None = None
+    last_comfort_setpoint: float | None = None
 
 class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     """Coordinator to manage preheating logic."""
@@ -378,12 +383,36 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             return self._last_comfort_setpoint
         # Fallback to Climate attribute
         climate = self._get_conf(CONF_CLIMATE)
+        climate_temp = None
         if climate:
              state = self.hass.states.get(climate)
              if state and state.attributes.get("temperature"):
-                 try: return float(state.attributes["temperature"])
+                 try: 
+                     climate_temp = float(state.attributes["temperature"])
                  except ValueError: pass
-        return 22.0 # Last resort
+        
+        # Valid Logic:
+        # 1. If we have a learned "Confidence" value (Last Comfort), prefer that over a "Too Low" climate value.
+        # 2. If Climate value is likely "Eco/Night" (below Comfort Min), ignore it and use Fallback/Learned.
+        
+        comfort_min = self._get_conf(CONF_COMFORT_MIN, DEFAULT_COMFORT_MIN)
+        
+        # If Climate is valid and "Warm enough" to be a Comfort Temp, use it (Highest Priority for dynamic changes)
+        if climate_temp and climate_temp >= comfort_min:
+            return climate_temp
+
+        # If Climate is "Cold" (Eco), try stored learned value
+        if self._last_comfort_setpoint is not None:
+             return self._last_comfort_setpoint
+             
+        # If no learned value, try Fallback Config
+        fallback = self._get_conf(CONF_COMFORT_FALLBACK, DEFAULT_COMFORT_FALLBACK)
+        
+        # If Climate is available (even if low), but we have no other clue... 
+        # Should we use Climate (17) or Fallback (22)?
+        # USAGE: If I am Absent, Climate is 17. I want preheat to 22. 
+        # So Fallback (22) is better than Climate (17).
+        return fallback
 
     def _track_temperature_gradient(self, current_temp: float, now: datetime) -> None:
         """Track gradient and detect open windows."""
@@ -534,7 +563,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 schedule_summary=self.planner.get_schedule_summary(),
                 valve_signal=self._get_valve_position(),
                 window_open=self._window_open_detected,
-                outdoor_temp=outdoor_temp
+                outdoor_temp=outdoor_temp,
+                last_comfort_setpoint=self._last_comfort_setpoint
             )
 
         except Exception as err:

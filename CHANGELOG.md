@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.2.2
+
+- **Improvement:** Smarter Setpoint Logic: Ignores thermostat values below `comfort_min_temp` (default 19°C) and uses `comfort_fallback` or learned values instead. Fixes "cold start" issues where Eco mode was mistaken for the target.
+
+
 ## v2.2.1
 
 - **Fix:** HACS validation compliance (moved strings, added recorder dependency).

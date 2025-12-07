@@ -79,6 +79,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "avg_error": round(physics.avg_error, 2),
             "sample_count": physics.sample_count,
             "window_open": data.window_open,
+            "learned_setpoint": data.last_comfort_setpoint,
         }
 
 class NextEventSensor(PreheatBaseSensor):
