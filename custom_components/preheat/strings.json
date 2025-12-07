@@ -59,71 +59,70 @@
           "valve_position_sensor": "Valve Position (Optional)",
           "max_preheat_hours": "Max Preheat Duration (Hours)"
         }
+      }
+    },
+    "error": {
+      "invalid_time_format": "Invalid time format (must be HH:MM:SS)"
+    }
+  },
+  "selector": {
+    "preset_mode": {
+      "options": {
+        "aggressive": "Aggressive (Early & Safe)",
+        "balanced": "Balanced (Recommended)",
+        "conservative": "Eco (Late & Efficient)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Idle",
+          "preheating": "Preheating"
+        }
       },
-    }
-  },
-  "error": {
-    "invalid_time_format": "Invalid time format (must be HH:MM:SS)"
-  }
-},
-"selector": {
-  "preset_mode": {
-    "options": {
-      "aggressive": "Aggressive (Early & Safe)",
-      "balanced": "Balanced (Recommended)",
-      "conservative": "Eco (Late & Efficient)"
-    }
-  }
-},
-"entity": {
-  "sensor": {
-    "status": {
-      "name": "Status",
-      "state": {
-        "idle": "Idle",
-        "preheating": "Preheating"
+      "next_event": {
+        "name": "Next Event"
+      },
+      "model_status": {
+        "name": "Model Status",
+        "state": {
+          "ready": "Ready",
+          "learning": "Learning Active"
+        }
+      },
+      "mass_factor": {
+        "name": "Thermal Mass"
+      },
+      "loss_factor": {
+        "name": "Thermal Loss"
+      },
+      "confidence": {
+        "name": "Learning Confidence"
       }
     },
-    "next_event": {
-      "name": "Next Event"
-    },
-    "model_status": {
-      "name": "Model Status",
-      "state": {
-        "ready": "Ready",
-        "learning": "Learning Active"
+    "button": {
+      "reset_gain": {
+        "name": "Reset Thermal Model"
+      },
+      "reset_schedule": {
+        "name": "Reset Schedule"
+      },
+      "analyze_history": {
+        "name": "Analyze History"
       }
-    },
-    "mass_factor": {
-      "name": "Thermal Mass"
-    },
-    "loss_factor": {
-      "name": "Thermal Loss"
-    },
-    "confidence": {
-      "name": "Learning Confidence"
     }
   },
-  "button": {
-    "reset_gain": {
-      "name": "Reset Thermal Model"
+  "issues": {
+    "missing_entity": {
+      "title": "Missing entity in {name}",
+      "description": "The entity `{entity}` configured in zone {name} is unavailable or missing. Please check configuration or the sensor."
     },
-    "reset_schedule": {
-      "name": "Reset Schedule"
-    },
-    "analyze_history": {
-      "name": "Analyze History"
+    "data_migrated": {
+      "title": "Migration completed for {name}",
+      "description": "Historical data from v1 was converted. Precision may be reduced initially. Use 'Analyze History' button to rebuild from recorder data for better accuracy."
     }
   }
-},
-"issues": {
-  "missing_entity": {
-    "title": "Missing entity in {name}",
-    "description": "The entity `{entity}` configured in zone {name} is unavailable or missing. Please check configuration or the sensor."
-  },
-  "data_migrated": {
-    "title": "Migration completed for {name}",
-    "description": "Historical data from v1 was converted. Precision may be reduced initially. Use 'Analyze History' button to rebuild from recorder data for better accuracy."
-  }
-}
 }
