@@ -14,6 +14,7 @@
                     "weather_entity": "Weather Forecast (for Prediction)",
                     "workday_sensor": "Workday Sensor (Optional)",
                     "preset_mode": "Operation Mode",
+                    "heating_profile": "Heating System Profile",
                     "valve_position_sensor": "Valve Position (for precise learning)"
                 }
             }
@@ -35,6 +36,7 @@
                 "description": "Default settings are usually sufficient. Enable expert mode for fine-tuning.",
                 "data": {
                     "preset_mode": "Operation Mode",
+                    "heating_profile": "Heating System Profile",
                     "expert_mode": "Show Expert Settings",
                     "occupancy_sensor": "Occupancy Sensor",
                     "temperature_sensor": "Room Temperature",
@@ -71,6 +73,15 @@
                 "aggressive": "Aggressive (Early & Safe)",
                 "balanced": "Balanced (Recommended)",
                 "conservative": "Eco (Late & Efficient)"
+            }
+        },
+        "heating_profile": {
+            "options": {
+                "infrared_air": "Infrared / Air (Fast)",
+                "radiator_new": "Radiator (Modern)",
+                "radiator_old": "Radiator (Old / Cast Iron)",
+                "floor_dry": "Floor Heating (Dry / Light)",
+                "floor_concrete": "Floor Heating (Concrete / Massive)"
             }
         }
     },

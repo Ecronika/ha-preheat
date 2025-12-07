@@ -24,9 +24,14 @@ from .const import (
     CONF_PRESET_MODE,
     CONF_EXPERT_MODE,
     CONF_VALVE_POSITION,
+    CONF_HEATING_PROFILE,
+    HEATING_PROFILES,
+    PROFILE_RADIATOR_NEW,
+    # Presets
     PRESET_BALANCED,
     PRESET_AGGRESSIVE,
     PRESET_CONSERVATIVE,
+    # Keys
     CONF_EMA_ALPHA,
     CONF_BUFFER_MIN,
     CONF_INITIAL_GAIN,
@@ -36,6 +41,7 @@ from .const import (
     CONF_ARRIVAL_WINDOW_END,
     CONF_AIR_TO_OPER_BIAS,
     CONF_EARLIEST_START,
+    # Defaults
     DEFAULT_EMA_ALPHA,
     DEFAULT_BUFFER_MIN,
     DEFAULT_INITIAL_GAIN,
@@ -60,6 +66,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
+             # V3: Profile defines defaults. We just save the selection.
              return self.async_create_entry(
                 title=user_input[CONF_NAME],
                 data={},
@@ -70,6 +77,12 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             )
 
+        # Build Profile Options
+        profile_options = [
+            {"value": k, "label": v["name"]} 
+            for k,v in HEATING_PROFILES.items()
+        ]
+
         data_schema = vol.Schema({
             vol.Required(CONF_NAME, default="Office"): str,
             vol.Required(CONF_OCCUPANCY): selector.EntitySelector(
@@ -78,9 +91,16 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_TEMPERATURE): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["sensor", "input_number"])
             ),
-            # Optional basics
+            # Climate is now strongly encouraged as it replaces Setpoint Sensor
             vol.Optional(CONF_CLIMATE): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate")
+            ),
+            vol.Required(CONF_HEATING_PROFILE, default=PROFILE_RADIATOR_NEW): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=profile_options,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    translation_key="heating_profile" # Ensure we add this to strings.json
+                )
             ),
              vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
                 selector.SelectSelectorConfig(
@@ -137,13 +157,27 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(step_id="init", data_schema=self._build_schema(show_expert=is_expert), errors=errors)
 
     def _build_schema(self, show_expert: bool) -> vol.Schema:
+        # Build Profile Options
+        profile_options = [
+            {"value": k, "label": v["name"]} 
+            for k,v in HEATING_PROFILES.items()
+        ]
+
         schema = {
             vol.Optional(CONF_OCCUPANCY): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
             vol.Optional(CONF_TEMPERATURE): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "input_number"])),
             vol.Optional(CONF_CLIMATE): selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
-            vol.Optional(CONF_SETPOINT): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "input_number"])),
+            # Removed: Setpoint Sensor
             vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
             
+            vol.Required(CONF_HEATING_PROFILE, default=PROFILE_RADIATOR_NEW): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=profile_options,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    translation_key="heating_profile"
+                )
+            ),
+
             vol.Optional(CONF_PRESET_MODE): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
@@ -160,14 +194,12 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         if show_expert:
             schema.update({
                 vol.Optional(CONF_VALVE_POSITION): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain=["sensor", "input_number"]) # Valve is usually a sensor?
+                    selector.EntitySelectorConfig(domain=["sensor", "input_number"]) 
                 ),
                 vol.Optional(CONF_LOCK): selector.EntitySelector(selector.EntitySelectorConfig(domain="input_boolean")),
                 vol.Optional(CONF_WORKDAY): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
                 
-                vol.Optional(CONF_INITIAL_GAIN): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1.0, max=60.0, step=0.5, unit_of_measurement="min/K", mode="box")
-                ),
+                # Removed: Initial Gain
                 vol.Optional(CONF_EMA_ALPHA): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.05, mode="slider")
                 ),
@@ -185,9 +217,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_AIR_TO_OPER_BIAS): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=-5.0, max=5.0, step=0.5, unit_of_measurement="K", mode="box")
                 ),
-                vol.Optional(CONF_EARLIEST_START): selector.NumberSelector(
-                     selector.NumberSelectorConfig(min=60, max=480, step=15, unit_of_measurement="min", mode="box")
-                ),
+                # Removed: Earliest Start (Redundant with Max Duration)
                 vol.Optional(CONF_COMFORT_MIN): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="°C", mode="box")
                 ),

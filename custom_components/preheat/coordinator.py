@@ -54,8 +54,8 @@ from .const import (
     DEFAULT_COMFORT_FALLBACK,
     # CONF_DISABLE_SCHOOL,
     # CONF_SCHOOL_KEYWORD,
-    PRESETS,
-    PRESET_BALANCED,
+    # PRESETS, # Replaced by Profiles logic in _get_conf
+    # PRESET_BALANCED,
     DEFAULT_ARRIVAL_WINDOW_START,
     DEFAULT_ARRIVAL_WINDOW_END,
     CONF_STORE_DEADBAND,
@@ -64,14 +64,19 @@ from .const import (
     ATTR_MODEL_MASS,
     ATTR_MODEL_LOSS,
     ATTR_ARRIVAL_HISTORY,
+    # V3
+    CONF_HEATING_PROFILE,
+    HEATING_PROFILES,
+    PROFILE_RADIATOR_NEW,
 )
 
 from .planner import PreheatPlanner
 from .physics import ThermalPhysics, ThermalModelData
+from .history_buffer import RingBuffer, DeadtimeAnalyzer, HistoryPoint
 
 _LOGGER = logging.getLogger(__name__)
 
-STORAGE_VERSION = 4 # Incremented for v2 data structure
+STORAGE_VERSION = 4 
 STORAGE_KEY_TEMPLATE = "preheat.{}"
 
 @dataclass(frozen=True)
@@ -93,6 +98,7 @@ class PreheatData:
     window_open: bool = False
     outdoor_temp: float | None = None
     last_comfort_setpoint: float | None = None
+    deadtime: float = 0.0 # V3
 
 class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     """Coordinator to manage preheating logic."""
@@ -112,6 +118,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # Core Modules
         self.planner = PreheatPlanner()
+        # V3: Init Buffer and Analyzer
+        self.history_buffer = RingBuffer(capacity=360) # 6 hours
+        self.deadtime_analyzer = DeadtimeAnalyzer()
+        
+        # Init Physics with minimal default until loaded
         self.physics = ThermalPhysics()
         
         # State
@@ -139,17 +150,26 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         return self._window_open_detected
 
     def _get_conf(self, key: str, default: Any = None) -> Any:
-        """Get config value from options, falling back to presets or data."""
+        """Get config value from options, falling back to Profile > defaults."""
         options = self.entry.options
-        is_expert = options.get(CONF_EXPERT_MODE, False)
         
-        if not is_expert:
-            preset_name = options.get(CONF_PRESET_MODE, PRESET_BALANCED)
-            preset_values = PRESETS.get(preset_name, PRESETS[PRESET_BALANCED])
-            if key in preset_values:
-                return preset_values[key]
+        # 1. Direct Options (Expert Overrides or Configured values)
+        if key in options:
+             return options[key]
+        if key in self.entry.data:
+             return self.entry.data[key]
+             
+        # 2. Heating Profile Defaults
+        profile_key = options.get(CONF_HEATING_PROFILE, self.entry.data.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW))
+        profile = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
         
-        return options.get(key, self.entry.data.get(key, default))
+        if key == CONF_BUFFER_MIN and "buffer" in profile:
+             return profile["buffer"]
+        if key == CONF_MAX_PREHEAT_HOURS and "max_duration" in profile:
+             return profile["max_duration"]
+             
+        # 3. Fallback to code defaults
+        return default
 
     async def async_load_data(self) -> None:
         """Load learned data from storage."""
@@ -208,20 +228,24 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 mass = data.get(ATTR_MODEL_MASS, mass_factor if mass_factor is not None else data.get(ATTR_LEARNED_GAIN)) # Fallback
                 # If we fallback to Gain, mass roughly equals Gain. Loss depends on defaults.
                 
+                # Get Configured Parameters
+                profile_key = self._get_conf(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
+                profile_data = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
+                mass = data.get(ATTR_MODEL_MASS, mass_factor if mass_factor is not None else profile_data["default_mass"])
+
                 p_data = ThermalModelData(
                     mass_factor=mass,
                     loss_factor=data.get(ATTR_MODEL_LOSS, 5.0), # Default
                     sample_count=data.get(ATTR_SAMPLE_COUNT, 0),
-                    avg_error=data.get("avg_error", 0.0)
+                    avg_error=data.get("avg_error", 0.0),
+                    deadtime=data.get("deadtime", 0.0)
                 ) if mass is not None or ATTR_MODEL_LOSS in data else None
                 
-                # Get Configured Parameters
-                initial_gain = self._get_conf(CONF_INITIAL_GAIN, 10.0) # Assuming DEFAULT_INITIAL_GAIN is 10.0
-                learning_rate = self._get_conf(CONF_EMA_ALPHA, 0.1) # KEY: Use Constant!
+                learning_rate = self._get_conf(CONF_EMA_ALPHA, 0.1)
                 
                 self.physics = ThermalPhysics(
                     data=p_data,
-                    initial_mass=initial_gain,
+                    profile_data=profile_data,
                     learning_rate=learning_rate
                 )
                 
@@ -373,15 +397,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             return INVALID_TEMP
 
     async def _get_target_setpoint(self) -> float:
-        setpoint_sensor = self._get_conf(CONF_SETPOINT)
-        if setpoint_sensor:
-            state = self.hass.states.get(setpoint_sensor)
-            if state and state.state not in ("unknown", "unavailable"):
-                try: return float(state.state)
-                except ValueError: pass
-        if self._last_comfort_setpoint is not None:
-            return self._last_comfort_setpoint
-        # Fallback to Climate attribute
+        # V3: Removed dedicated Setpoint Sensor.
+        # Primary Source: Climate Entity Attributes or User Overrides (via Service?)
+        # For now, we rely on Climate Entity or Fallback.
+        
+        # 1. Learned Comfort Temp (Highest Priority for precision if validated?)
+        # Actually logic V2 was: Climate > Learned > Fallback.
+        # But if Climate is in Eco (17C), we don't want to target 17C? We want to target Comfort (21C).
+        # So: If Climate >= ComfortMin -> Use Climate.
+        # If Climate < ComfortMin -> Use Learned/Fallback.
+        
+        # Check Climate
         climate = self._get_conf(CONF_CLIMATE)
         climate_temp = None
         if climate:
@@ -390,16 +416,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  try: 
                      climate_temp = float(state.attributes["temperature"])
                  except ValueError: pass
-        
-        # Valid Logic:
-        # 1. If we have a learned "Confidence" value (Last Comfort), prefer that over a "Too Low" climate value.
-        # 2. If Climate value is likely "Eco/Night" (below Comfort Min), ignore it and use Fallback/Learned.
-        
+
         comfort_min = self._get_conf(CONF_COMFORT_MIN, DEFAULT_COMFORT_MIN)
         
-        # If Climate is valid and "Warm enough" to be a Comfort Temp, use it (Highest Priority for dynamic changes)
         if climate_temp and climate_temp >= comfort_min:
             return climate_temp
+
+        if self._last_comfort_setpoint is not None:
+             return self._last_comfort_setpoint
+             
+        fallback = self._get_conf(CONF_COMFORT_FALLBACK, DEFAULT_COMFORT_FALLBACK)
+        return fallback
 
         # If Climate is "Cold" (Eco), try stored learned value
         if self._last_comfort_setpoint is not None:
@@ -453,6 +480,20 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             await self._check_entity_availability(self._get_conf(CONF_TEMPERATURE), "temperature")
             
             now = dt_util.now()
+            
+            # Feed History Buffer (V3)
+            op_temp_raw = await self._get_operative_temperature()
+            valve_pos_raw = self._get_valve_position()
+            
+            if op_temp_raw > INVALID_TEMP:
+                 v_val = valve_pos_raw if valve_pos_raw is not None else (100.0 if self._preheat_active else 0.0)
+                 self.history_buffer.append(HistoryPoint(
+                     timestamp=now.timestamp(), 
+                     temp=op_temp_raw, 
+                     valve=v_val, 
+                     is_active=self._preheat_active
+                 ))
+
             is_holiday = False
             workday = self._get_conf(CONF_WORKDAY)
             if workday:
@@ -462,7 +503,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             next_event = self.planner.get_next_scheduled_event(now, is_holiday)
             
             # 2. Calculate Physics
-            operative_temp = await self._get_operative_temperature()
+            operative_temp = op_temp_raw # Reuse
             
             # Update Gradient / Window Detection (approx every 5 min)
             if operative_temp > INVALID_TEMP:
@@ -564,7 +605,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 valve_signal=self._get_valve_position(),
                 window_open=self._window_open_detected,
                 outdoor_temp=outdoor_temp,
-                last_comfort_setpoint=self._last_comfort_setpoint
+                last_comfort_setpoint=self._last_comfort_setpoint,
+                deadtime=self.physics.deadtime
             )
 
         except Exception as err:
@@ -596,6 +638,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 
                 # Valve Sensor
                 valve_pos = self._get_valve_position()
+                
+                # V3: Analyze Deadtime
+                new_deadtime = self.deadtime_analyzer.analyze(self.history_buffer.get_all())
+                if new_deadtime:
+                     self.physics.update_deadtime(new_deadtime)
+                     _LOGGER.info("Deadtime Updated: %.1f min", self.physics.deadtime)
                 
                 success = self.physics.update_model(duration, delta_in, delta_out, valve_pos)
                 if success:

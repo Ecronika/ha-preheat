@@ -2,7 +2,64 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION: Final = "2.2.2"
+VERSION: Final = "2.3.0-beta1"
+
+# --- Heating Profiles (V3) ---
+CONF_HEATING_PROFILE: Final = "heating_profile"
+
+PROFILE_IR: Final = "infrared_air"
+PROFILE_RADIATOR_NEW: Final = "radiator_new"
+PROFILE_RADIATOR_OLD: Final = "radiator_old"
+PROFILE_FLOOR_DRY: Final = "floor_dry"
+PROFILE_FLOOR_CONCRETE: Final = "floor_concrete"
+
+HEATING_PROFILES: Final = {
+    PROFILE_IR: {
+        "name": "Infrared / Air",
+        "deadtime": 5,          # Minutes
+        "mass_factor_min": 5,   # min/K
+        "mass_factor_max": 20,  # min/K
+        "default_mass": 10,
+        "max_duration": 1.5,    # Hours
+        "buffer": 5             # Minutes
+    },
+    PROFILE_RADIATOR_NEW: {
+        "name": "Radiators (Modern)",
+        "deadtime": 15,
+        "mass_factor_min": 10,
+        "mass_factor_max": 40,
+        "default_mass": 20,
+        "max_duration": 2.5,
+        "buffer": 10
+    },
+    PROFILE_RADIATOR_OLD: {
+        "name": "Radiators (Old/Cast Iron)",
+        "deadtime": 30,
+        "mass_factor_min": 20,
+        "mass_factor_max": 60,
+        "default_mass": 30,
+        "max_duration": 3.0,
+        "buffer": 15
+    },
+    PROFILE_FLOOR_DRY: {
+        "name": "Floor Heating (Dry/Light)",
+        "deadtime": 45,
+        "mass_factor_min": 30,
+        "mass_factor_max": 90,
+        "default_mass": 50,
+        "max_duration": 4.0,
+        "buffer": 20
+    },
+    PROFILE_FLOOR_CONCRETE: {
+        "name": "Floor Heating (Concrete/Screed)",
+        "deadtime": 120,
+        "mass_factor_min": 60,
+        "mass_factor_max": 240, 
+        "default_mass": 100,
+        "max_duration": 8.0,
+        "buffer": 30
+    }
+}
 
 # Technical Constants
 INVALID_TEMP: Final = -273.15

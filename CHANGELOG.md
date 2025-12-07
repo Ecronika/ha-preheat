@@ -1,4 +1,22 @@
-# Changelog
+
+## v2.3.0-beta1 (2025-12-08)
+
+### 🔥 Deadtime Detection (V3)
+*   **Dynamic Deadtime**: Uses a new **Ring Buffer (RAM)** and "Tangent Method" analysis to accurately detect the delay between heating start and temperature rise (Totzeit).
+*   **Physics Update**: Duration calculation now accounts for Deadtime, significantly improving accuracy for **Floor Heating** and slow radiators.
+
+### 🏗️ Heating Profiles
+*   **Simplified Setup**: Removed complex technical parameters (`gain`, `buffer`, etc.) in the Zone setup.
+*   **Profile Selection**: Users simply choose their system type:
+    *   *Infrared / Air* (Fast)
+    *   *Radiator* (Modern/Old)
+    *   *Floor* (Dry/Concrete)
+*   **Auto-Tuning**: Profiles provide safe defaults and constraints (Min/Max thermal mass) to prevent learning anomalies.
+
+### ⚠️ Breaking Changes
+*   **Config Flow**: The setup wizard is completely redesigned. Existing configs might show warnings or require re-configuration if expert parameters were used.
+*   **Sensors**: `setpoint_sensor` entity has been removed (redundant).
+
 
 ## v2.2.2
 
