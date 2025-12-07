@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.2.1
+
+- **Fix:** HACS validation compliance (moved strings, added recorder dependency).
+- **Fix:** Corrected internal version constant.
+- **Meta:** Added LICENSE file.
+
+
 ## v2.2.0 (2025-12-07)
 
 ### 🛡️ Robustness & Diagnostics (Phase 1)
