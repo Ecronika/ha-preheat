@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION: Final = "2.0.0"
+VERSION: Final = "2.2.0"
 
 # Technical Constants
 INVALID_TEMP: Final = -273.15
@@ -105,8 +105,6 @@ ATTR_ARRIVAL_HISTORY: Final = "arrival_history_v2" # Stores raw timestamps for c
 
 # New Config Keys
 CONF_VALVE_POSITION: Final = "valve_position_sensor"
-CONF_DISABLE_SCHOOL: Final = "disable_on_school_holidays"
-CONF_SCHOOL_KEYWORD: Final = "school_holiday_keyword"
 
 # Physics Defaults
 DEFAULT_MASS_FACTOR: Final = 10.0 # Minutes to raise 1°C (Perfect insulation)
