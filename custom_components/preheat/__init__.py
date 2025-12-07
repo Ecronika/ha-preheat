@@ -7,12 +7,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
+from homeassistant.helpers import config_validation as cv
 from .const import DOMAIN, CONF_PRESET_MODE, CONF_EXPERT_MODE, PRESET_BALANCED
 from .coordinator import PreheatingCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PreheatConfigEntry = ConfigEntry[PreheatingCoordinator]
 
