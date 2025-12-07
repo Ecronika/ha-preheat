@@ -1,0 +1,9 @@
+{
+  "name": "Intelligent Preheating",
+  "render_readme": true,
+  "domains": [
+    "sensor",
+    "switch",
+    "button"
+  ]
+}

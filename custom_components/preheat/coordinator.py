@@ -1,0 +1,674 @@
+"""Coordinator for Preheat integration."""
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+from datetime import datetime, timedelta, date, time
+import logging
+from typing import Any, TYPE_CHECKING
+import math
+import random
+
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue, async_delete_issue
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
+from homeassistant.const import STATE_ON, STATE_OFF
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+
+from .const import (
+    DOMAIN,
+    INVALID_TEMP,
+    CONF_OCCUPANCY,
+    CONF_TEMPERATURE,
+    CONF_CLIMATE,
+    CONF_SETPOINT,
+    CONF_OUTDOOR_TEMP,
+    CONF_WEATHER_ENTITY,
+    CONF_WORKDAY,
+    CONF_LOCK,
+    CONF_PRESET_MODE,
+    CONF_EXPERT_MODE,
+    CONF_INITIAL_GAIN,
+    CONF_EMA_ALPHA,
+    CONF_BUFFER_MIN,
+    CONF_DONT_START_IF_WARM,
+    CONF_EARLIEST_START,
+    # CONF_START_GRACE, # Unused
+    CONF_WEATHER_BASE,
+    CONF_WEATHER_GAIN,
+    CONF_WEATHER_ENABLED,
+    CONF_AIR_TO_OPER_BIAS,
+    CONF_MAX_PREHEAT_HOURS,
+    CONF_OFF_ONLY_WHEN_WARM,
+    CONF_ARRIVAL_WINDOW_START,
+    CONF_ARRIVAL_WINDOW_END,
+    CONF_VALVE_POSITION,
+    # CONF_DISABLE_SCHOOL,
+    # CONF_SCHOOL_KEYWORD,
+    PRESETS,
+    PRESET_BALANCED,
+    DEFAULT_ARRIVAL_WINDOW_START,
+    DEFAULT_ARRIVAL_WINDOW_END,
+    CONF_STORE_DEADBAND,
+    ATTR_LEARNED_GAIN,
+    ATTR_SAMPLE_COUNT,
+    ATTR_MODEL_MASS,
+    ATTR_MODEL_LOSS,
+    ATTR_ARRIVAL_HISTORY,
+)
+
+from .planner import PreheatPlanner
+from .physics import ThermalPhysics, ThermalModelData
+
+_LOGGER = logging.getLogger(__name__)
+
+STORAGE_VERSION = 4 # Incremented for v2 data structure
+STORAGE_KEY_TEMPLATE = "preheat.{}"
+
+@dataclass(frozen=True)
+class PreheatData:
+    """Class to hold coordinator data."""
+    preheat_active: bool
+    next_start_time: datetime | None
+    operative_temp: float | None
+    target_setpoint: float
+    next_arrival: datetime | None
+    
+    # Debug / Sensor Attributes
+    predicted_duration: float
+    mass_factor: float
+    loss_factor: float
+    learning_active: bool
+    schedule_summary: dict[str, str] | None = None
+    valve_signal: float | None = None
+    window_open: bool = False
+    outdoor_temp: float | None = None
+
+class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
+    """Coordinator to manage preheating logic."""
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Initialize coordinator."""
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}_{entry.entry_id}",
+            update_interval=timedelta(minutes=1),
+        )
+        self.entry = entry
+        self.device_name = entry.title
+        
+        self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY_TEMPLATE.format(entry.entry_id))
+        
+        # Core Modules
+        self.planner = PreheatPlanner()
+        self.physics = ThermalPhysics()
+        
+        # State
+        self._preheat_started_at: datetime | None = None
+        self._start_temp: float | None = None
+        self._occupancy_on_since: datetime | None = None
+        self._preheat_active: bool = False
+        self._last_learned_date: date | None = None
+        self._last_comfort_setpoint: float | None = None
+        
+        # Window Detection State
+        self._prev_temp: float | None = None
+        self._prev_temp_time: datetime | None = None
+        self._window_open_detected: bool = False
+        self._window_cooldown_counter: int = 0
+        
+        # Caching
+        self._cached_outdoor_temp: float = 10.0
+        self._last_weather_check: datetime | None = None
+        
+        self._setup_listeners()
+
+    @property
+    def window_open_detected(self) -> bool:
+        return self._window_open_detected
+
+    def _get_conf(self, key: str, default: Any = None) -> Any:
+        """Get config value from options, falling back to presets or data."""
+        options = self.entry.options
+        is_expert = options.get(CONF_EXPERT_MODE, False)
+        
+        if not is_expert:
+            preset_name = options.get(CONF_PRESET_MODE, PRESET_BALANCED)
+            preset_values = PRESETS.get(preset_name, PRESETS[PRESET_BALANCED])
+            if key in preset_values:
+                return preset_values[key]
+        
+        return options.get(key, self.entry.data.get(key, default))
+
+    async def async_load_data(self) -> None:
+        """Load learned data from storage."""
+        try:
+            data = await self._store.async_load()
+            if data:
+                # Load History
+                history = data.get(ATTR_ARRIVAL_HISTORY, {})
+                # Migration from v1 keys if v2 missing?
+                if not history and "learned_arrivals" in data:
+                    _LOGGER.info("Migrating legacy arrival data with variance injection...")
+                    
+                    # Create Repair Issue
+                    async_create_issue(
+                        self.hass,
+                        DOMAIN,
+                        f"migration_v2_{self.entry.entry_id}",
+                        is_fixable=False,
+                        severity=IssueSeverity.WARNING,
+                        translation_key="data_migrated",
+                        translation_placeholders={"name": self.device_name}
+                    )
+                    
+                    # Legacy was {weekday: average_min}. Hard to migrate cleanly to raw stamps.
+                    # We'll just start fresh for patterns, or seed it?
+                    legacy = data["learned_arrivals"]
+                    history = {}
+                    for k, v in legacy.items():
+                        # v is the average arrival minute (e.g. 420 for 07:00)
+                        # Create 5 fake events with Gaussian-like spread (+- 15 mins)
+                        # to allow clustering to pick it up as a valid cluster.
+                        fake_events = []
+                        base_time = int(v)
+                        for _ in range(5):
+                            # Random +/- 15 mins
+                            offset = random.randint(-15, 15)
+                            simulated = max(0, min(1439, base_time + offset))
+                            fake_events.append(simulated)
+                        history[int(k)] = fake_events
+                
+                self.planner = PreheatPlanner(history)
+                
+                # Load Physics
+                mass_factor = None
+                # Map legacy gain to mass_factor if reasonable?
+                # Legacy 'learned_gain' was min/K.
+                # v2 'mass_factor' is also min/K (Minutes to raise 1C).
+                # So we can direct port it.
+                if "learned_gain" in data:
+                    try:
+                        lg = float(data["learned_gain"])
+                        mass_factor = max(1.0, min(120.0, lg))
+                        _LOGGER.info("Migrated legacy gain %.2f to mass_factor.", lg)
+                    except ValueError: pass
+
+                mass = data.get(ATTR_MODEL_MASS, mass_factor if mass_factor is not None else data.get(ATTR_LEARNED_GAIN)) # Fallback
+                # If we fallback to Gain, mass roughly equals Gain. Loss depends on defaults.
+                
+                p_data = ThermalModelData(
+                    mass_factor=mass,
+                    loss_factor=data.get(ATTR_MODEL_LOSS, 5.0), # Default
+                    sample_count=data.get(ATTR_SAMPLE_COUNT, 0),
+                    avg_error=data.get("avg_error", 0.0)
+                ) if mass is not None or ATTR_MODEL_LOSS in data else None
+                
+                # Get Configured Parameters
+                initial_gain = self._get_conf(CONF_INITIAL_GAIN, 10.0) # Assuming DEFAULT_INITIAL_GAIN is 10.0
+                learning_rate = self._get_conf(CONF_EMA_ALPHA, 0.1) # KEY: Use Constant!
+                
+                self.physics = ThermalPhysics(
+                    data=p_data,
+                    initial_mass=initial_gain,
+                    learning_rate=learning_rate
+                )
+                
+                self._last_comfort_setpoint = data.get("last_comfort_setpoint")
+            else:
+                _LOGGER.info("No data found. Analyzing history...")
+                await self.analyze_history()
+                
+        except Exception:
+            _LOGGER.exception("Failed loading data")
+            await self._async_save_data()
+
+    async def _async_save_data(self) -> None:
+        """Save learned data to storage."""
+        try:
+            data_physics = self.physics.to_dict()
+            data_planner = self.planner.to_dict()
+            
+            data = {
+                ATTR_ARRIVAL_HISTORY: data_planner,
+                ATTR_MODEL_MASS: data_physics["mass_factor"],
+                ATTR_MODEL_LOSS: data_physics["loss_factor"],
+                ATTR_SAMPLE_COUNT: data_physics["sample_count"],
+                "avg_error": data_physics.get("avg_error", 0.0),
+                "last_comfort_setpoint": self._last_comfort_setpoint,
+            }
+            await self._store.async_save(data)
+        except Exception as err:
+            _LOGGER.error("Failed to save preheat data: %s", err)
+
+    def _parse_time_to_minutes(self, time_str: str, default_str: str) -> int:
+        try:
+            t = datetime.strptime(str(time_str), "%H:%M:%S").time()
+            return t.hour * 60 + t.minute
+        except ValueError:
+            t = datetime.strptime(default_str, "%H:%M:%S").time()
+            return t.hour * 60 + t.minute
+
+    async def analyze_history(self) -> None:
+        """Analyze past 28 days of occupancy."""
+        occupancy_entity = self._get_conf(CONF_OCCUPANCY)
+        if not occupancy_entity: return
+
+        _LOGGER.info("Starting historical analysis for %s...", occupancy_entity)
+        try:
+            from homeassistant.components.recorder import history
+            start_date = dt_util.utcnow() - timedelta(days=28)
+            
+            history_data = await self.hass.async_add_executor_job(
+                history.get_significant_states,
+                self.hass,
+                start_date,
+                None,
+                [occupancy_entity]
+            )
+            
+            if not history_data or occupancy_entity not in history_data:
+                return
+
+            states = history_data[occupancy_entity]
+            win_start_str = self._get_conf(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START)
+            win_end_str = self._get_conf(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END)
+            win_start_min = self._parse_time_to_minutes(win_start_str, DEFAULT_ARRIVAL_WINDOW_START)
+            win_end_min = self._parse_time_to_minutes(win_end_str, DEFAULT_ARRIVAL_WINDOW_END)
+
+            count = 0
+            for state in states:
+                if state.state != STATE_ON: continue
+                local_dt = dt_util.as_local(state.last_changed)
+                current_minutes = local_dt.hour * 60 + local_dt.minute
+                
+                # Basic window filter
+                if win_start_min <= current_minutes <= win_end_min:
+                    self.planner.record_arrival(local_dt)
+                    count += 1
+            
+            if count > 0:
+                _LOGGER.info("Identified %d arrival events from history.", count)
+                await self._async_save_data()
+                
+        except Exception as e:
+            _LOGGER.error("Error analyzing history: %s", e)
+
+    def _setup_listeners(self) -> None:
+        occupancy_sensor = self._get_conf(CONF_OCCUPANCY)
+        if occupancy_sensor:
+            self.entry.async_on_unload(
+                async_track_state_change_event(
+                    self.hass, [occupancy_sensor], self._handle_occupancy_change
+                )
+            )
+
+    @callback
+    def _handle_occupancy_change(self, event) -> None:
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+        if not new_state or not old_state: return
+        
+        if old_state.state != STATE_ON and new_state.state == STATE_ON:
+            self._occupancy_on_since = dt_util.utcnow()
+            # Feed planner
+            self.hass.async_create_task(self._learn_arrival_event())
+        
+        if old_state.state == STATE_ON and new_state.state != STATE_ON:
+            self._occupancy_on_since = None
+
+    async def _learn_arrival_event(self) -> None:
+        now = dt_util.now()
+        
+        # Debounce: One per day? No, one per Cluster Window?
+        # Planner handles storage constraints.
+        # We just filter Config Window here.
+        win_start_str = self._get_conf(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START)
+        win_end_str = self._get_conf(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END)
+        win_start = self._parse_time_to_minutes(win_start_str, DEFAULT_ARRIVAL_WINDOW_START)
+        win_end = self._parse_time_to_minutes(win_end_str, DEFAULT_ARRIVAL_WINDOW_END)
+        
+        current_minutes = now.hour * 60 + now.minute
+        if win_start <= current_minutes <= win_end:
+            _LOGGER.debug("Recording arrival at %s", now)
+            self.planner.record_arrival(now)
+            await self._async_save_data()
+
+    async def _check_entity_availability(self, entity_id: str, issue_id: str) -> None:
+        if not entity_id: return
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state == "unavailable":
+            async_create_issue(
+                self.hass, DOMAIN, f"missing_{issue_id}_{self.entry.entry_id}",
+                is_fixable=False, severity=IssueSeverity.WARNING,
+                translation_key="missing_entity",
+                translation_placeholders={"entity": entity_id, "name": self.device_name},
+            )
+        else:
+            async_delete_issue(self.hass, DOMAIN, f"missing_{issue_id}_{self.entry.entry_id}")
+
+    async def _get_operative_temperature(self) -> float:
+        temp_sensor = self._get_conf(CONF_TEMPERATURE)
+        if not temp_sensor: return INVALID_TEMP
+        state = self.hass.states.get(temp_sensor)
+        if not state or state.state in ("unknown", "unavailable"): return INVALID_TEMP
+        try:
+            raw = float(state.state)
+            if not (-40 < raw < 80): return INVALID_TEMP
+            
+            bias = self._get_conf(CONF_AIR_TO_OPER_BIAS, 0.0)
+            return raw - float(bias)
+        except (ValueError, TypeError):
+            return INVALID_TEMP
+
+    async def _get_target_setpoint(self) -> float:
+        setpoint_sensor = self._get_conf(CONF_SETPOINT)
+        if setpoint_sensor:
+            state = self.hass.states.get(setpoint_sensor)
+            if state and state.state not in ("unknown", "unavailable"):
+                try: return float(state.state)
+                except ValueError: pass
+        if self._last_comfort_setpoint is not None:
+            return self._last_comfort_setpoint
+        # Fallback to Climate attribute
+        climate = self._get_conf(CONF_CLIMATE)
+        if climate:
+             state = self.hass.states.get(climate)
+             if state and state.attributes.get("temperature"):
+                 try: return float(state.attributes["temperature"])
+                 except ValueError: pass
+        return 22.0 # Last resort
+
+    def _track_temperature_gradient(self, current_temp: float, now: datetime) -> None:
+        """Track gradient and detect open windows."""
+        if self._prev_temp is None or self._prev_temp_time is None:
+            self._prev_temp = current_temp
+            self._prev_temp_time = now
+            return
+
+        dt = (now - self._prev_temp_time).total_seconds() / 60.0
+        if dt < 4.5: return # Need at least 5 mins roughly, or keep accumulating? 
+        # Update every 5 mins approx if loop is 1 min?
+        
+        delta = current_temp - self._prev_temp
+        
+        # Check Gradient
+        # Heuristic: Drop > 0.5K in 5 mins
+        newly_detected = False
+        if delta < -0.4: # Slightly sensitive
+             _LOGGER.warning("Window Open Detected! Gradient: %.2fK in %.1f min", delta, dt)
+             self._window_open_detected = True
+             self._window_cooldown_counter = 30 # Paused for 30 mins
+             newly_detected = True
+        
+        # Reset if counter active
+        if self._window_open_detected and not newly_detected:
+            self._window_cooldown_counter -= int(dt)
+            if self._window_cooldown_counter <= 0:
+                _LOGGER.info("Window Open Cooldown finished. Resuming.")
+                self._window_open_detected = False
+        
+        # Reset tracker
+        self._prev_temp = current_temp
+        self._prev_temp_time = now
+
+    async def _async_update_data(self) -> PreheatData:
+        """Main Loop."""
+        try:
+            await self._check_entity_availability(self._get_conf(CONF_TEMPERATURE), "temperature")
+            
+            now = dt_util.now()
+            is_holiday = False
+            workday = self._get_conf(CONF_WORKDAY)
+            if workday:
+                is_holiday = self.hass.states.is_state(workday, STATE_OFF) # Binary sensor: On=Workday
+            
+            # 1. Get Next Arrival
+            next_event = self.planner.get_next_scheduled_event(now, is_holiday)
+            
+            # 2. Calculate Physics
+            operative_temp = await self._get_operative_temperature()
+            
+            # Update Gradient / Window Detection (approx every 5 min)
+            if operative_temp > INVALID_TEMP:
+                # We call it every minute logic, but internal it waits for elapsed time
+                self._track_temperature_gradient(operative_temp, now)
+
+            target_setpoint = await self._get_target_setpoint()
+            outdoor_temp = await self._get_outdoor_temp_current()
+            
+            if operative_temp <= INVALID_TEMP:
+                # Sensor error, bail out safe
+                return PreheatData(False, None, None, target_setpoint, next_event, 0, 0, 0, False)
+
+            # Delta Calculation
+            delta_in = target_setpoint - operative_temp
+            delta_out = target_setpoint - outdoor_temp # Positive means cold outside
+            
+            predicted_duration = self.physics.calculate_duration(delta_in, delta_out)
+            
+            # 3. Decision Logic
+            start_time = None
+            should_start = False
+            
+            if next_event:
+                # Add Buffer
+                buffer = self._get_conf(CONF_BUFFER_MIN, 10)
+                start_time = next_event - timedelta(minutes=predicted_duration + buffer)
+                
+                # Earliest Start Check
+                earliest_min = self._get_conf(CONF_EARLIEST_START, 180) # e.g. 03:00
+                earliest_dt = next_event.replace(hour=0, minute=0, second=0) + timedelta(minutes=earliest_min)
+                
+                if start_time < earliest_dt:
+                    start_time = earliest_dt
+                
+                # Check Triggers
+                # Logic: IF now >= start_time AND now < target_event (don't start if already late... actually we should if < target?)
+                # Let's say: Start if Now >= Start AND Now < Target
+                if start_time <= now < next_event:
+                     should_start = True
+            
+            # 4. Overrides
+            
+            # Window Open
+            if self._window_open_detected:
+                should_start = False
+
+            # Don't start if warm
+            if self._get_conf(CONF_DONT_START_IF_WARM, True):
+                if delta_in < 0.2: should_start = False
+                
+            # Lock
+            lock = self._get_conf(CONF_LOCK)
+            if lock and self.hass.states.is_state(lock, STATE_ON): should_start = False
+            
+            # Occupied?
+            occ_sensor = self._get_conf(CONF_OCCUPANCY)
+            is_occupied = False
+            if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
+                is_occupied = True
+                should_start = False # User is home, no Pre-heat (Normal heat takes over)
+
+            # 5. Actuate
+            if should_start and not self._preheat_active:
+                await self._start_preheat(operative_temp)
+            
+            elif self._preheat_active:
+                # Stop conditions
+                # 1. Target reached
+                if delta_in <= 0.2: # Comfortable
+                    await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp)
+                # 2. User came home
+                elif is_occupied:
+                    await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=True)
+                # 3. Timeout
+                elif self._preheat_started_at:
+                    max_hours = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0)
+                    runtime = (dt_util.utcnow() - self._preheat_started_at).total_seconds() / 3600
+                    if runtime > max_hours:
+                        await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=True)
+                # 4. Window Open
+                elif self._window_open_detected:
+                     await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=True)
+
+            # Comfort Learning (Update Setpoint preference)
+            await self._update_comfort_learning(target_setpoint, is_occupied)
+
+            return PreheatData(
+                preheat_active=self._preheat_active,
+                next_start_time=start_time,
+                operative_temp=operative_temp,
+                target_setpoint=target_setpoint,
+                next_arrival=next_event,
+                predicted_duration=predicted_duration,
+                mass_factor=self.physics.mass_factor,
+                loss_factor=self.physics.loss_factor,
+                learning_active=self._preheat_active and not self._window_open_detected,
+                schedule_summary=self.planner.get_schedule_summary(),
+                valve_signal=self._get_valve_position(),
+                window_open=self._window_open_detected,
+                outdoor_temp=outdoor_temp
+            )
+
+        except Exception as err:
+            raise UpdateFailed(f"Update failed: {err}") from err
+
+    async def _start_preheat(self, operative_temp: float) -> None:
+        self._preheat_active = True
+        self._preheat_started_at = dt_util.utcnow()
+        self._start_temp = operative_temp
+        self.hass.bus.async_fire(f"{DOMAIN}_started", {"name": self.device_name})
+        _LOGGER.info("Preheat STARTED. Temp: %.1f", operative_temp)
+
+    async def _stop_preheat(self, end_temp: float, target: float, outdoor: float, aborted: bool = False) -> None:
+        if not self._preheat_active: return
+        
+        duration = 0
+        if self._preheat_started_at:
+            duration = (dt_util.utcnow() - self._preheat_started_at).total_seconds() / 60
+        
+        if not aborted and self._start_temp is not None:
+            # LEARN
+            
+            # Don't learn if Window Open detected recently
+            if self._window_open_detected:
+                _LOGGER.info("Skipping learning due to Open Window detected.")
+            else:
+                delta_in = end_temp - self._start_temp
+                delta_out = target - outdoor # Approx average delta
+                
+                # Valve Sensor
+                valve_pos = self._get_valve_position()
+                
+                success = self.physics.update_model(duration, delta_in, delta_out, valve_pos)
+                if success:
+                    await self._async_save_data()
+                    _LOGGER.info("Learning Success: Mass=%.1f, Loss=%.1f", self.physics.mass_factor, self.physics.loss_factor)
+        
+        self._preheat_active = False
+        self._preheat_started_at = None
+        self._start_temp = None
+        self.hass.bus.async_fire(f"{DOMAIN}_stopped", {"name": self.device_name})
+
+    async def _get_outdoor_temp_current(self) -> float:
+        # Caching logic
+        now = dt_util.utcnow()
+        if self._last_weather_check and (now - self._last_weather_check).total_seconds() < 900:
+            return self._cached_outdoor_temp
+            
+        # Try Weather Entity
+        weather = self._get_conf(CONF_WEATHER_ENTITY)
+        if weather:
+             state = self.hass.states.get(weather)
+             if state:
+                 try:
+                     self._cached_outdoor_temp = float(state.attributes.get("temperature", 10.0))
+                     self._last_weather_check = now
+                     return self._cached_outdoor_temp
+                 except: pass
+        
+        # Try Sensor
+        sensor = self._get_conf(CONF_OUTDOOR_TEMP)
+        if sensor:
+             state = self.hass.states.get(sensor)
+             try:
+                 self._cached_outdoor_temp = float(state.state)
+                 self._last_weather_check = now
+                 return self._cached_outdoor_temp
+             except: pass
+        
+        return 10.0
+
+    async def _update_comfort_learning(self, current_setpoint: float, is_occupied: bool) -> None:
+        if not is_occupied or not self._occupancy_on_since: return
+        duration = (dt_util.utcnow() - self._occupancy_on_since).total_seconds() / 60
+        if duration < 15: return # Wait for settling
+        
+        if self._last_comfort_setpoint != current_setpoint:
+             self._last_comfort_setpoint = current_setpoint
+             await self._async_save_data()
+
+    async def force_preheat_on(self) -> None:
+        """Manually start preheat."""
+        op_temp = await self._get_operative_temperature()
+        await self._start_preheat(op_temp)
+        self.async_update_listeners()
+
+    async def stop_preheat_manual(self) -> None:
+        """Manually stop preheat."""
+        op_temp = await self._get_operative_temperature()
+        target = await self._get_target_setpoint()
+        outdoor = await self._get_outdoor_temp_current()
+        # User request: Try to learn even if stopped manually, if data is valid.
+        # Physics module filters out noise (small deltas).
+        await self._stop_preheat(op_temp, target, outdoor, aborted=False)
+        self.async_update_listeners()
+
+    async def reset_gain(self) -> None:
+        """Reset thermal physics model."""
+        self.physics = ThermalPhysics() # Resets to defaults
+        await self._async_save_data()
+        _LOGGER.info("Thermal Model RESET to defaults.")
+        self.async_update_listeners()
+
+    async def reset_arrivals(self) -> None:
+        """Reset arrival history."""
+        self.planner = PreheatPlanner() # Empty history
+        await self._async_save_data()
+        _LOGGER.info("Arrival History RESET.")
+        self.async_update_listeners()
+
+    def _get_valve_position(self) -> float | None:
+        """Get current valve position from sensor or climate attribute."""
+        # 1. Dedicated Sensor
+        valve_entity = self._get_conf(CONF_VALVE_POSITION)
+        if valve_entity:
+            st = self.hass.states.get(valve_entity)
+            if st and st.state not in ("unknown", "unavailable"):
+                try: return float(st.state)
+                except ValueError: pass
+        
+        # 2. Climate Attribute (KNX 'command_value', or generic 'valve_position')
+        climate_entity = self._get_conf(CONF_CLIMATE)
+        if climate_entity:
+            st = self.hass.states.get(climate_entity)
+            if st:
+                # Common attribute names
+                for attr in ["valve_position", "command_value", "pi_heating_demand", "output_val"]:
+                    val = st.attributes.get(attr)
+                    if val is not None:
+                        try: return float(val)
+                        except ValueError: pass
+        return None
+
+    @property
+    def preheat_active(self) -> bool:
+        """Return True if preheat is active."""
+        return self._preheat_active

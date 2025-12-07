@@ -1,0 +1,128 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Intelligentes Vorheizen",
+        "description": "Erstelle eine neue Heizzone. Das System lernt automatisch, wie lange der Raum zum Aufheizen benötigt.",
+        "data": {
+          "name": "Zonen-Name",
+          "occupancy_sensor": "Belegungssensor (Anwesenheit)",
+          "temperature_sensor": "Raumtemperatur-Sensor",
+          "climate_entity": "Thermostat (Optional)",
+          "setpoint_sensor": "Zielwert-Sensor (Optional)",
+          "outdoor_temp_sensor": "Außentemperatur (Fallback)",
+          "weather_entity": "Wetter-Vorhersage (für Prognose)",
+          "workday_sensor": "Arbeitstag-Sensor (Optional)",
+          "preset_mode": "Betriebsstrategie",
+          "valve_position_sensor": "Ventil-Position (für präzises Lernen)"
+        }
+      }
+    },
+    "error": {
+      "invalid_occupancy_sensor": "Ungültiger Belegungssensor ausgewählt",
+      "invalid_temperature_sensor": "Ungültiger Temperatursensor ausgewählt",
+      "buffer_too_high": "Sicherheitspuffer über 60 Minuten - Wert zu hoch",
+      "max_duration_too_high": "Maximale Vorheizdauer über 5 Stunden ist ein Sicherheitsrisiko"
+    },
+    "abort": {
+      "already_configured": "Diese Zone ist bereits konfiguriert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zonen-Einstellungen",
+        "description": "Die Standard-Einstellungen reichen meist aus. Aktiviere den Experten-Modus für Feinjustierung.",
+        "data": {
+          "preset_mode": "Betriebsstrategie",
+          "expert_mode": "Experteneinstellungen anzeigen",
+          "occupancy_sensor": "Belegungssensor",
+          "temperature_sensor": "Raumtemperatur",
+          "climate_entity": "Thermostat",
+          "setpoint_sensor": "Zielwert-Sensor",
+          "weather_entity": "Wetter-Dienst",
+          "outdoor_temp_sensor": "Außentemperatur",
+          "workday_sensor": "Arbeitstag-Sensor",
+          "preheat_lock": "Sperr-Schalter (Lock)",
+          "ema_alpha": "Lerngeschwindigkeit (Alpha)",
+          "initial_gain": "Start-Aufheizfaktor (min/K)",
+          "buffer_minutes": "Sicherheitspuffer (Minuten)",
+          "earliest_start_minutes": "Frühester Start (Minuten ab Mitternacht)",
+          "comfort_min_temp": "Minimale Zieltemperatur",
+          "comfort_max_temp": "Maximale Zieltemperatur",
+          "comfort_fallback_temp": "Fallback Zieltemperatur",
+          "dont_start_if_warm": "Nicht starten wenn bereits warm",
+          "off_only_when_warm": "Heizen bis Zieltemperatur (auch bei Ankunft)",
+          "arrival_window_start": "Ankunftsfenster Start (Uhrzeit)",
+          "arrival_window_end": "Ankunftsfenster Ende (Uhrzeit)",
+          "air_to_oper_bias_k": "Korrektur für gefühlte Temp. (Bias)",
+          "valve_position_sensor": "Ventil-Position (Optional)",
+          "max_preheat_hours": "Max. Vorheizdauer (Stunden)"
+        }
+      },
+      "error": {
+        "invalid_time_format": "Ungültiges Zeitformat (muss HH:MM:SS sein)"
+      }
+    }
+  },
+  "selector": {
+    "preset_mode": {
+      "options": {
+        "aggressive": "Aggressiv (Früh & Sicher)",
+        "balanced": "Ausgewogen (Empfohlen)",
+        "conservative": "Sparsam (Spät & Effizient)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Inaktiv",
+          "preheating": "Vorheizen"
+        }
+      },
+      "next_event": {
+        "name": "Nächstes Event"
+      },
+      "model_status": {
+        "name": "Modell Status",
+        "state": {
+          "ready": "Bereit",
+          "learning": "Lernt aktiv"
+        }
+      },
+      "mass_factor": {
+        "name": "Thermische Masse"
+      },
+      "loss_factor": {
+        "name": "Thermischer Verlust"
+      },
+      "confidence": {
+        "name": "Lern-Konfidenz"
+      }
+    },
+    "button": {
+      "reset_gain": {
+        "name": "Thermisches Modell zurücksetzen"
+      },
+      "reset_schedule": {
+        "name": "Zeitplan zurücksetzen"
+      },
+      "analyze_history": {
+        "name": "Historie analysieren"
+      }
+    }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "Sensor fehlt in {name}",
+      "description": "Die Entität `{entity}`, die in der Zone {name} konfiguriert ist, ist nicht verfügbar oder existiert nicht. Bitte überprüfe die Konfiguration oder den Sensor."
+    },
+    "data_migrated": {
+      "title": "Migration für {name} abgeschlossen",
+      "description": "Historische Daten der v1 wurden konvertiert. Die Genauigkeit kann anfangs reduziert sein. Nutze 'Historie analysieren', um die Daten aus dem Recorder neu aufzubauen."
+    }
+  }
+}

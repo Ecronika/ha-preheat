@@ -1,0 +1,16 @@
+{
+  "domain": "preheat",
+  "name": "Intelligent Preheating",
+  "codeowners": [
+    "@Ecronika"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Ecronika/ha-preheat",
+  "integration_type": "device",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/Ecronika/ha-preheat/issues",
+  "requirements": [],
+  "version": "2.2.0",
+  "homeassistant": "2025.10.0"
+}

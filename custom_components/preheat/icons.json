@@ -1,0 +1,23 @@
+{
+  "entity": {
+    "sensor": {
+      "next_start": { "default": "mdi:clock-start" },
+      "lead_time": { "default": "mdi:timer" },
+      "arrival_time": { "default": "mdi:home-clock" },
+      "operative_temp": { "default": "mdi:thermometer" },
+      "target_temp": { "default": "mdi:thermostat" }
+    },
+    "switch": {
+      "preheat": {
+        "default": "mdi:radiator",
+        "state": {
+          "on": "mdi:radiator",
+          "off": "mdi:radiator-off"
+        }
+      }
+    },
+    "button": {
+      "reset_learning": { "default": "mdi:school-outline" }
+    }
+  }
+}
