@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.2)
+# Intelligent Preheating for Home Assistant (v2.2.1)
 
 A smart, learning-based preheating controller that ensures your room is at the target temperature exactly when you arrive.
 
@@ -25,7 +25,8 @@ This integration uses the **Occupancy Sensor** to **STOP** preheating.
 - **Outdoor Temp**: From a weather integration or physical sensor.
 - **Valve Position**: (Optional) For "Smart Valve" logic that filters out low-flow learning noise.
 
-## 2.2.0 Release Notes
+## What's New in v2.2.1
+- **HACS Ready**: Full compliance with default repository standards (Linting, Licenses, Workflows).
 - **Window Detection**: Pauses learning if temp drops >0.4K in 5 minutes.
 - **System Health**: Full Diagnostics export available.
 - **Persistence**: Improved error metric tracking across restarts.
