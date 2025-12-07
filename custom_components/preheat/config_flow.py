@@ -42,6 +42,12 @@ from .const import (
     DEFAULT_MAX_HOURS,
     DEFAULT_ARRIVAL_WINDOW_START,
     DEFAULT_ARRIVAL_WINDOW_END,
+    CONF_COMFORT_MIN,
+    CONF_COMFORT_MAX,
+    CONF_COMFORT_FALLBACK,
+    DEFAULT_COMFORT_MIN,
+    DEFAULT_COMFORT_MAX,
+    DEFAULT_COMFORT_FALLBACK,
 )
 
 class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -182,6 +188,15 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_EARLIEST_START): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=60, max=480, step=15, unit_of_measurement="min", mode="box")
                 ),
+                vol.Optional(CONF_COMFORT_MIN): selector.NumberSelector(
+                     selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="°C", mode="box")
+                ),
+                vol.Optional(CONF_COMFORT_MAX): selector.NumberSelector(
+                     selector.NumberSelectorConfig(min=18.0, max=30.0, step=0.5, unit_of_measurement="°C", mode="box")
+                ),
+                vol.Optional(CONF_COMFORT_FALLBACK): selector.NumberSelector(
+                     selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="°C", mode="box")
+                ),
             })
 
         # Fill defaults
@@ -192,6 +207,10 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         
         if CONF_AIR_TO_OPER_BIAS not in data: data[CONF_AIR_TO_OPER_BIAS] = 0.0
         if CONF_EARLIEST_START not in data: data[CONF_EARLIEST_START] = 180 # 3h default
+        
+        if CONF_COMFORT_MIN not in data: data[CONF_COMFORT_MIN] = DEFAULT_COMFORT_MIN
+        if CONF_COMFORT_MAX not in data: data[CONF_COMFORT_MAX] = DEFAULT_COMFORT_MAX
+        if CONF_COMFORT_FALLBACK not in data: data[CONF_COMFORT_FALLBACK] = DEFAULT_COMFORT_FALLBACK
 
         data[CONF_EXPERT_MODE] = show_expert
         

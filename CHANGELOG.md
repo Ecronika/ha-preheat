@@ -3,6 +3,8 @@
 ## v2.2.2
 
 - **Improvement:** Smarter Setpoint Logic: Ignores thermostat values below `comfort_min_temp` (default 19°C) and uses `comfort_fallback` or learned values instead. Fixes "cold start" issues where Eco mode was mistaken for the target.
+- **Config:** Exposed `Comfort Min/Max` and `Fallback` temperatures in Expert Settings.
+- **Change:** Changed default `Comfort Fallback` to 21.0°C (was 22.0°C).
 
 
 ## v2.2.1

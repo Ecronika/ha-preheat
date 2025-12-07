@@ -13,6 +13,10 @@ A smart, learning-based preheating controller that ensures your room is at the t
 2. Add integration via Settings -> Devices -> Add Integration -> "Intelligent Preheating".
 
 ## Configuration
+### Expert Settings (Optional)
+- **Minimum Comfort Temp**: Threshold to distinguish "Eco/Off" from "Comfort" (Default: 19°C).
+- **Fallback Temp**: Target used if no history exists yet (Default: 21°C).
+
 ### Critical Note on Occupancy ⚠️
 This integration uses the **Occupancy Sensor** to **STOP** preheating.
 - **TRUE/ON**: Means "User is physically present". The preheater stops, and your normal thermostat schedule should take over.
