@@ -95,6 +95,13 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_CLIMATE): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate")
             ),
+            # Weather & Outdoor (Non-Expert)
+            vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="weather")
+            ),
+            vol.Optional(CONF_OUTDOOR_TEMP): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "input_number"], device_class="temperature")
+            ),
             vol.Required(CONF_HEATING_PROFILE, default=PROFILE_RADIATOR_NEW): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=profile_options,
