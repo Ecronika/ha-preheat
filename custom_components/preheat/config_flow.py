@@ -238,7 +238,24 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
 
         # Fill defaults
         data = {**self.config_entry.data, **self.config_entry.options}
+        
+        # Resolve Profile Defaults
+        profile_key = data.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
+        profile_data = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
+        
+        if CONF_BUFFER_MIN not in data:
+             data[CONF_BUFFER_MIN] = profile_data.get("buffer", DEFAULT_BUFFER_MIN)
+        if CONF_MAX_PREHEAT_HOURS not in data:
+             data[CONF_MAX_PREHEAT_HOURS] = profile_data.get("max_duration", DEFAULT_MAX_HOURS)
+        if CONF_EMA_ALPHA not in data:
+             data[CONF_EMA_ALPHA] = DEFAULT_EMA_ALPHA
+        if CONF_DONT_START_IF_WARM not in data:
+             data[CONF_DONT_START_IF_WARM] = True
+
         if CONF_VALVE_POSITION not in data: data[CONF_VALVE_POSITION] = None
+        if CONF_LOCK not in data: data[CONF_LOCK] = None
+        if CONF_WORKDAY not in data: data[CONF_WORKDAY] = None
+        
         if CONF_ARRIVAL_WINDOW_START not in data: data[CONF_ARRIVAL_WINDOW_START] = DEFAULT_ARRIVAL_WINDOW_START
         if CONF_ARRIVAL_WINDOW_END not in data: data[CONF_ARRIVAL_WINDOW_END] = DEFAULT_ARRIVAL_WINDOW_END
         
