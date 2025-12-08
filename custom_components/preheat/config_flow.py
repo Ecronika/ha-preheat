@@ -137,33 +137,57 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage options."""
-        is_expert = self._get_val(CONF_EXPERT_MODE, False)
+        stored_expert = self._get_val(CONF_EXPERT_MODE, False)
         errors = {}
         
+        # Determine if we are currently SHOWING the expert form (based on input)
+        # If user_input has a key that only exists in expert mode (e.g. CONF_VALVE_POSITION or CONF_BUFFER_MIN),
+        # then we are submitting the Expert Form.
+        # Note: CONF_BUFFER_MIN is now expert-only.
+        is_submitting_expert_form = user_input is not None and CONF_BUFFER_MIN in user_input
+        
         if user_input is not None:
-             # Validation
+             # 1. Validation
             if user_input.get(CONF_BUFFER_MIN, 0) > 60:
                  errors[CONF_BUFFER_MIN] = "buffer_too_high"
-            
             if user_input.get(CONF_MAX_PREHEAT_HOURS, 3.0) > 5.0:
                  errors[CONF_MAX_PREHEAT_HOURS] = "max_duration_too_high"
-
-            # Handle Expert Switch
-            if not errors and user_input.get(CONF_EXPERT_MODE, False) != is_expert:
-                 # Reload form with new fields
+            
+            # 2. Logic: Should we Reload or Save?
+            requested_expert = user_input.get(CONF_EXPERT_MODE, False)
+            
+            # Case A: We want to switch Mode (Simple <-> Expert)
+            # This happens if requested mode != what we see. 
+            # But "what we see" is inferred. 
+            # If we submitted Simple Form (no buffer_min) and requested Expert -> Reload.
+            # If we submitted Expert Form (has buffer_min) and requested Simple -> Reload.
+            # If we submitted Expert Form and requested Expert -> Save.
+            
+            should_reload = False
+            
+            if requested_expert and not is_submitting_expert_form:
+                # User checked "Show Expert" on Simple Form -> Expand
+                should_reload = True
+            elif not requested_expert and is_submitting_expert_form:
+                 # User unchecked "Show Expert" on Expert Form -> Collapse
+                 should_reload = True
+            
+            # If errors exist, always reload (to show errors)
+            if errors or should_reload:
                  return self.async_show_form(
                     step_id="init", 
-                    data_schema=self._build_schema(show_expert=user_input.get(CONF_EXPERT_MODE)),
+                    data_schema=self._build_schema(show_expert=requested_expert, user_input=user_input),
                     errors=errors
                 )
             
-            # Save
-            if not errors:
-                return self.async_create_entry(title="", data=user_input)
+            # 3. Save
+            return self.async_create_entry(title="", data=user_input)
 
-        return self.async_show_form(step_id="init", data_schema=self._build_schema(show_expert=is_expert), errors=errors)
+        # First Open: Use stored expert state
+        return self.async_show_form(step_id="init", data_schema=self._build_schema(show_expert=stored_expert), errors=errors)
 
-    def _build_schema(self, show_expert: bool) -> vol.Schema:
+    def _build_schema(self, show_expert: bool, user_input: dict[str, Any] | None = None) -> vol.Schema:
+
         # Build Profile Options
         profile_options = [
             {"value": k, "label": v["name"]} 
@@ -237,9 +261,14 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             })
 
         # Fill defaults
+        # 1. Start with Stored Data
         data = {**self.config_entry.data, **self.config_entry.options}
         
-        # Resolve Profile Defaults
+        # 2. Merge with User Input (if reloading form)
+        if user_input:
+            data.update(user_input)
+            
+        # 3. Resolve Profile Defaults (Only if still missing)
         profile_key = data.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
         profile_data = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
         
