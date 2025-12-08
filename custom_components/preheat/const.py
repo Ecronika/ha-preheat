@@ -127,6 +127,7 @@ CONF_ARRIVAL_WINDOW_START: Final = "arrival_window_start"
 CONF_ARRIVAL_WINDOW_END: Final = "arrival_window_end"
 CONF_STORE_DEADBAND: Final = "store_deadband_k"
 CONF_EARLIEST_START: Final = "earliest_start_minutes"
+CONF_ONLY_ON_WORKDAYS: Final = "only_on_workdays"
 
 # Defaults
 DEFAULT_EMA_ALPHA: Final = 0.3

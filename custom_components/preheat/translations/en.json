@@ -45,6 +45,7 @@
                     "weather_entity": "Weather Service",
                     "outdoor_temp_sensor": "Outdoor Temperature",
                     "workday_sensor": "Workday Sensor",
+                    "only_on_workdays": "Only preheat on workdays (Skip weekends/holidays)",
                     "preheat_lock": "Lock Switch",
                     "ema_alpha": "Learning Rate (Alpha)",
                     "initial_gain": "Initial Gain (min/K)",

@@ -45,6 +45,7 @@
           "weather_entity": "Wetter-Dienst",
           "outdoor_temp_sensor": "Außentemperatur",
           "workday_sensor": "Arbeitstag-Sensor",
+          "only_on_workdays": "Nur an Arbeitstagen vorheizen (Wochenende/Feiertage ignorieren)",
           "preheat_lock": "Sperr-Schalter (Lock)",
           "ema_alpha": "Lerngeschwindigkeit (Alpha)",
           "initial_gain": "Start-Aufheizfaktor (min/K)",

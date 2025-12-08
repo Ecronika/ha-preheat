@@ -496,9 +496,18 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  ))
 
             is_holiday = False
-            workday = self._get_conf(CONF_WORKDAY)
-            if workday:
-                is_holiday = self.hass.states.is_state(workday, STATE_OFF) # Binary sensor: On=Workday
+            workday_on = True # Default true if no sensor
+            workday_sensor = self._get_conf(CONF_WORKDAY)
+            if workday_sensor:
+                state = self.hass.states.get(workday_sensor)
+                if state:
+                     is_holiday = state.state == STATE_OFF
+                     workday_on = state.state == STATE_ON
+            
+            # Check 'Only On Workdays' constraint
+            force_off_holiday = False
+            if self._get_conf(CONF_ONLY_ON_WORKDAYS, False) and not workday_on:
+                 force_off_holiday = True
             
             # 1. Get Next Arrival
             next_event = self.planner.get_next_scheduled_event(now, is_holiday)
@@ -566,6 +575,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
                 is_occupied = True
                 should_start = False # User is home, no Pre-heat (Normal heat takes over)
+
+            # Strict Workday Mode
+            if force_off_holiday:
+                should_start = False
 
             # 5. Actuate
             if should_start and not self._preheat_active:

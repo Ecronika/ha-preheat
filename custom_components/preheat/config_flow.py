@@ -229,6 +229,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional(CONF_LOCK): selector.EntitySelector(selector.EntitySelectorConfig(domain="input_boolean")),
                 vol.Optional(CONF_WORKDAY): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
+                vol.Optional(CONF_ONLY_ON_WORKDAYS): selector.BooleanSelector(),
                 
                 # Removed: Initial Gain
                 vol.Optional(CONF_EMA_ALPHA): selector.NumberSelector(
@@ -284,6 +285,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         if CONF_VALVE_POSITION not in data: data[CONF_VALVE_POSITION] = None
         if CONF_LOCK not in data: data[CONF_LOCK] = None
         if CONF_WORKDAY not in data: data[CONF_WORKDAY] = None
+        if CONF_ONLY_ON_WORKDAYS not in data: data[CONF_ONLY_ON_WORKDAYS] = False
         
         if CONF_ARRIVAL_WINDOW_START not in data: data[CONF_ARRIVAL_WINDOW_START] = DEFAULT_ARRIVAL_WINDOW_START
         if CONF_ARRIVAL_WINDOW_END not in data: data[CONF_ARRIVAL_WINDOW_END] = DEFAULT_ARRIVAL_WINDOW_END
