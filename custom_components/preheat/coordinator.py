@@ -110,6 +110,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             _LOGGER,
             name=f"{DOMAIN}_{entry.entry_id}",
             update_interval=timedelta(minutes=1),
+            config_entry=entry,
         )
         self.entry = entry
         self.device_name = entry.title
@@ -291,10 +292,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
         _LOGGER.info("Starting historical analysis for %s...", occupancy_entity)
         try:
-            from homeassistant.components.recorder import history
+            from homeassistant.components.recorder import history, get_instance
             start_date = dt_util.utcnow() - timedelta(days=28)
             
-            history_data = await self.hass.async_add_executor_job(
+            history_data = await get_instance(self.hass).async_add_executor_job(
                 history.get_significant_states,
                 self.hass,
                 start_date,
