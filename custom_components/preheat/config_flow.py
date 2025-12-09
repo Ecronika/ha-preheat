@@ -53,7 +53,16 @@ from .const import (
     CONF_COMFORT_FALLBACK,
     DEFAULT_COMFORT_MIN,
     DEFAULT_COMFORT_MAX,
+    DEFAULT_COMFORT_MAX,
     DEFAULT_COMFORT_FALLBACK,
+    # Forecast
+    CONF_USE_FORECAST,
+    CONF_RISK_MODE,
+    RISK_BALANCED,
+    RISK_PESSIMISTIC,
+    RISK_OPTIMISTIC,
+    DEFAULT_USE_FORECAST,
+    DEFAULT_RISK_MODE,
 )
 
 class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -231,6 +240,20 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_WORKDAY): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
                 vol.Optional(CONF_ONLY_ON_WORKDAYS): selector.BooleanSelector(),
                 
+                # Forecast Integration
+                vol.Optional(CONF_USE_FORECAST): selector.BooleanSelector(),
+                vol.Optional(CONF_RISK_MODE): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": RISK_BALANCED, "label": "Balanced (Integral)"},
+                            {"value": RISK_PESSIMISTIC, "label": "Pessimistic (P10 - Comfort)"},
+                            {"value": RISK_OPTIMISTIC, "label": "Optimistic (P90 - Savings)"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                        translation_key="risk_mode"
+                    )
+                ),
+                
                 # Removed: Initial Gain
                 vol.Optional(CONF_EMA_ALPHA): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.05, mode="slider")
@@ -285,7 +308,11 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         if CONF_VALVE_POSITION not in data: data[CONF_VALVE_POSITION] = None
         if CONF_LOCK not in data: data[CONF_LOCK] = None
         if CONF_WORKDAY not in data: data[CONF_WORKDAY] = None
+        if CONF_WORKDAY not in data: data[CONF_WORKDAY] = None
         if CONF_ONLY_ON_WORKDAYS not in data: data[CONF_ONLY_ON_WORKDAYS] = False
+        
+        if CONF_USE_FORECAST not in data: data[CONF_USE_FORECAST] = DEFAULT_USE_FORECAST
+        if CONF_RISK_MODE not in data: data[CONF_RISK_MODE] = DEFAULT_RISK_MODE
         
         if CONF_ARRIVAL_WINDOW_START not in data: data[CONF_ARRIVAL_WINDOW_START] = DEFAULT_ARRIVAL_WINDOW_START
         if CONF_ARRIVAL_WINDOW_END not in data: data[CONF_ARRIVAL_WINDOW_END] = DEFAULT_ARRIVAL_WINDOW_END

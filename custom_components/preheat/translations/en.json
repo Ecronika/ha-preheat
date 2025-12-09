@@ -58,6 +58,8 @@
                     "off_only_when_warm": "Heat until target reached (even if occupied)",
                     "arrival_window_start": "Arrival Window Start",
                     "arrival_window_end": "Arrival Window End",
+                    "use_forecast": "Use Weather Forecast (Prediction)",
+                    "risk_mode": "Forecast Risk Strategy",
                     "air_to_oper_bias_k": "Air-to-Operative Bias (K)",
                     "valve_position_sensor": "Valve Position (Optional)",
                     "max_preheat_hours": "Max Preheat Duration (Hours)"
@@ -83,6 +85,13 @@
                 "radiator_old": "Radiator (Old / Cast Iron)",
                 "floor_dry": "Floor Heating (Dry / Light)",
                 "floor_concrete": "Floor Heating (Concrete / Massive)"
+            }
+        },
+        "risk_mode": {
+            "options": {
+                "balanced": "Balanced (Integral / Default)",
+                "pessimistic": "Pessimistic (Comfort / P10)",
+                "optimistic": "Optimistic (Savings / P90)"
             }
         }
     },

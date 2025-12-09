@@ -58,6 +58,8 @@
           "off_only_when_warm": "Heizen bis Zieltemperatur (auch bei Ankunft)",
           "arrival_window_start": "Ankunftsfenster Start (Uhrzeit)",
           "arrival_window_end": "Ankunftsfenster Ende (Uhrzeit)",
+          "use_forecast": "Wetter-Vorhersage nutzen (Prognose)",
+          "risk_mode": "Forecast Risiko-Strategie",
           "air_to_oper_bias_k": "Korrektur für gefühlte Temp. (Bias)",
           "valve_position_sensor": "Ventil-Position (Optional)",
           "max_preheat_hours": "Max. Vorheizdauer (Stunden)"
@@ -83,6 +85,13 @@
         "radiator_old": "Heizkörper (Alt / Guss)",
         "floor_dry": "Fußbodenheizung (Trockenbau / Leicht)",
         "floor_concrete": "Fußbodenheizung (Estrich / Massiv)"
+      }
+    },
+    "risk_mode": {
+      "options": {
+        "balanced": "Ausgewogen (Integral / Standard)",
+        "pessimistic": "Pessimistisch (Komfort / P10)",
+        "optimistic": "Optimistisch (Sparen / P90)"
       }
     }
   },

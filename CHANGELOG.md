@@ -1,4 +1,20 @@
 
+
+## v2.4.0-beta1 (2025-12-09)
+
+### ⛈️ Forecast Integration (Phase 2)
+*   **Forecast-Aware Preheating**: The integration now reads future weather data via `weather.get_forecasts` to predict heat loss more accurately during the preheating window.
+*   **Risk Strategies**: Choose your preferred balance between Comfort and Savings:
+    *   **Balanced**: Uses Time-Weighted Integral (Trapezoidal Rule). Accurately models total thermal load.
+    *   **Pessimistic (P10)**: Uses the *coldest 10%* of the forecast window. Ensures comfort even if the forecast is slightly off.
+    *   **Optimistic (P90)**: Uses the *warmest 10%*. Prioritizes energy savings.
+*   **Smart Caching**: Minimizes API calls by caching forecasts for 30 minutes.
+
+### 🛠️ Improvements
+*   **Robust Root Solver**: Handles non-monotonic temperature curves (e.g., warm peaks).
+*   **Strict Workday Mode**: Option `CONF_ONLY_ON_WORKDAYS` to disable heating on holidays.
+*   **UTC Normalization**: Prevents DST glitches.
+
 ## v2.3.0-beta1 (2025-12-08)
 
 ### 🔥 Deadtime Detection (V3)

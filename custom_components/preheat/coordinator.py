@@ -64,15 +64,23 @@ from .const import (
     ATTR_MODEL_MASS,
     ATTR_MODEL_LOSS,
     ATTR_ARRIVAL_HISTORY,
+    ATTR_MODEL_LOSS,
+    ATTR_ARRIVAL_HISTORY,
     # V3
     CONF_HEATING_PROFILE,
     HEATING_PROFILES,
     PROFILE_RADIATOR_NEW,
+    # Forecast V2.4
+    CONF_USE_FORECAST,
+    CONF_RISK_MODE,
+    RISK_BALANCED,
 )
 
 from .planner import PreheatPlanner
 from .physics import ThermalPhysics, ThermalModelData
 from .history_buffer import RingBuffer, DeadtimeAnalyzer, HistoryPoint
+from .weather_service import WeatherService
+from . import math_preheat
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -142,6 +150,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # Caching
         self._cached_outdoor_temp: float = 10.0
+        self._last_weather_check: datetime | None = None
+        self.weather_service: WeatherService | None = None
         self._last_weather_check: datetime | None = None
         
         self._setup_listeners()
@@ -529,9 +539,55 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
             # Delta Calculation
             delta_in = target_setpoint - operative_temp
-            delta_out = target_setpoint - outdoor_temp # Positive means cold outside
+            # delta_out = target_setpoint - outdoor_temp # Logic moved below
             
-            predicted_duration = self.physics.calculate_duration(delta_in, delta_out)
+            # --- Forecast Integration (V2.4) ---
+            predicted_duration = 0.0
+            use_forecast = self._get_conf(CONF_USE_FORECAST, False)
+            weather_entity = self._get_conf(CONF_WEATHER_ENTITY)
+            forecasts = None
+            
+            if use_forecast and weather_entity:
+                if not self.weather_service or self.weather_service.entity_id != weather_entity:
+                    self.weather_service = WeatherService(self.hass, weather_entity)
+                
+                # Fetch (Cached)
+                forecasts = await self.weather_service.get_forecasts()
+            
+            if forecasts:
+                # ROOT FINDING LOGIC
+                risk_mode = self._get_conf(CONF_RISK_MODE, RISK_BALANCED)
+                
+                def _duration_eval(test_dur_min: float) -> float:
+                    # g(d) = calculated - d
+                    # If d=0, calc > 0. g(0) > 0.
+                    # We look for g(d) <= 0.
+                    if test_dur_min < 0: return 100.0
+                    
+                    # Window: Now -> Now + d
+                    win_end = now + timedelta(minutes=test_dur_min)
+                    
+                    # Effective Outdoor Temp
+                    t_out = math_preheat.calculate_risk_metric(forecasts, now, win_end, risk_mode)
+                    
+                    d_out = target_setpoint - t_out
+                    req = self.physics.calculate_duration(delta_in, d_out)
+                    return req - test_dur_min
+
+                max_h = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0)
+                predicted_duration = math_preheat.root_find_duration(_duration_eval, int(max_h * 60))
+                
+                # Extrapolation Warning
+                if forecasts and (now + timedelta(minutes=predicted_duration)) > forecasts[-1]["datetime"]:
+                     if predicted_duration > 15: # Ignore trivial
+                        _LOGGER.warning("Forecast extrapolation active (> 50%% window). Prediction may be inaccurate.")
+            
+            else:
+                # Classic Logic
+                delta_out = target_setpoint - outdoor_temp 
+                predicted_duration = self.physics.calculate_duration(delta_in, delta_out)
+            
+            # -----------------------------------
             
             # 3. Decision Logic
             start_time = None

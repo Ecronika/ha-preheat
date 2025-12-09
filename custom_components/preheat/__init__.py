@@ -8,8 +8,9 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv
 from .const import DOMAIN, CONF_PRESET_MODE, CONF_EXPERT_MODE, PRESET_BALANCED
-from .coordinator import PreheatingCoordinator
+# from .coordinator import PreheatingCoordinator # Lazy import
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PreheatConfigEntry = ConfigEntry[PreheatingCoordinator]
+PreheatConfigEntry = ConfigEntry # [PreheatingCoordinator] Lazy typing
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Preheat component globally."""
@@ -25,6 +26,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> bool:
     """Set up Preheat from a config entry."""
+    from .coordinator import PreheatingCoordinator
     coordinator = PreheatingCoordinator(hass, entry)
     
     await coordinator.async_load_data()

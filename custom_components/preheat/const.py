@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION: Final = "2.3.0-beta1"
+VERSION: Final = "2.4.0-beta1"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -129,6 +129,15 @@ CONF_STORE_DEADBAND: Final = "store_deadband_k"
 CONF_EARLIEST_START: Final = "earliest_start_minutes"
 CONF_ONLY_ON_WORKDAYS: Final = "only_on_workdays"
 
+# Forecast Integration (V2.4)
+CONF_USE_FORECAST: Final = "use_forecast"
+CONF_RISK_MODE: Final = "risk_mode"
+CONF_FORECAST_CACHE_MIN: Final = "forecast_cache_ttl_min"
+
+RISK_BALANCED: Final = "balanced"
+RISK_PESSIMISTIC: Final = "pessimistic"
+RISK_OPTIMISTIC: Final = "optimistic"
+
 # Defaults
 DEFAULT_EMA_ALPHA: Final = 0.3
 DEFAULT_ARRIVAL_MIN: Final = 300
@@ -147,6 +156,9 @@ DEFAULT_START_GRACE: Final = 3
 DEFAULT_LEARN_DELAY: Final = 10
 DEFAULT_ARRIVAL_WINDOW_START: Final = "04:00:00"
 DEFAULT_ARRIVAL_WINDOW_END: Final = "20:00:00"
+DEFAULT_USE_FORECAST: Final = False
+DEFAULT_RISK_MODE: Final = RISK_BALANCED
+DEFAULT_CACHE_TTL: Final = 30
 
 # Storage Attributes
 ATTR_LEARNED_ARRIVALS: Final = "learned_arrivals"
