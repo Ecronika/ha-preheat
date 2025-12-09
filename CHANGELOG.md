@@ -1,5 +1,8 @@
 
 
+## v2.4.0-beta2 (2025-12-09)
+*   **Fix**: Added missing import `CONF_ONLY_ON_WORKDAYS` causing Setup/Update failures.
+
 ## v2.4.0-beta1 (2025-12-09)
 
 ### ⛈️ Forecast Integration (Phase 2)
