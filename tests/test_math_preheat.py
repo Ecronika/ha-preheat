@@ -98,5 +98,12 @@ class TestMathPreheat(unittest.TestCase):
         # Bisection(25, 30) -> Approx 26.66...
         self.assertTrue(25.0 <= root <= 30.0, f"Root {root} not in 25-30")
 
+    def test_root_finding_no_solution(self):
+        """Test when no duration is sufficient."""
+        # Function always positive (needs more time than available)
+        eval_func = lambda d: 1000.0 - d 
+        root = math_preheat.root_find_duration(eval_func, max_minutes=180)
+        self.assertEqual(root, 180.0) # Should return max if never satisfied
+
 if __name__ == '__main__':
     unittest.main()
