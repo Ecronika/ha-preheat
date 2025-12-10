@@ -1,4 +1,4 @@
-- **Robust**: Detects open windows and sensor errors to prevent wasteful heating.
+# Intelligent Preheating for Home Assistant (v2.4.0)
 - **Transparent**: Includes a Confidence Sensor and detailed Diagnostics to see exactly "why" it's doing what it's doing.
 
 ## Installation

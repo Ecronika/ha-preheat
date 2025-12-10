@@ -1,5 +1,29 @@
 
 
+## v2.4.0 (2025-12-10)
+
+**Initial Stable Release of Forecast Integration** 🚀
+
+This major release transforms the preheater from a reactive to a **predictive** system. By looking ahead using `weather.get_forecasts`, it can now anticipate heat loss before it happens.
+
+### ⛈️ Weather Forecast Integration
+*   **Predictive Heating**: Duration calculation now accounts for future outdoor temperature.
+*   **Risk Strategies**:
+    *   **Balanced**: Accurate physics-based model.
+    *   **Pessimistic (P10)**: Prioritizes comfort (assumes cold forecast).
+    *   **Optimistic (P90)**: Prioritizes savings (assumes warm forecast).
+*   **Smart Caching**: Efficient API usage with 30-min cache.
+
+### 🛡️ Resilience & Engineering
+*   **Deadtime V3**: New "Tangent Method" ring-buffer to detect heating lag (Totzeit).
+*   **Robustness**:
+    *   `CONF_ONLY_ON_WORKDAYS` option for office use-cases.
+    *   **UTC Normalization** for time-zone safe calculations.
+    *   **Root-Finding Solver** for non-monotonic temperature curves.
+*   **Quality**: Coverage increased to 65% with new critical-path tests.
+
+---
+
 ## v2.4.0-beta2 (2025-12-09)
 *   **Fix**: Added missing import `CONF_ONLY_ON_WORKDAYS` causing Setup/Update failures.
 
