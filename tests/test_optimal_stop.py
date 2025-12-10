@@ -1,7 +1,18 @@
-"""Tests for Optimal Stop Manager."""
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
+import sys
+
+# Mock HA modules
+sys.modules['homeassistant'] = MagicMock()
+sys.modules['homeassistant.config_entries'] = MagicMock()
+sys.modules['homeassistant.const'] = MagicMock()
+sys.modules['homeassistant.core'] = MagicMock()
+sys.modules['homeassistant.helpers'] = MagicMock()
+sys.modules['homeassistant.util'] = MagicMock()
+# Explicitly mock dt_util since it is imported
+sys.modules['homeassistant.util.dt'] = MagicMock()
+
 from homeassistant.util import dt as dt_util
 
 from custom_components.preheat.optimal_stop import OptimalStopManager, CONF_STOP_TOLERANCE, CONF_MAX_COAST_HOURS
@@ -16,6 +27,9 @@ class TestOptimalStop(unittest.TestCase):
             CONF_STOP_TOLERANCE: 0.5,
             CONF_MAX_COAST_HOURS: 4.0
         }
+        # Fix dt_util.utcnow to return a real time
+        self.now = datetime(2023, 1, 1, 12, 0, 0)
+        dt_util.utcnow.side_effect = lambda: self.now
         
     def test_safety_break_too_cold(self):
         # Target 21.0, Tolerance 0.5 -> Floor 20.5
@@ -27,7 +41,7 @@ class TestOptimalStop(unittest.TestCase):
         self.manager.update(
             current_temp=20.2,
             target_temp=21.0,
-            schedule_end=dt_util.utcnow() + timedelta(minutes=60),
+            schedule_end=self.now + timedelta(minutes=60),
             forecast_provider=lambda s,e: 0.0,
             tau_hours=4.0,
             config=self.config
@@ -43,8 +57,7 @@ class TestOptimalStop(unittest.TestCase):
         # Temp Diff Start = 11. Diff End = 10.5. Ratio 0.95.
         # t = -240 * ln(0.954) ~ 11 mins.
         
-        now = dt_util.utcnow()
-        sched_end = now + timedelta(minutes=10) # 10 mins away
+        sched_end = self.now + timedelta(minutes=10) # 10 mins away
         
         # Should activate if calc duration > 10 min?
         # Actually calc duration ~11 mins.
@@ -76,9 +89,9 @@ class TestOptimalStop(unittest.TestCase):
         
         # Change target
         self.manager.update(
-            current_temp=21.0,
+            current_temp=21.5, # Boost current temp to avoid "Too Cold" safety break (21.5 > 21.3)
             target_temp=22.0, # Changed
-            schedule_end=dt_util.utcnow() + timedelta(minutes=60),
+            schedule_end=self.now + timedelta(minutes=60),
             forecast_provider=lambda s,e: 0.0,
             tau_hours=4.0,
             config=self.config

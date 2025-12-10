@@ -62,5 +62,7 @@ class PreheatOptimalStopBinarySensor(PreheatBaseBinarySensor):
         data = self.coordinator.data
         return {
             "savings_remaining_min": round(data.savings_remaining, 1),
-            "reason": data.stop_reason
+            "reason": data.stop_reason,
+            "coast_tau_hours": round(data.coast_tau, 2),
+            "tau_confidence": round(data.tau_confidence, 2)
         }

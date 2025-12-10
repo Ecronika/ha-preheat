@@ -249,7 +249,7 @@ def calculate_coast_duration(
         
     # 2. Edge Case: Warm Outside (Short-Circuit)
     # If outside is warmer than (Floor - 2.0), cooling is extremely slow/impossible via transmission.
-    if t_out_eff >= (t_floor - 2.0):
+    if t_out_eff >= (t_floor - 0.5):
         return 0.0
         
     # 3. Physics Check (Log Domain)

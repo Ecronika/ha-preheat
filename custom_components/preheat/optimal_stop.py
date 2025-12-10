@@ -115,6 +115,7 @@ class OptimalStopManager:
                 _LOGGER.info("Optimal Stop RESET: Target temp changed.")
                 self._active = False
                 self._reason = "setpoint_change"
+                return
         self._last_target_temp = target_temp
         
         # B. Session End or Schedule OFF
