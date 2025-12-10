@@ -75,12 +75,20 @@ from .const import (
     CONF_USE_FORECAST,
     CONF_RISK_MODE,
     RISK_BALANCED,
+    RISK_BALANCED,
+    # Optimal Stop
+    CONF_ENABLE_OPTIMAL_STOP,
+    CONF_STOP_TOLERANCE,
+    CONF_MAX_COAST_HOURS,
+    CONF_SCHEDULE_ENTITY,
 )
 
 from .planner import PreheatPlanner
 from .physics import ThermalPhysics, ThermalModelData
 from .history_buffer import RingBuffer, DeadtimeAnalyzer, HistoryPoint
 from .weather_service import WeatherService
+from .optimal_stop import OptimalStopManager, SessionResolver
+from .cooling_analyzer import CoolingAnalyzer
 from . import math_preheat
 
 _LOGGER = logging.getLogger(__name__)
@@ -108,6 +116,15 @@ class PreheatData:
     outdoor_temp: float | None = None
     last_comfort_setpoint: float | None = None
     deadtime: float = 0.0 # V3
+    
+    # Optimal Stop V2.5
+    optimal_stop_active: bool = False
+    optimal_stop_time: datetime | None = None
+    stop_reason: str | None = None
+    savings_total: float = 0.0
+    savings_remaining: float = 0.0
+    coast_tau: float = 0.0
+    tau_confidence: float = 0.0
 
 class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     """Coordinator to manage preheating logic."""
@@ -131,6 +148,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # V3: Init Buffer and Analyzer
         self.history_buffer = RingBuffer(capacity=360) # 6 hours
         self.deadtime_analyzer = DeadtimeAnalyzer()
+        
+        # V2.5: Optimal Stop
+        self.optimal_stop_manager = OptimalStopManager(hass)
+        self.cooling_analyzer = CoolingAnalyzer()
         
         # Init Physics with minimal default until loaded
         self.physics = ThermalPhysics()
@@ -261,6 +282,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     learning_rate=learning_rate
                 )
                 
+                # V2.5 Load Cooling Data
+                self.cooling_analyzer.learned_tau = data.get("model_cooling_tau", 4.0)
+                self.cooling_analyzer.confidence = data.get("cooling_confidence", 0.0)
+                
                 self._last_comfort_setpoint = data.get("last_comfort_setpoint")
             else:
                 _LOGGER.info("No data found. Analyzing history...")
@@ -283,6 +308,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 ATTR_SAMPLE_COUNT: data_physics["sample_count"],
                 "avg_error": data_physics.get("avg_error", 0.0),
                 "last_comfort_setpoint": self._last_comfort_setpoint,
+                # V2.5
+                "model_cooling_tau": self.cooling_analyzer.learned_tau,
+                "cooling_confidence": self.cooling_analyzer.confidence,
             }
             await self._store.async_save(data)
         except Exception as err:
@@ -662,6 +690,70 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # Comfort Learning (Update Setpoint preference)
             await self._update_comfort_learning(target_setpoint, is_occupied)
 
+            # --- V2.5 Optimal Stop Logic ---
+            opt_active = False
+            opt_time = None
+            opt_reason = "disabled"
+            savings_total = 0.0
+            savings_remaining = 0.0
+            
+            # Helper to get HVAC Action
+            is_heating_now = False
+            climate_ent = self._get_conf(CONF_CLIMATE)
+            if climate_ent:
+                 c_state = self.hass.states.get(climate_ent)
+                 if c_state and c_state.attributes.get("hvac_action") == "heating":
+                      is_heating_now = True
+            v_pos = self._get_valve_position()
+            if v_pos is not None and v_pos > 0: is_heating_now = True
+            if self._preheat_active: is_heating_now = True
+
+            if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
+                # 1. Session Resolver
+                sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
+                if not self.session_resolver or self.session_resolver._entity_id != sched_ent:
+                      self.session_resolver = SessionResolver(self.hass, sched_ent)
+                
+                session_end = self.session_resolver.get_current_session_end()
+                
+                # 2. Feed Analyzer
+                self.cooling_analyzer.add_data_point(
+                    now, operative_temp, outdoor_temp, is_heating_now,
+                    window_open=self._window_open_detected
+                )
+                
+                if now.minute % 30 == 0: # Analyze periodically
+                     self.cooling_analyzer.analyze()
+
+                # 3. Manager Update
+                def _forecast_provider_cb(s, e):
+                    if forecasts:
+                         mode = self._get_conf(CONF_RISK_MODE, RISK_BALANCED)
+                         return math_preheat.calculate_risk_metric(forecasts, s, e, mode)
+                    return outdoor_temp
+
+                # Config Dict
+                opt_config = {
+                     CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE),
+                     CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS)
+                }
+                
+                self.optimal_stop_manager.update(
+                    current_temp=operative_temp,
+                    target_temp=target_setpoint,
+                    schedule_end=session_end,
+                    forecast_provider=_forecast_provider_cb,
+                    tau_hours=self.cooling_analyzer.learned_tau,
+                    config=opt_config
+                )
+                
+                opt_active = self.optimal_stop_manager.is_active
+                opt_time = self.optimal_stop_manager.stop_time
+                opt_reason = self.optimal_stop_manager.debug_info["reason"]
+                savings_total = self.optimal_stop_manager._savings_total
+                savings_remaining = self.optimal_stop_manager._savings_remaining
+            
+            # Update output
             return PreheatData(
                 preheat_active=self._preheat_active,
                 next_start_time=start_time,
@@ -677,7 +769,15 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 window_open=self._window_open_detected,
                 outdoor_temp=outdoor_temp,
                 last_comfort_setpoint=self._last_comfort_setpoint,
-                deadtime=self.physics.deadtime
+                deadtime=self.physics.deadtime,
+                # V2.5
+                optimal_stop_active=opt_active,
+                optimal_stop_time=opt_time,
+                stop_reason=opt_reason,
+                savings_total=savings_total,
+                savings_remaining=savings_remaining,
+                coast_tau=self.cooling_analyzer.learned_tau,
+                tau_confidence=self.cooling_analyzer.confidence
             )
 
         except Exception as err:

@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION: Final = "2.4.0"
+VERSION = "v2.5.0-beta1"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -138,6 +138,12 @@ RISK_BALANCED: Final = "balanced"
 RISK_PESSIMISTIC: Final = "pessimistic"
 RISK_OPTIMISTIC: Final = "optimistic"
 
+# Optimal Stop (V2.5)
+CONF_ENABLE_OPTIMAL_STOP: Final = "enable_optimal_stop"
+CONF_STOP_TOLERANCE: Final = "stop_tolerance"
+CONF_MAX_COAST_HOURS: Final = "max_coast_hours"
+CONF_SCHEDULE_ENTITY: Final = "schedule_entity"
+
 # Defaults
 DEFAULT_EMA_ALPHA: Final = 0.3
 DEFAULT_ARRIVAL_MIN: Final = 300
@@ -159,6 +165,8 @@ DEFAULT_ARRIVAL_WINDOW_END: Final = "20:00:00"
 DEFAULT_USE_FORECAST: Final = False
 DEFAULT_RISK_MODE: Final = RISK_BALANCED
 DEFAULT_CACHE_TTL: Final = 30
+DEFAULT_STOP_TOLERANCE: Final = 0.5
+DEFAULT_MAX_COAST_HOURS: Final = 4.0
 
 # Storage Attributes
 ATTR_LEARNED_ARRIVALS: Final = "learned_arrivals"

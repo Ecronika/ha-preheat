@@ -64,6 +64,15 @@ from .const import (
     RISK_OPTIMISTIC,
     DEFAULT_USE_FORECAST,
     DEFAULT_RISK_MODE,
+    DEFAULT_USE_FORECAST,
+    DEFAULT_RISK_MODE,
+    # Optimal Stop
+    CONF_ENABLE_OPTIMAL_STOP,
+    CONF_STOP_TOLERANCE,
+    CONF_MAX_COAST_HOURS,
+    CONF_SCHEDULE_ENTITY,
+    DEFAULT_STOP_TOLERANCE,
+    DEFAULT_MAX_COAST_HOURS,
 )
 
 class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -254,6 +263,18 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                         translation_key="risk_mode"
                     )
                 ),
+
+                # Optimal Stop (V2.5)
+                vol.Optional(CONF_ENABLE_OPTIMAL_STOP): selector.BooleanSelector(),
+                vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
+                     selector.EntitySelectorConfig(domain="schedule")
+                ),
+                vol.Optional(CONF_STOP_TOLERANCE): selector.NumberSelector(
+                     selector.NumberSelectorConfig(min=0.1, max=2.0, step=0.1, unit_of_measurement="K", mode="box")
+                ),
+                vol.Optional(CONF_MAX_COAST_HOURS): selector.NumberSelector(
+                     selector.NumberSelectorConfig(min=0.5, max=12.0, step=0.5, unit_of_measurement="h", mode="box")
+                ),
                 
                 # Removed: Initial Gain
                 vol.Optional(CONF_EMA_ALPHA): selector.NumberSelector(
@@ -314,6 +335,11 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         
         if CONF_USE_FORECAST not in data: data[CONF_USE_FORECAST] = DEFAULT_USE_FORECAST
         if CONF_RISK_MODE not in data: data[CONF_RISK_MODE] = DEFAULT_RISK_MODE
+        
+        if CONF_ENABLE_OPTIMAL_STOP not in data: data[CONF_ENABLE_OPTIMAL_STOP] = False
+        if CONF_SCHEDULE_ENTITY not in data: data[CONF_SCHEDULE_ENTITY] = None
+        if CONF_STOP_TOLERANCE not in data: data[CONF_STOP_TOLERANCE] = DEFAULT_STOP_TOLERANCE
+        if CONF_MAX_COAST_HOURS not in data: data[CONF_MAX_COAST_HOURS] = DEFAULT_MAX_COAST_HOURS
         
         if CONF_ARRIVAL_WINDOW_START not in data: data[CONF_ARRIVAL_WINDOW_START] = DEFAULT_ARRIVAL_WINDOW_START
         if CONF_ARRIVAL_WINDOW_END not in data: data[CONF_ARRIVAL_WINDOW_END] = DEFAULT_ARRIVAL_WINDOW_END

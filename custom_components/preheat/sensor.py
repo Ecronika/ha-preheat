@@ -32,6 +32,7 @@ async def async_setup_entry(
         PhysicsSensor(coordinator, entry, "mass_factor", "mass_factor", "min/K"),
         PhysicsSensor(coordinator, entry, "loss_factor", "loss_factor", "min/K"),
         PreheatConfidenceSensor(coordinator, entry),
+        PreheatOptimalStopTimeSensor(coordinator, entry),
     ]
     
     async_add_entities(sensors)
@@ -162,3 +163,29 @@ class PreheatConfidenceSensor(PreheatBaseSensor):
     @property
     def native_value(self) -> int:
         return self.coordinator.physics.get_confidence()
+
+class PreheatOptimalStopTimeSensor(PreheatBaseSensor):
+    """Optimal Stop trigger time."""
+    _attr_translation_key = "optimal_stop_time"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-end"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_optimal_stop_time"
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self.coordinator.data.optimal_stop_time
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data
+        return {
+            "savings_total_min": round(data.savings_total, 1),
+            "savings_remaining_min": round(data.savings_remaining, 1),
+            "reason": data.stop_reason,
+            "coast_tau_hours": round(data.coast_tau, 1),
+            "tau_confidence": round(data.tau_confidence * 100, 1),
+            "is_active": data.optimal_stop_active
+        }

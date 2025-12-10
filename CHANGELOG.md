@@ -1,5 +1,21 @@
 
 
+## v2.5.0-beta1 (2025-12-10)
+
+### 📉 Optimal Stop (Coast-to-Vacancy)
+*   **Intelligent Shutdown**: The system can now turn off heating *before* a scheduled vacancy (e.g., leaving for work), letting the room "coast" to a stop while staying within a comfortable temperature tolerance.
+*   **Cooling Analyzer**: A new self-learning component that observes how your building cools down (`tau`) to predict exactly when to stop heating.
+*   **Inverted Physics**: Solves the cooling equation in reverse to maximize energy savings without engaging the "Anti-Freeze" safety too early.
+
+### ✨ New Entities
+*   `sensor.preheat_optimal_stop_time`: Displays the calculated time when heating will stop.
+*   `binary_sensor.preheat_optimal_stop_active`: Indicates when the system is effectively "Coasting" (Heating OFF due to Optimal Stop).
+
+### ⚙️ Configuration
+*   **Expert Mode**: New options to enable Optimal Stop, select a Schedule Helper, and tune tolerance/max coast duration.
+
+---
+
 ## v2.4.0 (2025-12-10)
 
 **Initial Stable Release of Forecast Integration** 🚀

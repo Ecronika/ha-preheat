@@ -220,3 +220,65 @@ def root_find_duration(
             low = mid # Need more duration
             
     return high # Safer to return high (guaranteed sufficient) or mid? High is safe comfort wise.
+
+def calculate_coast_duration(
+    t_start: float,
+    t_floor: float,
+    t_out_eff: float,
+    tau_hours: float,
+    max_minutes: float = 240.0
+) -> float:
+    """
+    Calculate how long (in minutes) it takes to cool down to t_floor.
+    
+    Formula: t = -tau * ln( (T_floor - T_out) / (T_start - T_out) )
+    
+    Args:
+        t_start: Current indoor temperature.
+        t_floor: Target floor temperature (Target - Tolerance).
+        t_out_eff: Effective outdoor temperature (Sink).
+        tau_hours: Thermal Time Constant in hours.
+        max_minutes: Cap for the result.
+        
+    Returns:
+        float: Duration in minutes (0.0 if not possible or too slow).
+    """
+    # 1. Edge Case: Already too cold
+    if t_start <= t_floor:
+        return 0.0
+        
+    # 2. Edge Case: Warm Outside (Short-Circuit)
+    # If outside is warmer than (Floor - 2.0), cooling is extremely slow/impossible via transmission.
+    if t_out_eff >= (t_floor - 2.0):
+        return 0.0
+        
+    # 3. Physics Check (Log Domain)
+    # We need (T_floor - T_out) > 0 and (T_start - T_out) > 0.
+    # From checks 1 & 2, we know T_start > T_floor > T_out.
+    # So numerator and denominator are positive.
+    
+    numerator = t_floor - t_out_eff
+    denominator = t_start - t_out_eff
+    
+    if denominator == 0: return 0.0 # Should not happen due to checks, but safety.
+    
+    ratio = numerator / denominator
+    if ratio <= 0: return 0.0 # Math domain error protection
+    
+    # 4. Calculation
+    # result in hours = -tau * ln(ratio)
+    hours = -tau_hours * math.log(ratio)
+    minutes = hours * 60.0
+    
+    # 5. Clamping
+    if minutes < 0: return 0.0
+    if minutes > max_minutes: return max_minutes
+    
+    return minutes
+
+def calc_forecast_mean_or_p90_placeholder(forecasts: list[dict], start_dt: datetime, end_dt: datetime) -> float:
+    """
+    Helper to get effective T_out for Coasting.
+    Uses 'Balanced' (Mean) logic by default as spec requests.
+    """
+    return integrate_forecast(forecasts, start_dt, end_dt)

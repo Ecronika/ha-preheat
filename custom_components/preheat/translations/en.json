@@ -62,7 +62,11 @@
                     "risk_mode": "Forecast Risk Strategy",
                     "air_to_oper_bias_k": "Air-to-Operative Bias (K)",
                     "valve_position_sensor": "Valve Position (Optional)",
-                    "max_preheat_hours": "Max Preheat Duration (Hours)"
+                    "max_preheat_hours": "Max Preheat Duration (Hours)",
+                    "enable_optimal_stop": "Enable Optimal Stop (Coast)",
+                    "schedule_entity": "Schedule Helper",
+                    "stop_tolerance": "Stop Tolerance (K)",
+                    "max_coast_hours": "Max Coast Duration (Hours)"
                 }
             }
         },
@@ -122,6 +126,14 @@
             },
             "confidence": {
                 "name": "Learning Confidence"
+            },
+            "optimal_stop_time": {
+                "name": "Optimal Stop Time"
+            }
+        },
+        "binary_sensor": {
+            "optimal_stop_active": {
+                "name": "Optimal Stop Active"
             }
         },
         "button": {
