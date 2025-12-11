@@ -62,7 +62,11 @@
           "risk_mode": "Forecast Risiko-Strategie",
           "air_to_oper_bias_k": "Korrektur für gefühlte Temp. (Bias)",
           "valve_position_sensor": "Ventil-Position (Optional)",
-          "max_preheat_hours": "Max. Vorheizdauer (Stunden)"
+          "max_preheat_hours": "Max. Vorheizdauer (Stunden)",
+          "enable_optimal_stop": "Optimal Stop aktivieren (Coasting)",
+          "schedule_entity": "Zeitplan-Helfer (Schedule Entity)",
+          "stop_tolerance": "Abschalt-Toleranz (K)",
+          "max_coast_hours": "Max. Coasting-Dauer (Stunden)"
         }
       }
     },
@@ -122,6 +126,14 @@
       },
       "confidence": {
         "name": "Lern-Konfidenz"
+      },
+      "optimal_stop_time": {
+        "name": "Optimaler Abschaltzeitpunkt"
+      }
+    },
+    "binary_sensor": {
+      "optimal_stop_active": {
+        "name": "Optimal Stop Aktiv"
       }
     },
     "button": {
