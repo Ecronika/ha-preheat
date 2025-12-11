@@ -152,6 +152,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # V2.5: Optimal Stop
         self.optimal_stop_manager = OptimalStopManager(hass)
         self.cooling_analyzer = CoolingAnalyzer()
+        self.session_resolver = None
         
         # Init Physics with minimal default until loaded
         self.physics = ThermalPhysics()
