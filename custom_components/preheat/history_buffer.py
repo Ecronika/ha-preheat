@@ -32,6 +32,17 @@ class RingBuffer:
     def clear(self) -> None:
         self._buffer.clear()
 
+    def get_average_valve(self, start_ts: float, end_ts: float) -> float | None:
+        """Calculate average valve position within the time window."""
+        total = 0.0
+        count = 0
+        for p in self._buffer:
+            if start_ts <= p.timestamp <= end_ts:
+                total += p.valve
+                count += 1
+        
+        return (total / count) if count > 0 else None
+
 class DeadtimeAnalyzer:
     """Analyzes heating curves to find deadtime (Totzeit)."""
 

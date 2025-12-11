@@ -807,8 +807,19 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 delta_in = end_temp - self._start_temp
                 delta_out = target - outdoor # Approx average delta
                 
-                # Valve Sensor
-                valve_pos = self._get_valve_position()
+                # Valve Sensor Check (Average over the heating period)
+                start_ts = self._preheat_started_at.timestamp()
+                end_ts = dt_util.utcnow().timestamp()
+                
+                # Try average first
+                valve_pos_avg = self.history_buffer.get_average_valve(start_ts, end_ts)
+                
+                # Fallback to current if buffer empty (unlikely)
+                if valve_pos_avg is None:
+                     valve_pos_avg = self._get_valve_position()
+                
+                _LOGGER.debug("Learning Check: Valve Avg=%.1f (over %.1f min)", 
+                              valve_pos_avg if valve_pos_avg else 0, duration)
                 
                 # V3: Analyze Deadtime
                 new_deadtime = self.deadtime_analyzer.analyze(self.history_buffer.get_all())
@@ -816,7 +827,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                      self.physics.update_deadtime(new_deadtime)
                      _LOGGER.info("Deadtime Updated: %.1f min", self.physics.deadtime)
                 
-                success = self.physics.update_model(duration, delta_in, delta_out, valve_pos)
+                success = self.physics.update_model(duration, delta_in, delta_out, valve_pos_avg)
                 if success:
                     await self._async_save_data()
                     _LOGGER.info("Learning Success: Mass=%.1f, Loss=%.1f", self.physics.mass_factor, self.physics.loss_factor)
