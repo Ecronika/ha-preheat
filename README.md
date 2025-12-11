@@ -1,79 +1,99 @@
-# Intelligent Preheating for Home Assistant (v2.5.0-beta1)
-- **Transparent**: Includes a Confidence Sensor and detailed Diagnostics to see exactly "why" it's doing what it's doing.
+# Intelligent Preheating for Home Assistant (v2.5.0-beta)
 
-## Installation
-1. Install via HACS (Custom Repository) or copy `custom_components/preheat` to your HA config.
-2. Add integration via Settings -> Devices -> Add Integration -> "Intelligent Preheating".
+**Turn your heating into a Predictive Smart System.**
 
-## Configuration
-### Expert Settings (Optional)
-- **Minimum Comfort Temp**: Threshold to distinguish "Eco/Off" from "Comfort" (Default: 19°C).
-- **Fallback Temp**: Target used if no history exists yet (Default: 21°C).
+This integration learns the thermal physics of your room (How fast does it heat up? How fast does it cool down?) to control your thermostat intelligently.
 
-### Weather Forecast (New in v2.4) ⛈️
-Enable "Use Weather Forecast" in Expert Settings to react to incoming cold fronts.
-- **Risk Mode**:
-    - *Balanced*: Standard physics calculation (Recommended).
-    - *Pessimistic (P10)*: Assumes it will be colder than average. Better comfort.
-    - *Optimistic (P90)*: Assumes it will be warmer. Better savings.
+*   **Goal**: Reach your target temperature *exactly* when you arrive/wake up.
+*   **Goal**: Stop heating *before* you leave ("Optimal Stop"), letting the room coast to a stop to save energy.
 
+---
 
-### Critical Note on Occupancy ⚠️
-This integration uses the **Occupancy Sensor** to **STOP** preheating.
-- **TRUE/ON**: Means "User is physically present". The preheater stops, and your normal thermostat schedule should take over.
-- **FALSE/OFF**: Means "Room is empty". The preheater waits for the next scheduled arrival to start purely predictive heating.
+## ✨ Features
 
-**DO NOT** use a scheduler entity (that turns ON at 07:00) as the Occupancy Sensor! This will cause the preheater to shut down exactly when you want it to run. Usage of a schedule helper logic should be inverted or handled separately.
-- **Robust**: Detects open windows and sensor errors to prevent wasteful heating.
-- **Transparent**: Includes a Confidence Sensor and detailed Diagnostics to see exactly "why" it's doing what it's doing.
+*   🧠 **Self-Learning Physics**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime` (Totzeit) for each room.
+*   📉 **Optimal Stop (Coast-to-Vacancy)**: Turns off the heating early if the room stays warm enough until the schedule ends.
+*   ⛈️ **Weather Forecast Integration**: Looks ahead at the weather forecast to adjust heating power for incoming cold fronts.
+*   🪟 **Window Detection**: Pauses operation if a rapid temperature drop is detected.
+*   🛡️ **Robustness**: Filters out sensor noise and ignores "low valve position" learning to ensure data quality.
+*   🔍 **Transparent**: Provides detailed Diagnostics, Confidence scores, and "Reason" attributes so you know *why* it acted.
+*   🌎 **Localized**: Available in English and German.
 
-## Installation
-1. Install via HACS (Custom Repository) or copy `custom_components/preheat` to your HA config.
-2. Add integration via Settings -> Devices -> Add Integration -> "Intelligent Preheating".
+---
 
-## Configuration
-### Expert Settings (Optional)
-- **Minimum Comfort Temp**: Threshold to distinguish "Eco/Off" from "Comfort" (Default: 19°C).
-- **Fallback Temp**: Target used if no history exists yet (Default: 21°C).
+## 📦 Installation
 
-### Weather Forecast (New in v2.4) ⛈️
-Enable "Use Weather Forecast" in Expert Settings to react to incoming cold fronts.
-- **Risk Mode**:
-    - *Balanced*: Standard physics calculation (Recommended).
-    - *Pessimistic (P10)*: Assumes it will be colder than average. Better comfort.
-    - *Optimistic (P90)*: Assumes it will be warmer. Better savings.
+1.  **HACS**:
+    *   Add this repository as a **Custom Repository** in HACS.
+    *   Search for "Intelligent Preheating" and install.
+    *   Restart Home Assistant.
+2.  **Configuration**:
+    *   Go to **Settings** -> **Devices & Services** -> **Add Integration**.
+    *   Search for "Intelligent Preheating".
+    *   Follow the setup wizard.
 
-### Weather Forecast (New in v2.4) ⛈️
-Enable "Use Weather Forecast" in Expert Settings to react to incoming cold fronts.
-- **Risk Mode**:
-    - *Balanced*: Standard physics calculation (Recommended).
-    - *Pessimistic (P10)*: Assumes it will be colder than average. Better comfort.
-    - *Optimistic (P90)*: Assumes it will be warmer. Better savings.
+---
 
-### Critical Note on Occupancy ⚠️
-This integration uses the **Occupancy Sensor** to **STOP** preheating.
-- **TRUE/ON**: Means "User is physically present". The preheater stops, and your normal thermostat schedule should take over.
-- **FALSE/OFF**: Means "Room is empty". The preheater waits for the next scheduled arrival to start purely predictive heating.
+## ⚙️ Configuration
 
-**DO NOT** use a scheduler entity (that turns ON at 07:00) as the Occupancy Sensor! This will cause the preheater to shut down exactly when you want it to run. Usage of a schedule helper logic should be inverted or handled separately.
+### Basic Setup
+*   **Occupancy Sensor**: A binary sensor that indicates if the room is *IN USE*. (See "Critical Note" below).
+*   **Temperature Sensor**: The accurate room temperature.
+*   **Climate Entity** (Optional): The thermostat to control.
+*   **Weather Entity** (Optional): For forecast-based prediction.
+*   **Valve Position** (Optional): Helps the system learn only when heating is actually active.
 
-### Optimal Stop (Coast-to-Stop) 🍃
-*New in v2.5.0*
+### Expert Settings
+Once added, click "Configure" on the integration entry to access:
+*   **Enable Optimal Stop**: Activate the Coast-to-Stop feature.
+*   **Schedule Entity**: Required for Optimal Stop to know when the heating period ends.
+*   **Heating Profile**: Select your system type (e.g., *Radiator New*, *Floor Concrete*) to assist the learning algorithm.
+*   **Risk Mode**: Choose between *Balanced*, *Pessimistic* (Comfort), or *Optimistic* (Savings) for weather handling.
 
-Intelligent Preheating now helps you save energy at the **end** of your heating cycle by "Coasting" to a stop.
-- **How it works?** It learns how fast your room cools down (`tau_cool`) and calculates the exact moment to switch off the heating so that the room reaches your target Minimum Comfort Temp exactly at the end of the schedule.
-- **Configuration**: Enabled via "Expert Settings".
-- **Schedule Requirement**: For this to work, your **Schedule Entity** must accurately reflect the "Required Comfort Period" (e.g., 08:00 - 22:00). If you just toggle it manually, Optimal Stop cannot predict when to stop.
+---
 
-> **Signals, not Magic**: This integration provides a `binary_sensor.preheat_optimal_stop_active`. **YOU** decide what to do with it (e.g., turn off the switch, lower the thermostat). We do not override your climate entity automatically.
+## 💡 Key Concepts
 
-### Recommended Sensors
-- **Temperature**: A reliable room sensor (zigbee/zwave).
-- **Outdoor Temp**: From a weather integration or physical sensor.
-- **Valve Position**: (Optional) For "Smart Valve" logic that filters out low-flow learning noise.
+### ⚠️ The Occupancy Sensor (Critical!)
+This integration uses **Presence** to determining when to **STOP** preheating.
+*   **ON (True)**: "User is here." -> Preheating stops, normal thermostat schedule/rules take over.
+*   **OFF (False)**: "Room is empty." -> System waits for the next predicted arrival to start pre-heating.
 
-## What's New in v2.5.0-beta1
-- **Optimal Stop**: predictive coasting to save energy at the end of the day.
-- **Improved Forecast Integration**: Better handling of mild weather conditions.
-- **Strict Workday Mode**: Option to disable preheating on weekends/holidays.
+> **Do NOT** use a simple time-scheduler (e.g., "On at 7am") as the Occupancy Sensor. This would shut down the preheater exactly when it tries to work. Use a real presence sensor or a logic helper that represents "People are present".
 
+### 🍃 Optimal Stop (Signals, not Magic)
+If enabled, the integration calculates the earliest possible shutdown time.
+It exposes a **Binary Sensor** (`binary_sensor.zone_optimal_stop_active`).
+*   **ON**: "You can turn off the heating now. It will stay warm."
+*   **OFF**: "keep heating."
+
+**Automation Example**:
+```yaml
+trigger:
+  - platform: state
+    entity_id: binary_sensor.office_optimal_stop_active
+    to: "on"
+action:
+  - service: climate.set_temperature
+    target:
+      entity_id: climate.office
+    data:
+      temperature: 19 # Eco Temperature
+```
+
+---
+
+## ❓ FAQ
+
+**Q: Why are my physics values (Mass/Deadtime) not changing?**
+A: The system filters out "noise". It only learns from "clean" heating events (Temp rise > 0.5K, Valve open). If you only maintain temperature (hysteresis), it won't change the model often. This is normal.
+
+**Q: Does it handle Daylight Savings Time?**
+A: Yes. All calculations use UTC internally. The physics (duration) remain valid regardless of how the wall clock shifts.
+
+**Q: Can I use it for Floor Heating?**
+A: Yes! Select the "Floor (Concrete)" profile. Computing `Deadtime` (delay) is specifically designed for slow floor systems.
+
+---
+
+**License**: MIT

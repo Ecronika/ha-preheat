@@ -1,5 +1,17 @@
 
 
+## v2.5.0-beta5 (2025-12-11)
+*   **Polish**: Standardized `tau_confidence` formatting to percentage across all sensors.
+
+## v2.5.0-beta4 (2025-12-11)
+*   **Localization**: Added missing German translations for Optimal Stop configuration and sensors.
+
+## v2.5.0-beta3 (2025-12-11)
+*   **Hotfix**: Fixed `AttributeError: session_resolver` crash on startup/update.
+
+## v2.5.0-beta2 (2025-12-11)
+*   **Bugfix**: Fixed learning events being discarded if valve position drops to 0% at the exact moment of target achievement. Now uses **average** valve position over the heating duration.
+
 ## v2.5.0-beta1 (2025-12-10)
 
 ### 📉 Optimal Stop (Coast-to-Vacancy)
