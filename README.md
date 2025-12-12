@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.5.0-beta)
+# Intelligent Preheating for Home Assistant (v2.5.0)
 
 **Turn your heating into a Predictive Smart System.**
 

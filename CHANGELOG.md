@@ -1,40 +1,36 @@
+## v2.5.0 (2025-12-12)
 
+**Official Stable Release of Optimal Stop & Context Intelligence** 📉🧠
 
-## v2.5.0-beta9 (2025-12-12)
-*   **Enhancement**: Exposed `health_score` (0-100%) in the main status sensor attributes. Now you can easily see if the model is healthy without checking debug logs.
-
-## v2.5.0-beta8 (2025-12-12)
-*   **Hotfix**: Fixed `NameError: force_off_holiday` crash introduced in beta7. Reworked filter logic to be implicitly handled by the Planner.
-
-## v2.5.0-beta7 (2025-12-12)
-*   **Fix**: Correctly calculate "Next Event" for future days when "Only on workdays" is enabled. Attempts to find the next valid workday instead of showing weekends or phantom events.
-*   **Robustness**: Now respects the specific `workdays` configuration of the Binary Workday Sensor (e.g. if Saturday is configured as a workday).
-
-## v2.5.0-beta5 (2025-12-11)
-*   **Polish**: Standardized `tau_confidence` formatting to percentage across all sensors.
-
-## v2.5.0-beta4 (2025-12-11)
-*   **Localization**: Added missing German translations for Optimal Stop configuration and sensors.
-
-## v2.5.0-beta3 (2025-12-11)
-*   **Hotfix**: Fixed `AttributeError: session_resolver` crash on startup/update.
-
-## v2.5.0-beta2 (2025-12-11)
-*   **Bugfix**: Fixed learning events being discarded if valve position drops to 0% at the exact moment of target achievement. Now uses **average** valve position over the heating duration.
-
-## v2.5.0-beta1 (2025-12-10)
+This release focuses on **saving energy** by knowing when to stop, not just when to start. It introduces the "Coast-to-Stop" feature and intelligent calendar handling.
 
 ### 📉 Optimal Stop (Coast-to-Vacancy)
 *   **Intelligent Shutdown**: The system can now turn off heating *before* a scheduled vacancy (e.g., leaving for work), letting the room "coast" to a stop while staying within a comfortable temperature tolerance.
-*   **Cooling Analyzer**: A new self-learning component that observes how your building cools down (`tau`) to predict exactly when to stop heating.
-*   **Inverted Physics**: Solves the cooling equation in reverse to maximize energy savings without engaging the "Anti-Freeze" safety too early.
+*   **Sensors**: Added `sensor.preheat_optimal_stop_time` and `binary_sensor.optimal_stop_active`.
+*   **Config**: New "Expert Mode" settings to enable this feature and tune tolerance.
+*   **Physics**: A new self-learning component observes how your building cools down (`tau`) to maximize savings without risking comfort.
 
-### ✨ New Entities
-*   `sensor.preheat_optimal_stop_time`: Displays the calculated time when heating will stop.
-*   `binary_sensor.preheat_optimal_stop_active`: Indicates when the system is effectively "Coasting" (Heating OFF due to Optimal Stop).
+### 🧠 Workday & Schedule Intelligence
+*   **Smart Lookahead**: The planner now scans up to 7 days into the future to find the next valid event, skipping weekends if `Only on workdays` is enabled.
+*   **Sensor Integration**: Respects the specific configuration of your `binary_sensor.workday_sensor` (e.g., handles custom workdays like Saturday).
+*   **Robustness**: Fallback logic ensures operation even if the Workday sensor is unavailable.
 
-### ⚙️ Configuration
-*   **Expert Mode**: New options to enable Optimal Stop, select a Schedule Helper, and tune tolerance/max coast duration.
+### 🩺 Diagnostics & Health
+*   **Health Score**: New `health_score` attribute on the status sensor (0-100%) gives instant feedback on model quality.
+*   **Transparency**: Detailed attributes for `stop_reason`, `tau_confidence`, and `savings_minutes`.
+
+### 🌍 Localization
+*   **German**: Added full German translations for all new features and configuration options.
+
+---
+
+### Beta Cycle History (v2.5.0-beta1 to beta9)
+*   **beta9**: Exposed `health_score` in status sensor.
+*   **beta8**: Hotfix for `NameError` crash in workday logic.
+*   **beta7**: Fixed "Next Event" logic to correctly skip weekends/holidays.
+*   **beta4-5**: Localization updates & formatting polish.
+*   **beta2-3**: Fixes for valve position averaging and startup crashes.
+*   **beta1**: Initial Optimal Stop implementation.
 
 ---
 
