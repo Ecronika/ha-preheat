@@ -1,5 +1,8 @@
 
 
+## v2.5.0-beta9 (2025-12-12)
+*   **Enhancement**: Exposed `health_score` (0-100%) in the main status sensor attributes. Now you can easily see if the model is healthy without checking debug logs.
+
 ## v2.5.0-beta8 (2025-12-12)
 *   **Hotfix**: Fixed `NameError: force_off_holiday` crash introduced in beta7. Reworked filter logic to be implicitly handled by the Planner.
 
