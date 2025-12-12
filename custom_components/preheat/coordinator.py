@@ -535,22 +535,35 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                      is_active=self._preheat_active
                  ))
 
-            is_holiday = False
-            workday_on = True # Default true if no sensor
-            workday_sensor = self._get_conf(CONF_WORKDAY)
-            if workday_sensor:
-                state = self.hass.states.get(workday_sensor)
-                if state:
-                     is_holiday = state.state == STATE_OFF
-                     workday_on = state.state == STATE_ON
-            
-            # Check 'Only On Workdays' constraint
-            force_off_holiday = False
-            if self._get_conf(CONF_ONLY_ON_WORKDAYS, False) and not workday_on:
-                 force_off_holiday = True
-            
             # 1. Get Next Arrival
-            next_event = self.planner.get_next_scheduled_event(now, is_holiday)
+            allowed_weekdays = None
+            if self._get_conf(CONF_ONLY_ON_WORKDAYS, False):
+                 workday_sensor = self._get_conf(CONF_WORKDAY)
+                 if workday_sensor:
+                     state = self.hass.states.get(workday_sensor)
+                     # Check if sensor provides 'workdays' attribute (list of allowed days)
+                     if state and state.state != "unavailable":
+                         w_attr = state.attributes.get("workdays")
+                         if isinstance(w_attr, list):
+                             # Map ['mon', 'tue'] -> [0, 1]
+                             week_map = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+                             allowed_weekdays = []
+                             for day_str in w_attr:
+                                 if str(day_str).lower() in week_map:
+                                     allowed_weekdays.append(week_map[str(day_str).lower()])
+                         else:
+                             # Fallback: Default to Mon-Fri if attribute missing but sensor exists
+                             _LOGGER.warning("Workday sensor %s missing 'workdays' attribute. Fallback to Mon-Fri.", workday_sensor)
+                             allowed_weekdays = [0, 1, 2, 3, 4]
+                     else:
+                          # Sensor unavailable/missing -> Fallback Mon-Fri
+                          _LOGGER.warning("Workday sensor %s unavailable. Fallback to Mon-Fri.", workday_sensor)
+                          allowed_weekdays = [0, 1, 2, 3, 4]
+                 else:
+                     # Helper enabled but no sensor configured?! Fallback Mon-Fri
+                     allowed_weekdays = [0, 1, 2, 3, 4]
+
+            next_event = self.planner.get_next_scheduled_event(now, allowed_weekdays=allowed_weekdays)
             
             # 2. Calculate Physics
             operative_temp = op_temp_raw # Reuse

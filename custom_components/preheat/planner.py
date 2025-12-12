@@ -83,43 +83,59 @@ class PreheatPlanner:
         events.sort()
         return events
 
-    def get_next_scheduled_event(self, now: datetime, is_holiday: bool = False) -> datetime | None:
-        """Get the very next event (Today or Tomorrow)."""
-        today_events = self.get_schedule_for_today(now, is_holiday)
-        if today_events:
-            return today_events[0]
+    def get_next_scheduled_event(self, now: datetime, allowed_weekdays: list[int] | None = None) -> datetime | None:
+        """
+        Get the very next event (Lookahead up to 7 days).
         
-        # Try tomorrow
-        # For tomorrow, "now" doesn't matter for filtering, we want the first event of the day.
-        tomorrow = now + timedelta(days=1)
-        weekday = tomorrow.weekday()
+        Args:
+            now: Current timestamp (aware).
+            allowed_weekdays: List of allowed weekday integers (0=Mon, 6=Sun). 
+                              If None, all days are allowed.
+        """
+        today_date = now.date()
         
-        # Check if tomorrow is also a holiday? 
-        # The caller 'is_holiday' is for TODAY. We assume tomorrow is standard unless we check logic again.
-        # Since we don't have tomorrow's holiday state here easily, we fallback to simple weekday.
-        # (Enhancement: Call coordinator for tomorrow's state? For now: keep simple)
-        if is_holiday and weekday < 5:
-             # Heuristic: If today is holiday, tomorrow might not be... 
-             # But 'is_holiday' param is strictly for Today.
-             # We should probably trust 'weekday' for tomorrow.
-             pass
-             
-        # Actually, let's just respect the weekday.
-        # If tomorrow is a workday-holiday, it will be missed, but that is edge case.
-        # If we really want to be correct, we'd need tomorrow's holiday state.
-        # For now, let's just remove the blind 'weekday = 6' override for tomorrow based on TODAY's holiday state.
+        # Look ahead 7 days to cover a full weekly cycle
+        for day_offset in range(8):
+            check_date = today_date + timedelta(days=day_offset)
+            weekday = check_date.weekday()
+            
+            # 1. Check Workday Restriction
+            if allowed_weekdays is not None:
+                if weekday not in allowed_weekdays:
+                    continue # Skip this day (e.g. Weekend)
+            
+            # 2. Get Events for this Weekday
+            timestamps = self.history.get(weekday, [])
+            if not timestamps:
+                continue
+                
+            clusters = self.detector.find_clusters(timestamps)
+            if not clusters:
+                continue
+            
+            # 3. Find valid event on this day
+            earliest_min = min(c.time_minutes for c in clusters)
+            event_dt = datetime.combine(check_date, datetime.min.time()) + timedelta(minutes=earliest_min)
+            event_dt = event_dt.replace(tzinfo=now.tzinfo)
+            
+            # 4. Filter Past Events (Only relevant for Today/offset=0)
+            if event_dt > now:
+                return event_dt
+                
+            # If Today has multiple events, we might need to check the next cluster?
+            # Current logic just takes min(). If min is past, it discards Today entirely?
+            # Enhancement: Check all clusters for Today.
+            if day_offset == 0:
+                # Iterate all clusters to find one > now
+                sorted_mins = sorted([c.time_minutes for c in clusters])
+                for m in sorted_mins:
+                     dt_candidate = datetime.combine(check_date, datetime.min.time()) + timedelta(minutes=m)
+                     dt_candidate = dt_candidate.replace(tzinfo=now.tzinfo)
+                     if dt_candidate > now:
+                         return dt_candidate
         
-        timestamps = self.history.get(weekday, [])
-        clusters = self.detector.find_clusters(timestamps)
-        
-        if not clusters:
-             return None
-             
-        # Find earliest cluster
-        earliest_min = min(c.time_minutes for c in clusters)
-        tomorrow_dt = datetime.combine(tomorrow.date(), datetime.min.time()) + timedelta(minutes=earliest_min)
-        tomorrow_dt = tomorrow_dt.replace(tzinfo=now.tzinfo)
-        return tomorrow_dt
+        # No event found in next 7 days matching criteria
+        return None
 
     def get_schedule_summary(self) -> dict[str, str]:
         """Get a human readable summary of learned times per weekday."""
