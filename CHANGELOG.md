@@ -1,5 +1,8 @@
 
 
+## v2.5.0-beta8 (2025-12-12)
+*   **Hotfix**: Fixed `NameError: force_off_holiday` crash introduced in beta7. Reworked filter logic to be implicitly handled by the Planner.
+
 ## v2.5.0-beta7 (2025-12-12)
 *   **Fix**: Correctly calculate "Next Event" for future days when "Only on workdays" is enabled. Attempts to find the next valid workday instead of showing weekends or phantom events.
 *   **Robustness**: Now respects the specific `workdays` configuration of the Binary Workday Sensor (e.g. if Saturday is configured as a workday).

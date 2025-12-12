@@ -675,9 +675,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 is_occupied = True
                 should_start = False # User is home, no Pre-heat (Normal heat takes over)
 
-            # Strict Workday Mode
-            if force_off_holiday:
-                should_start = False
+
 
             # 5. Actuate
             if should_start and not self._preheat_active:
