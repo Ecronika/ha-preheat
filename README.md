@@ -2,7 +2,7 @@
 
 **Turn your heating into a Predictive Smart System.**
 
-This integration learns the thermal physics of your room (How fast does it heat up? How fast does it cool down?) to control your thermostat intelligently.
+This integration acts as a **Stand-Alone Pilot** for your heating. It learns the thermal physics of your room to control **any** thermostat intelligently, without needing complex dependencies.
 
 *   **Goal**: Reach your target temperature *exactly* when you arrive/wake up.
 *   **Goal**: Stop heating *before* you leave ("Optimal Stop"), letting the room coast to a stop to save energy.
@@ -12,16 +12,34 @@ This integration learns the thermal physics of your room (How fast does it heat 
 ## ✨ Features
 
 *   🧠 **Self-Learning Physics**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime` (Totzeit) for each room.
-*   📉 **Optimal Stop (Coast-to-Vacancy)**: Turns off the heating early if the room stays warm enough until the schedule ends.
+*   📉 **Optimal Stop (Coast-to-Vacancy)**: **[Unique]** Turns off the heating early if the room stays warm enough until the schedule ends.
+*   🔌 **Stand-Alone**: Works with any thermostat entity. No external "Scheduler Component" or "Virtual Thermostat" required.
 *   ⛈️ **Weather Forecast Integration**: Looks ahead at the weather forecast to adjust heating power for incoming cold fronts.
 *   🪟 **Window Detection**: Pauses operation if a rapid temperature drop is detected.
 *   🛡️ **Robustness**: Filters out sensor noise and ignores "low valve position" learning to ensure data quality.
 *   🔍 **Transparent**: Provides detailed Diagnostics, Confidence scores, and "Reason" attributes so you know *why* it acted.
 *   🌎 **Localized**: Available in English and German.
 
+## 🧠 How it works (The Math)
+
+The system treats your room like a physical battery. It learns two main things:
+1.  **Charge Rate (Thermal Mass)**: How long does it take to raise the temperature by 1°C?
+2.  **Leak Rate (Thermal Loss)**: How fast does the room lose heat to the outside?
+
+**Simple Calculation Example:**
+*   **Target**: 21°C at 07:00
+*   **Current Temp**: 18°C
+*   **Learned Rate**: Your room heats at **2°C per hour**.
+*   **Calculation**: `(21 - 18) / 2 = 1.5 hours`.
+*   **Result**: Start heating at **05:30**.
+
+*Note: In reality, the physics engine is much smarter. It uses a differential equation solver to account for outdoor temperature, heat loss during the heat-up phase, and system latency (Deadtime).*
+
 ---
 
 ## 📦 Installation
+
+**Prerequisites**: Just Home Assistant. No extra integrations required.
 
 1.  **HACS**:
     *   Add this repository as a **Custom Repository** in HACS.
