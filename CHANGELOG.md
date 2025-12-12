@@ -1,5 +1,9 @@
 
 
+## v2.5.0-beta7 (2025-12-12)
+*   **Fix**: Correctly calculate "Next Event" for future days when "Only on workdays" is enabled. Attempts to find the next valid workday instead of showing weekends or phantom events.
+*   **Robustness**: Now respects the specific `workdays` configuration of the Binary Workday Sensor (e.g. if Saturday is configured as a workday).
+
 ## v2.5.0-beta5 (2025-12-11)
 *   **Polish**: Standardized `tau_confidence` formatting to percentage across all sensors.
 
