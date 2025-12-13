@@ -1,3 +1,7 @@
+## v2.6.0-beta3 (2025-12-13)
+*   **Fix**: Fixed empty Sensor Attributes (Pattern type=none) during legacy fallback (Phase 1).
+*   **Fix**: Fixed empty Schedule Summary list by correctly falling back to v2 data when v3 data is sparse.
+
 ## v2.6.0-beta2 (2025-12-13)
 *   **Fix**: Critical fix for data migration. Restored loading of legacy arrival timestamps which were being reset in beta1.
 *   **Improvement**: Reduced log level of "Workday sensor unavailable" from Warning to Info during startup.

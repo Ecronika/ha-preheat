@@ -170,9 +170,22 @@ class PreheatPlanner:
             v3_count = len(v3_data)
             
             # LOGIC START
+            # LOGIC START
             if v3_count < MIN_POINTS_FOR_V3:
                 # Phase 1: Pure v2
                 prediction_minute = self._predict_v2(v2_data)
+                
+                # Setup legacy result for Sensor
+                if prediction_minute is not None:
+                     # Create a dummy result to show something
+                     self.last_pattern_result = PatternResult(
+                         prediction="legacy",
+                         prediction_time=prediction_minute,
+                         pattern_type="legacy_v2",
+                         confidence=1.0, # Legacy is trusted by default
+                         fallback_used=True,
+                         modes_found={"legacy": 1}
+                     )
                 
             elif v3_count < FULL_V3_POINTS:
                 # Phase 2: Hybrid Blending
@@ -180,10 +193,19 @@ class PreheatPlanner:
                 v3_res = self.detector.predict(v3_data, check_date)
                 
                 # Store result for inspection (even if blending)
-                if day_offset == 0: # Only store for nearest event to avoid overwrite?
-                     # Actually we want the result for the *found* event.
+                # We prioritize v3 metadata even if blended
+                if v3_res.prediction != "insufficient_data":
                      self.last_pattern_result = v3_res
-                
+                elif v2_min is not None:
+                     # Fallback to legacy metadata if v3 failed pattern check
+                      self.last_pattern_result = PatternResult(
+                         prediction="legacy_blended",
+                         prediction_time=v2_min,
+                         pattern_type="legacy_v2",
+                         confidence=0.5,
+                         fallback_used=True
+                     )
+
                 if v2_min is not None and v3_res.prediction_time is not None:
                     weight = (v3_count - MIN_POINTS_FOR_V3) / (FULL_V3_POINTS - MIN_POINTS_FOR_V3)
                     # Blended
@@ -226,13 +248,18 @@ class PreheatPlanner:
         summary = {}
         weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         for i in range(7):
-            # Prefer v3 data for summary
+            # Prefer v3 data for summary ONLY if sufficient points
             v3_data = self.history.get(i, [])
-            if v3_data:
+            
+            # Check sufficiency
+            clusters = []
+            if len(v3_data) >= MIN_POINTS_FOR_V3:
                 # Convert to minutes for simple clustering display
                 mins = [m for _, m in v3_data]
                 clusters = self.detector.find_clusters_v2(mins)
-            else:
+            
+            # Fallback to v2 if v3 insufficient or yielded no clusters (noise)
+            if not clusters:
                 v2_data = self.history_v2.get(i, [])
                 clusters = self.detector.find_clusters_v2(v2_data)
                 
