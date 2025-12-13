@@ -340,7 +340,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         _LOGGER.info("Starting historical analysis for %s...", occupancy_entity)
         try:
             from homeassistant.components.recorder import history, get_instance
-            start_date = dt_util.utcnow() - timedelta(days=28)
+            # Analyze up to 90 days (approx 3 months) to capture long-term parity patterns
+            # Note: HA default is 10 days, but advanced users often have more.
+            start_date = dt_util.utcnow() - timedelta(days=90)
             
             history_data = await get_instance(self.hass).async_add_executor_job(
                 history.get_significant_states,

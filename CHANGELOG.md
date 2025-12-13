@@ -1,3 +1,6 @@
+## v2.6.0-beta5 (2025-12-13)
+*   **Improvement**: Increased "Analyze History" lookback window from 28 to 90 days. We now try to learn from up to 3 months of past data if your recorder settings allow it.
+
 ## v2.6.0-beta4 (2025-12-13)
 *   **Improvement**: Lowered the threshold for v3 pattern recognition from 4 to 3 events. This allows the new logic to kick in immediately if you use "Analyze History" (which typically provides 3-4 weeks of data).
 
