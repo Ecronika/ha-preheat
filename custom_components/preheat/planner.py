@@ -42,6 +42,16 @@ class PreheatPlanner:
         """Load history handling v2 vs v3 formats."""
         for k, v in stored.items():
             try:
+                # 1. Handle "v2_X" keys (explicit v2 storage from v2.6+)
+                if k.startswith("v2_"):
+                    try:
+                        weekday = int(k.split("_")[1])
+                        self.history_v2[weekday] = v
+                    except (IndexError, ValueError):
+                        pass
+                    continue
+
+                # 2. Handle Integer keys (Standard v3 OR Legacy v2.5)
                 weekday = int(k)
                 if not v:
                     continue
@@ -49,7 +59,7 @@ class PreheatPlanner:
                 # Check format of first item
                 first = v[0]
                 if isinstance(first, int):
-                    # v2 format: list of ints
+                    # v2 format (Legacy 2.5): list of ints
                     self.history_v2[weekday] = v
                 elif isinstance(first, list) or isinstance(first, tuple):
                     # v3 format: list of [iso_date_str, int] (from JSON)

@@ -564,7 +564,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                              allowed_weekdays = [0, 1, 2, 3, 4]
                      else:
                           # Sensor unavailable/missing -> Fallback Mon-Fri
-                          _LOGGER.warning("Workday sensor %s unavailable. Fallback to Mon-Fri.", workday_sensor)
+                          # Reduce log level to INFO to avoid startup noise
+                          _LOGGER.info("Workday sensor %s not ready yet (state: %s). Fallback to Mon-Fri.", 
+                                       workday_sensor, state.state if state else "None")
+                          allowed_weekdays = [0, 1, 2, 3, 4]
                           allowed_weekdays = [0, 1, 2, 3, 4]
                  else:
                      # Helper enabled but no sensor configured?! Fallback Mon-Fri

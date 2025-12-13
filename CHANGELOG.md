@@ -1,3 +1,7 @@
+## v2.6.0-beta2 (2025-12-13)
+*   **Fix**: Critical fix for data migration. Restored loading of legacy arrival timestamps which were being reset in beta1.
+*   **Improvement**: Reduced log level of "Workday sensor unavailable" from Warning to Info during startup.
+
 ## v2.6.0-beta1 (2025-12-13)
 
 ### 🗓️ Multi-Modal Clustering (Shift Work Support)
