@@ -1,3 +1,6 @@
+## v2.6.0-beta4 (2025-12-13)
+*   **Improvement**: Lowered the threshold for v3 pattern recognition from 4 to 3 events. This allows the new logic to kick in immediately if you use "Analyze History" (which typically provides 3-4 weeks of data).
+
 ## v2.6.0-beta3 (2025-12-13)
 *   **Fix**: Fixed empty Sensor Attributes (Pattern type=none) during legacy fallback (Phase 1).
 *   **Fix**: Fixed empty Schedule Summary list by correctly falling back to v2 data when v3 data is sparse.

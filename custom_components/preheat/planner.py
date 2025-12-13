@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # v2.6 Constants
 WINDOW_SIZE = 30
-MIN_POINTS_FOR_V3 = 4
+MIN_POINTS_FOR_V3 = 3
 FULL_V3_POINTS = 10
 
 class PreheatPlanner:
