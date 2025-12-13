@@ -106,6 +106,16 @@ class NextEventSensor(PreheatBaseSensor):
             attrs["planned_start"] = data.next_start_time.isoformat()
         if data.schedule_summary:
             attrs["learned_schedule"] = data.schedule_summary
+
+        # v2.6 Patterns
+        attrs["pattern_type"] = data.pattern_type
+        attrs["pattern_confidence"] = round(data.pattern_confidence, 2)
+        attrs["pattern_stability"] = round(data.pattern_stability, 2)
+        attrs["fallback_used"] = data.fallback_used
+        
+        if data.detected_modes:
+            attrs["detected_modes"] = data.detected_modes
+            
         return attrs
 
 class ThermalModelSensor(PreheatBaseSensor):

@@ -126,6 +126,13 @@ class PreheatData:
     coast_tau: float = 0.0
     tau_confidence: float = 0.0
 
+    # v2.6 Multi-Modal Pattern Data
+    pattern_type: str | None = None
+    pattern_confidence: float = 0.0
+    pattern_stability: float = 0.0
+    detected_modes: dict[str, int] | None = None
+    fallback_used: bool = False
+
 class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     """Coordinator to manage preheating logic."""
 
@@ -565,6 +572,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
             next_event = self.planner.get_next_scheduled_event(now, allowed_weekdays=allowed_weekdays)
             
+            # v2.6 Pattern Meta Extraction
+            p_res = self.planner.last_pattern_result
+            pattern_type = p_res.pattern_type if p_res else "none"
+            pattern_conf = p_res.confidence if p_res else 0.0
+            pattern_stab = p_res.stability if p_res else 0.0
+            detected_modes = p_res.modes_found if p_res else None
+            fallback_used = p_res.fallback_used if p_res else False
+            
             # 2. Calculate Physics
             operative_temp = op_temp_raw # Reuse
             
@@ -789,7 +804,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 savings_total=savings_total,
                 savings_remaining=savings_remaining,
                 coast_tau=self.cooling_analyzer.learned_tau,
-                tau_confidence=self.cooling_analyzer.confidence
+                tau_confidence=self.cooling_analyzer.confidence,
+                # V2.6
+                pattern_type=pattern_type,
+                pattern_confidence=pattern_conf,
+                pattern_stability=pattern_stab,
+                detected_modes=detected_modes,
+                fallback_used=fallback_used
             )
 
         except Exception as err:
