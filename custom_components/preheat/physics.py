@@ -43,7 +43,6 @@ class ThermalPhysics:
             initial_deadtime = profile_data.get("deadtime", 0.0)
 
         if data:
-        if data:
             self.mass_factor = data.mass_factor if data.mass_factor is not None else initial_mass
             self.loss_factor = data.loss_factor if data.loss_factor is not None else DEFAULT_LOSS_FACTOR
             self.sample_count = data.sample_count

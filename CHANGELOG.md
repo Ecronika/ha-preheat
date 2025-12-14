@@ -1,3 +1,6 @@
+## v2.6.0-beta17 (2025-12-14)
+*   **Syntax Fix**: Removed a duplicate `if data:` line that caused an `IndentationError` in beta16.
+
 ## v2.6.0-beta16 (2025-12-14)
 *   **Fix**: Added robust guards against `NoneType` errors during setup. If stored data is corrupted or contains null values for physics parameters, the system now safely falls back to defaults instead of crashing with an `unsupported operand` error.
 
