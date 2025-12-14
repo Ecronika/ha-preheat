@@ -733,7 +733,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     max_hours = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0)
                     runtime = (dt_util.utcnow() - self._preheat_started_at).total_seconds() / 3600
                     if runtime > max_hours:
-                        await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=True)
+                        _LOGGER.info("Preheat timed out (>%.1fh). Stopping (with learning).", max_hours)
+                        # We allow learning here! If we ran for Max Hours and got some rise, 
+                        # we want the model to know it was too slow (it will learn a higher Mass Factor).
+                        await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=False)
                 # 4. Window Open
                 elif self._window_open_detected:
                      await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=True)
