@@ -15,7 +15,7 @@ sys.modules["homeassistant.const"] = MagicMock()
 sys.modules["homeassistant.helpers"] = MagicMock()
 # Mock DataUpdateCoordinator as a real class to avoid MagicMock property inheritance issues
 class MockDataUpdateCoordinator:
-    def __init__(self, hass, logger, name, update_interval):
+    def __init__(self, hass, logger, name, update_interval, **kwargs):
         self.hass = hass
         self.logger = logger
         self.name = name

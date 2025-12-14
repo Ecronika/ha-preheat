@@ -11,12 +11,18 @@ sys.modules['homeassistant.core'] = MagicMock()
 sys.modules['homeassistant.helpers'] = MagicMock()
 sys.modules['homeassistant.util'] = MagicMock()
 # Explicitly mock dt_util since it is imported
-sys.modules['homeassistant.util.dt'] = MagicMock()
+# sys.modules['homeassistant.util.dt'] = MagicMock() # Removed to allow clean patching
 
-from homeassistant.util import dt as dt_util
+# from homeassistant.util import dt as dt_util
 
 from custom_components.preheat.optimal_stop import OptimalStopManager, CONF_STOP_TOLERANCE, CONF_MAX_COAST_HOURS
 from custom_components.preheat.const import DEFAULT_STOP_TOLERANCE, DEFAULT_MAX_COAST_HOURS
+
+class FakeDT:
+    def __init__(self, now_val):
+        self._now = now_val
+    def utcnow(self):
+        return self._now
 
 class TestOptimalStop(unittest.TestCase):
     
@@ -27,9 +33,16 @@ class TestOptimalStop(unittest.TestCase):
             CONF_STOP_TOLERANCE: 0.5,
             CONF_MAX_COAST_HOURS: 4.0
         }
-        # Fix dt_util.utcnow to return a real time
+        # Use simple fixed time
         self.now = datetime(2023, 1, 1, 12, 0, 0)
-        dt_util.utcnow.side_effect = lambda: self.now
+        
+        # Patch local dt_util used in module
+        # Note: We need to patch where it is IMPORTED
+        patcher = patch("custom_components.preheat.optimal_stop.dt_util")
+        self.mock_dt_util = patcher.start()
+        self.mock_dt_util.utcnow.side_effect = lambda: self.now
+        self.addCleanup(patcher.stop)
+
         
     def test_safety_break_too_cold(self):
         # Target 21.0, Tolerance 0.5 -> Floor 20.5

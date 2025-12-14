@@ -1,3 +1,6 @@
+## v2.6.0-beta20 (2025-12-14)
+*   **Fix**: Resolved the *actual* cause of the "Update failed" error. It was due to missing default values for the new "Optimal Stop" configuration settings (added in v2.5). Older installations without these settings were passing `None` values, causing a crash during calculation.
+
 ## v2.6.0-beta19 (2025-12-14)
 *   **Syntax Fix**: Removed a duplicated line in `physics.py` that caused an `IndentationError` in beta18. Apologies for the noise!
 
