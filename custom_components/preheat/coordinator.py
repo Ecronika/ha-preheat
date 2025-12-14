@@ -72,8 +72,6 @@ from .const import (
     ATTR_MODEL_MASS,
     ATTR_MODEL_LOSS,
     ATTR_ARRIVAL_HISTORY,
-    ATTR_MODEL_LOSS,
-    ATTR_ARRIVAL_HISTORY,
     # V3
     CONF_HEATING_PROFILE,
     HEATING_PROFILES,
@@ -81,7 +79,6 @@ from .const import (
     # Forecast V2.4
     CONF_USE_FORECAST,
     CONF_RISK_MODE,
-    RISK_BALANCED,
     RISK_BALANCED,
     # Optimal Stop
     CONF_ENABLE_OPTIMAL_STOP,
@@ -189,7 +186,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._cached_outdoor_temp: float = 10.0
         self._last_weather_check: datetime | None = None
         self.weather_service: WeatherService | None = None
-        self._last_weather_check: datetime | None = None
         
         self._setup_listeners()
 
@@ -502,19 +498,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         fallback = self._get_conf(CONF_COMFORT_FALLBACK, DEFAULT_COMFORT_FALLBACK)
         return fallback
 
-        # If Climate is "Cold" (Eco), try stored learned value
-        if self._last_comfort_setpoint is not None:
-             return self._last_comfort_setpoint
-             
-        # If no learned value, try Fallback Config
-        fallback = self._get_conf(CONF_COMFORT_FALLBACK, DEFAULT_COMFORT_FALLBACK)
-        
-        # If Climate is available (even if low), but we have no other clue... 
-        # Should we use Climate (17) or Fallback (22)?
-        # USAGE: If I am Absent, Climate is 17. I want preheat to 22. 
-        # So Fallback (22) is better than Climate (17).
-        return fallback
-
     def _track_temperature_gradient(self, current_temp: float, now: datetime) -> None:
         """Track gradient and detect open windows."""
         if self._prev_temp is None or self._prev_temp_time is None:
@@ -593,7 +576,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                           # Reduce log level to INFO to avoid startup noise
                           _LOGGER.info("Workday sensor %s not ready yet (state: %s). Fallback to Mon-Fri.", 
                                        workday_sensor, state.state if state else "None")
-                          allowed_weekdays = [0, 1, 2, 3, 4]
                           allowed_weekdays = [0, 1, 2, 3, 4]
                  else:
                      # Helper enabled but no sensor configured?! Fallback Mon-Fri

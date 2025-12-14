@@ -54,7 +54,6 @@ from .const import (
     CONF_COMFORT_FALLBACK,
     DEFAULT_COMFORT_MIN,
     DEFAULT_COMFORT_MAX,
-    DEFAULT_COMFORT_MAX,
     DEFAULT_COMFORT_FALLBACK,
     # Forecast
     CONF_USE_FORECAST,
@@ -62,8 +61,6 @@ from .const import (
     RISK_BALANCED,
     RISK_PESSIMISTIC,
     RISK_OPTIMISTIC,
-    DEFAULT_USE_FORECAST,
-    DEFAULT_RISK_MODE,
     DEFAULT_USE_FORECAST,
     DEFAULT_RISK_MODE,
     # Optimal Stop
@@ -336,7 +333,6 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
 
         if CONF_VALVE_POSITION not in data: data[CONF_VALVE_POSITION] = None
         if CONF_LOCK not in data: data[CONF_LOCK] = None
-        if CONF_WORKDAY not in data: data[CONF_WORKDAY] = None
         if CONF_WORKDAY not in data: data[CONF_WORKDAY] = None
         if CONF_ONLY_ON_WORKDAYS not in data: data[CONF_ONLY_ON_WORKDAYS] = False
         

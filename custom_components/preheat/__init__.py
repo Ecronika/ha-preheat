@@ -8,7 +8,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import config_validation as cv
+
 from .const import DOMAIN, CONF_PRESET_MODE, CONF_EXPERT_MODE, PRESET_BALANCED
 # from .coordinator import PreheatingCoordinator # Lazy import
 

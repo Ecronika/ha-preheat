@@ -114,18 +114,11 @@ PRESETS: Final = {
 CONF_COMFORT_MIN: Final = "comfort_min_temp"
 CONF_COMFORT_MAX: Final = "comfort_max_temp"
 CONF_COMFORT_FALLBACK: Final = "comfort_fallback_temp"
-CONF_REACH_TOLERANCE: Final = "reach_tolerance_k"
 CONF_AIR_TO_OPER_BIAS: Final = "air_to_oper_bias_k"
-CONF_WEATHER_ENABLED: Final = "enable_weather_offset"
-CONF_WEATHER_BASE: Final = "weather_base_temp"
-CONF_WEATHER_GAIN: Final = "weather_gain_per_5k"
 CONF_MAX_PREHEAT_HOURS: Final = "max_preheat_hours"
-CONF_START_GRACE: Final = "start_grace_minutes"
-CONF_LEARN_DELAY: Final = "learn_delay_minutes"
 CONF_OFF_ONLY_WHEN_WARM: Final = "off_only_when_warm"
 CONF_ARRIVAL_WINDOW_START: Final = "arrival_window_start"
 CONF_ARRIVAL_WINDOW_END: Final = "arrival_window_end"
-CONF_STORE_DEADBAND: Final = "store_deadband_k"
 CONF_EARLIEST_START: Final = "earliest_start_minutes"
 CONF_ONLY_ON_WORKDAYS: Final = "only_on_workdays"
 
@@ -152,14 +145,9 @@ DEFAULT_BUFFER_MIN: Final = 10
 DEFAULT_COMFORT_MIN: Final = 19.0
 DEFAULT_COMFORT_MAX: Final = 23.5
 DEFAULT_COMFORT_FALLBACK: Final = 21.0
-DEFAULT_REACH_TOLERANCE: Final = 0.2
 DEFAULT_AIR_TO_OPER_BIAS: Final = 0.0 
 DEFAULT_INITIAL_GAIN: Final = 10.0
-DEFAULT_WEATHER_BASE: Final = 10.0
-DEFAULT_WEATHER_GAIN: Final = 10.0
 DEFAULT_MAX_HOURS: Final = 3.0
-DEFAULT_START_GRACE: Final = 3
-DEFAULT_LEARN_DELAY: Final = 10
 DEFAULT_ARRIVAL_WINDOW_START: Final = "04:00:00"
 DEFAULT_ARRIVAL_WINDOW_END: Final = "20:00:00"
 DEFAULT_USE_FORECAST: Final = False
@@ -169,10 +157,6 @@ DEFAULT_STOP_TOLERANCE: Final = 0.5
 DEFAULT_MAX_COAST_HOURS: Final = 4.0
 
 # Storage Attributes
-ATTR_LEARNED_ARRIVALS: Final = "learned_arrivals"
-ATTR_LEARNED_LEAD_TIME: Final = "learned_lead_time"
-ATTR_LEARNED_GAIN: Final = "learned_gain"
-ATTR_SAMPLE_COUNT: Final = "sample_count"
 ATTR_LAST_COMFORT_SETPOINT: Final = "last_comfort_setpoint"
 ATTR_PREHEAT_STARTED_AT: Final = "preheat_started_at"
 
