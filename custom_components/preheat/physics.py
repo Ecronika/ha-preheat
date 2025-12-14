@@ -43,8 +43,9 @@ class ThermalPhysics:
             initial_deadtime = profile_data.get("deadtime", 0.0)
 
         if data:
-            self.mass_factor = data.mass_factor
-            self.loss_factor = data.loss_factor
+        if data:
+            self.mass_factor = data.mass_factor if data.mass_factor is not None else initial_mass
+            self.loss_factor = data.loss_factor if data.loss_factor is not None else DEFAULT_LOSS_FACTOR
             self.sample_count = data.sample_count
             self.avg_error = getattr(data, "avg_error", 0.0)
             # V3 Migration: Use profile default if deadtime is missing/zero (unless explicitly 0 learned?)

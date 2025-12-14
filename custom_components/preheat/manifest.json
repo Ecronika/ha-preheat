@@ -13,5 +13,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/Ecronika/ha-preheat/issues",
   "requirements": [],
-  "version": "2.6.0-beta15"
+  "version": "2.6.0-beta16"
 }
