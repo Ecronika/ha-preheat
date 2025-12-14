@@ -65,10 +65,19 @@ class ThermalPhysics:
         Calculate required preheat minutes.
         V3: Duration = Deadtime + (Mass * Delta_In) + (Loss * Delta_Out)
         """
-        dt_in = max(0.0, delta_t_internal)
+        # 1. If we are already at or above target, no preheat needed.
+        if delta_t_internal <= 0:
+            return 0.0
+            
+        dt_in = delta_t_internal
         dt_out = max(0.0, delta_t_external) 
 
-        # Time = Deadtime + (Mass * Delta_In) + (Loss * Delta_Out)
+        # 2. Additive Model: Deadtime + (Mass * Delta_In) + (Loss * Delta_Out)
+        # Note: Loss term represents "Overhead due to cold walls".
+        # This creates a baseline duration even for small T_in. 
+        # Future V3 refinement: Make Loss term scale with dt_in to avoid "cliff" at 0.0.
+        # For now, we leave it linear but respect the <= 0 cut-off.
+        
         duration = self.deadtime + (self.mass_factor * dt_in) + (self.loss_factor * dt_out)
         return max(0.0, duration)
         

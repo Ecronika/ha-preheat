@@ -1,3 +1,6 @@
+## v2.6.0-beta13 (2025-12-14)
+*   **Fix**: Corrected physics calculation where `Predicted Duration` could be high (e.g. 70+ mins) even if the room was already warmer than the target temperature. This was due to the thermal loss factor (compensating for outside cold) being applied even when no heating was required. Now, if the room is warm enough, duration is strictly 0.
+
 ## v2.6.0-beta12 (2025-12-14)
 *   **Critical Fix**: Fixed an `AttributeError` in `PreheatPlanner` where core prediction methods were briefly missing in beta10/11. The integration is now fully functional and safe again.
 
