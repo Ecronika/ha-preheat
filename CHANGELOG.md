@@ -1,3 +1,6 @@
+## v2.6.0-beta7 (2025-12-14)
+*   **UX Consistency**: Ensured that the Initial Setup dialog matches the "Reconfigure" dialog (Non-Expert) exactly. Added `Weather Entity` back to the initial setup screen as an optional but recommended setting (helps with outdoor temperature data).
+
 ## v2.6.0-beta6 (2025-12-14)
 *   **UX Improvement**: Reorganized the configuration to be cleaner (Phase 2 Cleanup).
 *   **Change**: `Climate Entity` is now **Required**. It acts as the central control unit.
