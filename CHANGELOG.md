@@ -1,3 +1,6 @@
+## v2.6.0-beta11 (2025-12-14)
+*   **Legacy Compatibility**: Improved downgrade protection for versions older than 2.5 (e.g. 2.4/2.2). Newer v3 data is now sequestered in a container key (`999`) preventing `ValueError` crashes in older versions that strictly expect integer storage keys.
+
 ## v2.6.0-beta10 (2025-12-14)
 *   **Downgrade Safety**: Refactored data storage to ensure backward compatibility with v2.5.0. Legacy history data is now strictly written to standard keys (0-6) as integers, while new v3 data is stored in separate keys (`v3_0`-`v3_6`). This prevents crashes if downgrading to the stable version.
 *   **Note**: If you removed the now-optional `Temperature Sensor` in v2.6, you **must re-add it** before downgrading to v2.5, as the old version requires it.
