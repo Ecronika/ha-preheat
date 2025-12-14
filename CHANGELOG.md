@@ -1,3 +1,6 @@
+## v2.6.0-beta21 (2025-12-14)
+*   **Fix**: Added missing imports for the default values introduced in beta20. This resolves the `NameError: name 'DEFAULT_STOP_TOLERANCE' is not defined`.
+
 ## v2.6.0-beta20 (2025-12-14)
 *   **Fix**: Resolved the *actual* cause of the "Update failed" error. It was due to missing default values for the new "Optimal Stop" configuration settings (added in v2.5). Older installations without these settings were passing `None` values, causing a crash during calculation.
 

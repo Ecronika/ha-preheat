@@ -58,6 +58,8 @@ from .const import (
     # PRESETS, # Replaced by Profiles logic in _get_conf
     # PRESET_BALANCED,
     DEFAULT_ARRIVAL_WINDOW_START,
+    DEFAULT_STOP_TOLERANCE,
+    DEFAULT_MAX_COAST_HOURS,
     DEFAULT_ARRIVAL_WINDOW_END,
     CONF_STORE_DEADBAND,
     ATTR_LEARNED_GAIN,
