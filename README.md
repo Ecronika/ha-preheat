@@ -9,6 +9,15 @@ This integration acts as a **Stand-Alone Pilot** for your heating. It learns the
 
 ---
 
+## 📚 Documentation
+
+*   [**Installation Guide**](docs/installation.md)
+*   [**Configuration Reference**](docs/configuration.md)
+*   [**How it Works (The Math)**](docs/how_it_works.md)
+*   [**Troubleshooting & FAQ**](docs/troubleshooting.md)
+
+---
+
 ## ✨ Features
 
 *   🧠 **Self-Learning Physics**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime` (Totzeit) for each room.
