@@ -1,3 +1,9 @@
+## v2.6.0-beta6 (2025-12-14)
+*   **UX Improvement**: Reorganized the configuration to be cleaner (Phase 2 Cleanup).
+*   **Change**: `Climate Entity` is now **Required**. It acts as the central control unit.
+*   **Change**: `Temperature Sensor` is now **Optional**. If not set, the temperature from the Climate entity is used.
+*   **Change**: Important settings like `Arrival Window` and `Optimal Stop` are now visible on the main configuration page/tab, moving out of the "Expert" shadow.
+
 ## v2.6.0-beta5 (2025-12-13)
 *   **Improvement**: Increased "Analyze History" lookback window from 28 to 90 days. We now try to learn from up to 3 months of past data if your recorder settings allow it.
 

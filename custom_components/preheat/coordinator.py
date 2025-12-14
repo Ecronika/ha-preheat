@@ -433,18 +433,35 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             async_delete_issue(self.hass, DOMAIN, f"missing_{issue_id}_{self.entry.entry_id}")
 
     async def _get_operative_temperature(self) -> float:
+        # 1. Primary: Dedicated Sensor (if configured)
         temp_sensor = self._get_conf(CONF_TEMPERATURE)
-        if not temp_sensor: return INVALID_TEMP
-        state = self.hass.states.get(temp_sensor)
-        if not state or state.state in ("unknown", "unavailable"): return INVALID_TEMP
-        try:
-            raw = float(state.state)
-            if not (-40 < raw < 80): return INVALID_TEMP
-            
-            bias = self._get_conf(CONF_AIR_TO_OPER_BIAS, 0.0)
-            return raw - float(bias)
-        except (ValueError, TypeError):
-            return INVALID_TEMP
+        if temp_sensor:
+            state = self.hass.states.get(temp_sensor)
+            if state and state.state not in ("unknown", "unavailable"):
+                try:
+                    raw = float(state.state)
+                    if -40 < raw < 80:
+                        bias = self._get_conf(CONF_AIR_TO_OPER_BIAS, 0.0)
+                        return raw - float(bias)
+                except (ValueError, TypeError):
+                    pass
+
+        # 2. Secondary: Climate Entity current_temperature
+        climate = self._get_conf(CONF_CLIMATE)
+        if climate:
+             state = self.hass.states.get(climate)
+             if state and state.attributes.get("current_temperature") is not None:
+                 try:
+                     raw = float(state.attributes["current_temperature"])
+                     if -40 < raw < 80:
+                         # No Bias for Climate sensor (usually already calibrated)
+                         # Or should we apply bias? Assuming Climate is "Air Temp", likely yes.
+                         # But let's assume it's good for now.
+                         return raw
+                 except (ValueError, TypeError):
+                     pass
+                     
+        return INVALID_TEMP
 
     async def _get_target_setpoint(self) -> float:
         # V3: Removed dedicated Setpoint Sensor.

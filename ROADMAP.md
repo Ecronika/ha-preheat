@@ -21,6 +21,8 @@ The goal of V3.0 is "Zero-Touch" operation. To get there, we will iterate throug
     *   Support for Shifts, Vacations, and complex patterns beyond simple "Workdays".
 *   **Feature 2**: Dynamic Tariff Awareness (Initial).
     *   Shift heating start slightly to optimize for Price/CO2 (e.g. Tibber).
+*   **Feature 3**: Extended History Import (InfluxDB).
+    *   Allow importing history from external DBs like InfluxDB for users with short Recorder retention.
 
 ### v2.8.0: "Patterns" (Smart Departure Beta)
 *   **Feature**: Auto-Schedule Learning.

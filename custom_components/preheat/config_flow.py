@@ -107,27 +107,28 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_OCCUPANCY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
-            vol.Required(CONF_TEMPERATURE): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["sensor", "input_number"])
-            ),
-            # Climate is now strongly encouraged as it replaces Setpoint Sensor
-            vol.Optional(CONF_CLIMATE): selector.EntitySelector(
+            # Climate is now REQUIRED (Central control unit)
+            vol.Required(CONF_CLIMATE): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate")
             ),
-            # Weather & Outdoor (Non-Expert)
-            vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="weather")
+            # Temperature is now OPTIONAL (Fallback if Climate is inaccurate)
+            vol.Optional(CONF_TEMPERATURE): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "input_number"])
             ),
-            vol.Optional(CONF_OUTDOOR_TEMP): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["sensor", "input_number"], device_class="temperature")
-            ),
+            # Key Learning Settings (Now on Main Page)
             vol.Required(CONF_HEATING_PROFILE, default=PROFILE_RADIATOR_NEW): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=profile_options,
                     mode=selector.SelectSelectorMode.DROPDOWN,
-                    translation_key="heating_profile" # Ensure we add this to strings.json
+                    translation_key="heating_profile"
                 )
             ),
+            vol.Optional(CONF_ARRIVAL_WINDOW_START, default=DEFAULT_ARRIVAL_WINDOW_START): selector.TimeSelector(),
+            vol.Optional(CONF_ARRIVAL_WINDOW_END, default=DEFAULT_ARRIVAL_WINDOW_END): selector.TimeSelector(),
+            
+            # Key Feature: Optimal Stop (Promoted)
+            vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=False): selector.BooleanSelector(),
+
              vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=[
@@ -238,6 +239,12 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                     mode=selector.SelectSelectorMode.DROPDOWN
                 )
             ),
+            
+            # Key Settings (Moved from Expert)
+            vol.Optional(CONF_ARRIVAL_WINDOW_START): selector.TimeSelector(),
+            vol.Optional(CONF_ARRIVAL_WINDOW_END): selector.TimeSelector(),
+            vol.Optional(CONF_ENABLE_OPTIMAL_STOP): selector.BooleanSelector(),
+
             vol.Optional(CONF_EXPERT_MODE): selector.BooleanSelector()
         }
 
@@ -264,8 +271,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                     )
                 ),
 
-                # Optimal Stop (V2.5)
-                vol.Optional(CONF_ENABLE_OPTIMAL_STOP): selector.BooleanSelector(),
+                # Optimal Stop (Advanced Tuning)
                 vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
                      selector.EntitySelectorConfig(domain="schedule")
                 ),
@@ -287,9 +293,6 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                     selector.NumberSelectorConfig(min=1.0, max=12.0, step=0.5, unit_of_measurement="h", mode="box")
                 ),
                 vol.Optional(CONF_DONT_START_IF_WARM): selector.BooleanSelector(),
-                
-                vol.Optional(CONF_ARRIVAL_WINDOW_START): selector.TimeSelector(),
-                vol.Optional(CONF_ARRIVAL_WINDOW_END): selector.TimeSelector(),
                 
                 vol.Optional(CONF_AIR_TO_OPER_BIAS): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=-5.0, max=5.0, step=0.5, unit_of_measurement="K", mode="box")
