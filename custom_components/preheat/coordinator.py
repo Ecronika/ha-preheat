@@ -11,6 +11,11 @@ import random
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue, async_delete_issue
+from homeassistant.helpers.issue_registry import (
+    async_create_issue, 
+    async_delete_issue,
+    IssueSeverity
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -670,6 +675,25 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 predicted_duration = self.physics.calculate_duration(delta_in, delta_out)
             
             # -----------------------------------
+            
+            # Smart Diagnostic: Check if duration exceeds limit
+            max_dur_minutes = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0) * 60
+            if predicted_duration > (max_dur_minutes + 15):
+                # We need more time than allowed!
+                async_create_issue(
+                    self.hass, DOMAIN, f"limit_exceeded_{self.entry.entry_id}",
+                    is_fixable=False, 
+                    severity=IssueSeverity.WARNING,
+                    translation_key="duration_limit_exceeded",
+                    translation_placeholders={
+                        "predicted": f"{predicted_duration/60:.1f}",
+                        "limit": f"{max_dur_minutes/60:.1f}",
+                        "name": self.device_name
+                    },
+                )
+            else:
+                 # Clear if resolved
+                 async_delete_issue(self.hass, DOMAIN, f"limit_exceeded_{self.entry.entry_id}")
             
             # 3. Decision Logic
             start_time = None

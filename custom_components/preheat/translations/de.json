@@ -242,6 +242,10 @@
     "data_migrated": {
       "title": "Migration für {name} abgeschlossen",
       "description": "Historische Daten der v1 wurden konvertiert. Die Genauigkeit kann anfangs reduziert sein. Nutze 'Historie analysieren', um die Daten aus dem Recorder neu aufzubauen."
+    },
+    "duration_limit_exceeded": {
+      "title": "Maximale Vorheizdauer in {name} überschritten",
+      "description": "Die berechnete Vorheizdauer beträgt **{predicted} Stunden**, dein konfiguriertes Limit liegt aber bei **{limit} Stunden**. Bitte erhöhe die 'Max. Vorheizdauer' in den Einstellungen, damit die Zieltemperatur erreicht werden kann."
     }
   }
 }
