@@ -7,9 +7,9 @@ When you add the integration, you will be asked for the essential entities:
 | Field | Description | Required |
 | :--- | :--- | :--- |
 | **Occupancy Sensor** | A `binary_sensor` that is **ON** when the room is in use (occupied) and **OFF** when empty. This is the master trigger for learning and scheduling. | ✅ Yes |
-| **Temperature Sensor** | A `sensor` measuring the current room temperature. | ✅ Yes |
-| **Target Setpoint** | You can either select a `climate` entity to read the target from, OR a helper `input_number` if you control it manually. | ✅ Yes |
-| **Climate Entity** | The thermostat itself. Used to read target temp (if not using helper) and valve positions. | Optional |
+| **Climate Entity** | The thermostat itself. Used to read target temp and valve positions. This is now the primary source of truth. | ✅ Yes |
+| **Temperature Sensor** | A `sensor` measuring the current room temperature. Optional if your Climate entity reports accurate room temperature (`current_temperature`). | Optional |
+| **Target Setpoint** | Read directly from the Climate entity. Only needed if you don't use a Climate entity (deprecated setup). | Optional |
 | **Weather Entity** | A `weather.*` entity for forecast-based adjustments. | Optional |
 
 ---
