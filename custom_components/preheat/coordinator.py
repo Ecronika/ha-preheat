@@ -10,7 +10,7 @@ import math
 import random
 
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue, async_delete_issue
+
 from homeassistant.helpers.issue_registry import (
     async_create_issue, 
     async_delete_issue,
