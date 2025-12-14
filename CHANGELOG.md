@@ -1,3 +1,6 @@
+## v2.6.0-beta9 (2025-12-14)
+*   **Documentation**: Fully translated all sensor attributes (e.g. `Geplanter Start`, `Muster-Typ`, `Modell-Konfidenz`) in the German translation. No more English attributes in Lovelace cards.
+
 ## v2.6.0-beta8 (2025-12-14)
 *   **Documentation**: Updated translation strings (German/English) to correctly reflect mandatory vs. optional fields in the config flow. `Thermostat` is now labeled as "Required" / "Pflicht".
 

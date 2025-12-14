@@ -109,16 +109,79 @@
         "state": {
           "idle": "Inaktiv",
           "preheating": "Vorheizen"
+        },
+        "state_attributes": {
+          "target_temp": {
+            "name": "Ziel-Temperatur"
+          },
+          "current_temp": {
+            "name": "Aktuelle Temperatur"
+          },
+          "predicted_duration": {
+            "name": "Prognostizierte Dauer"
+          },
+          "confidence": {
+            "name": "Modell-Konfidenz"
+          },
+          "avg_error": {
+            "name": "Durchschn. Fehler"
+          },
+          "sample_count": {
+            "name": "Lern-Datensätze"
+          },
+          "window_open": {
+            "name": "Fenster offen"
+          },
+          "learned_setpoint": {
+            "name": "Gelernter Zielwert"
+          },
+          "deadtime_min": {
+            "name": "Totzeit (Deadtime)"
+          },
+          "health_score": {
+            "name": "Modell-Gesundheit"
+          }
         }
       },
       "next_event": {
-        "name": "Nächstes Event"
+        "name": "Nächstes Event",
+        "state_attributes": {
+          "planned_start": {
+            "name": "Geplanter Start"
+          },
+          "learned_schedule": {
+            "name": "Gelerntes Muster"
+          },
+          "pattern_type": {
+            "name": "Muster-Typ"
+          },
+          "pattern_confidence": {
+            "name": "Muster-Konfidenz"
+          },
+          "pattern_stability": {
+            "name": "Muster-Stabilität"
+          },
+          "fallback_used": {
+            "name": "Fallback genutzt"
+          },
+          "detected_modes": {
+            "name": "Erkannte Cluster"
+          }
+        }
       },
       "model_status": {
         "name": "Modell Status",
         "state": {
           "ready": "Bereit",
           "learning": "Lernt aktiv"
+        },
+        "state_attributes": {
+          "valve_coverage": {
+            "name": "Ventil-Abdeckung"
+          },
+          "valve_position": {
+            "name": "Ventil-Position"
+          }
         }
       },
       "mass_factor": {
@@ -131,7 +194,27 @@
         "name": "Lern-Konfidenz"
       },
       "optimal_stop_time": {
-        "name": "Optimaler Abschaltzeitpunkt"
+        "name": "Optimaler Abschaltzeitpunkt",
+        "state_attributes": {
+          "savings_total_min": {
+            "name": "Gesamt-Ersparnis (Min)"
+          },
+          "savings_remaining_min": {
+            "name": "Verbleibende Ersparnis"
+          },
+          "reason": {
+            "name": "Abschalt-Grund"
+          },
+          "coast_tau_hours": {
+            "name": "Abkühl-Konstante (Tau)"
+          },
+          "tau_confidence": {
+            "name": "Tau-Konfidenz"
+          },
+          "is_active": {
+            "name": "Stop Aktiv"
+          }
+        }
       }
     },
     "binary_sensor": {

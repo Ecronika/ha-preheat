@@ -6,16 +6,19 @@
                 "description": "Create a new zone. The system automatically learns how long the room takes to heat up.",
                 "data": {
                     "name": "Zone Name",
-                    "occupancy_sensor": "Occupancy Sensor",
-                    "temperature_sensor": "Room Temperature Sensor",
-                    "climate_entity": "Thermostat (Optional)",
+                    "occupancy_sensor": "Occupancy Sensor (Required)",
+                    "temperature_sensor": "Room Temperature Sensor (Optional)",
+                    "climate_entity": "Thermostat / Climate Control (Required)",
                     "setpoint_sensor": "Setpoint Sensor (Optional)",
-                    "outdoor_temp_sensor": "Outdoor Temperature (Fallback)",
-                    "weather_entity": "Weather Forecast (for Prediction)",
+                    "outdoor_temp_sensor": "Outdoor Temperature (Optional)",
+                    "weather_entity": "Weather Forecast (Recommended)",
                     "workday_sensor": "Workday Sensor (Optional)",
                     "preset_mode": "Operation Mode",
-                    "heating_profile": "Heating System Profile",
-                    "valve_position_sensor": "Valve Position (for precise learning)"
+                    "heating_profile": "Heating System Profile (Required)",
+                    "valve_position_sensor": "Valve Position (Optional)",
+                    "arrival_window_start": "Arrival Window Start",
+                    "arrival_window_end": "Arrival Window End",
+                    "enable_optimal_stop": "Enable Optimal Stop (Coast)"
                 }
             }
         },
