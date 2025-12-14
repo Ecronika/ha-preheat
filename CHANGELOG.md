@@ -1,3 +1,9 @@
+## v2.6.0-beta23
+- **Diagnostic Upgrade**: Added a "Repair Issue" warning if the calculated heating duration exceeds your configured Maximum Duration logic.
+- **Learning Fix**: Preheating that times out (reaches Max Duration) now correctly triggers learning (teaching the model that heating was slower than expected), instead of just aborting.
+- **Code Cleanup**: Massive cleanup of internal code (removed unused constants, dead code branches, and duplicate imports).
+- **Docs**: Documentation structure finalized in `docs/` folder.
+
 ## v2.6.0-beta22 (2025-12-14)
 *   **Test Suite**: Added a comprehensive `test_resilience.py` ensuring that legacy data corruption or missing configuration defaults will not crash the integration.
 *   **Compatibility**: Fixed `ImportError` on Python 3.10 systems due to missing `typing.override` (feature only available in 3.12+).
