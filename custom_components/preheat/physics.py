@@ -46,10 +46,16 @@ class ThermalPhysics:
             self.mass_factor = data.mass_factor if data.mass_factor is not None else initial_mass
             self.loss_factor = data.loss_factor if data.loss_factor is not None else DEFAULT_LOSS_FACTOR
             self.sample_count = data.sample_count
-            self.avg_error = getattr(data, "avg_error", 0.0)
-            # V3 Migration: Use profile default if deadtime is missing/zero (unless explicitly 0 learned?)
-            # Actually, migration should rely on profile default if it was never learned.
-            self.deadtime = getattr(data, "deadtime", 0.0)
+            
+            # Sanitize Avg Error and Deadtime (getattr returns None if attr is None!)
+            d_err = getattr(data, "avg_error", 0.0)
+            self.avg_error = d_err if d_err is not None else 0.0
+            
+            d_time = getattr(data, "deadtime", 0.0)
+            self.deadtime = d_time if d_time is not None else 0.0
+            
+            # V3 Migration logic:
+            if self.deadtime == 0.0 and profile_data and data.sample_count < 5:
             if self.deadtime == 0.0 and profile_data and data.sample_count < 5:
                 # Assuming new or un-tuned system, apply profile default
                 self.deadtime = initial_deadtime

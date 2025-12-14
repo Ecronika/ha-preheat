@@ -1,3 +1,6 @@
+## v2.6.0-beta18 (2025-12-14)
+*   **Deep Fix**: Addressed a persistent "Data Corruption" issue where stored Null values were bypassing safety checks. Both loading and logic layers now strictly enforce numeric types, preventing `NoneType` crashes even with corrupted legacy data.
+
 ## v2.6.0-beta17 (2025-12-14)
 *   **Syntax Fix**: Removed a duplicate `if data:` line that caused an `IndentationError` in beta16.
 
