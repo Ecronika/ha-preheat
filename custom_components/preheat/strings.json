@@ -6,15 +6,19 @@
         "description": "Create a new zone. The system automatically learns how long the room takes to heat up.",
         "data": {
           "name": "Zone Name",
-          "occupancy_sensor": "Occupancy Sensor",
-          "temperature_sensor": "Room Temperature Sensor",
-          "climate_entity": "Thermostat (Optional)",
+          "occupancy_sensor": "Occupancy Sensor (Required)",
+          "temperature_sensor": "Room Temperature Sensor (Optional)",
+          "climate_entity": "Thermostat / Climate Control (Required)",
           "setpoint_sensor": "Setpoint Sensor (Optional)",
-          "outdoor_temp_sensor": "Outdoor Temperature (Fallback)",
-          "weather_entity": "Weather Forecast (for Prediction)",
+          "outdoor_temp_sensor": "Outdoor Temperature (Optional)",
+          "weather_entity": "Weather Forecast (Optional)",
           "workday_sensor": "Workday Sensor (Optional)",
           "preset_mode": "Operation Mode",
-          "valve_position_sensor": "Valve Position (for precise learning)"
+          "valve_position_sensor": "Valve Position (Optional)",
+          "heating_profile": "Heating System Profile (Required)",
+          "arrival_window_start": "Arrival Window Start",
+          "arrival_window_end": "Arrival Window End",
+          "enable_optimal_stop": "Enable Optimal Stop (Coast)"
         }
       }
     },
@@ -57,7 +61,11 @@
           "arrival_window_end": "Arrival Window End",
           "air_to_oper_bias_k": "Air-to-Operative Bias (K)",
           "valve_position_sensor": "Valve Position (Optional)",
-          "max_preheat_hours": "Max Preheat Duration (Hours)"
+          "max_preheat_hours": "Max Preheat Duration (Hours)",
+          "enable_optimal_stop": "Enable Optimal Stop (Coast)",
+          "schedule_entity": "Schedule Helper",
+          "stop_tolerance": "Stop Tolerance (K)",
+          "max_coast_hours": "Max Coast Duration (Hours)"
         }
       }
     },

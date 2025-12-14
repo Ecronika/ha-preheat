@@ -6,16 +6,19 @@
         "description": "Erstelle eine neue Heizzone. Das System lernt automatisch, wie lange der Raum zum Aufheizen benötigt.",
         "data": {
           "name": "Zonen-Name",
-          "occupancy_sensor": "Belegungssensor (Anwesenheit)",
-          "temperature_sensor": "Raumtemperatur-Sensor",
-          "climate_entity": "Thermostat (Optional)",
-          "setpoint_sensor": "Zielwert-Sensor (Optional)",
-          "outdoor_temp_sensor": "Außentemperatur (Fallback)",
-          "weather_entity": "Wetter-Vorhersage (für Prognose)",
+          "occupancy_sensor": "Belegungssensor (Pflicht)",
+          "temperature_sensor": "Temperatursensor (Optional)",
+          "climate_entity": "Thermostat (Pflicht)",
+          "setpoint_sensor": "Zielwert-Sensor (Veraltet)",
+          "outdoor_temp_sensor": "Außentemperatur (Optional)",
+          "weather_entity": "Wetter-Vorhersage (Empfohlen)",
           "workday_sensor": "Arbeitstag-Sensor (Optional)",
           "preset_mode": "Betriebsstrategie",
-          "valve_position_sensor": "Ventil-Position (für präzises Lernen)",
-          "heating_profile": "Heizsystem-Profil"
+          "valve_position_sensor": "Ventil-Position (Optional)",
+          "heating_profile": "Heizsystem-Profil (Pflicht)",
+          "arrival_window_start": "Ankunftsfenster Start (Uhrzeit)",
+          "arrival_window_end": "Ankunftsfenster Ende (Uhrzeit)",
+          "enable_optimal_stop": "Optimal Stop aktivieren"
         }
       }
     },

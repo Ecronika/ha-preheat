@@ -1,3 +1,6 @@
+## v2.6.0-beta8 (2025-12-14)
+*   **Documentation**: Updated translation strings (German/English) to correctly reflect mandatory vs. optional fields in the config flow. `Thermostat` is now labeled as "Required" / "Pflicht".
+
 ## v2.6.0-beta7 (2025-12-14)
 *   **UX Consistency**: Ensured that the Initial Setup dialog matches the "Reconfigure" dialog (Non-Expert) exactly. Added `Weather Entity` back to the initial setup screen as an optional but recommended setting (helps with outdoor temperature data).
 
