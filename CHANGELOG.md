@@ -1,3 +1,6 @@
+## v2.6.0-beta19 (2025-12-14)
+*   **Syntax Fix**: Removed a duplicated line in `physics.py` that caused an `IndentationError` in beta18. Apologies for the noise!
+
 ## v2.6.0-beta18 (2025-12-14)
 *   **Deep Fix**: Addressed a persistent "Data Corruption" issue where stored Null values were bypassing safety checks. Both loading and logic layers now strictly enforce numeric types, preventing `NoneType` crashes even with corrupted legacy data.
 

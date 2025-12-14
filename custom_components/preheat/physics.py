@@ -56,7 +56,6 @@ class ThermalPhysics:
             
             # V3 Migration logic:
             if self.deadtime == 0.0 and profile_data and data.sample_count < 5:
-            if self.deadtime == 0.0 and profile_data and data.sample_count < 5:
                 # Assuming new or un-tuned system, apply profile default
                 self.deadtime = initial_deadtime
         else:
