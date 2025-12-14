@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any, TYPE_CHECKING, override
+from typing import Any, TYPE_CHECKING
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -52,17 +52,15 @@ class PreheatingSwitch(CoordinatorEntity["PreheatingCoordinator"], SwitchEntity)
         )
 
     @property
-    @override
     def is_on(self) -> bool:
         """Return true if preheat is on."""
         return self.coordinator.data.preheat_active
 
-    @override
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on preheat."""
         await self.coordinator.force_preheat_on()
 
-    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off preheat manually."""
         await self.coordinator.stop_preheat_manual()

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 from homeassistant.components.button import (
     ButtonDeviceClass,
@@ -88,7 +88,7 @@ class PreheatButton(CoordinatorEntity[PreheatingCoordinator], ButtonEntity):
             sw_version=VERSION,
         )
 
-    @override
+
     async def async_press(self) -> None:
         """Handle the button press."""
         if self.entity_description.press_action == "reset_gain":

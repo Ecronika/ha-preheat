@@ -1,3 +1,8 @@
+## v2.6.0-beta22 (2025-12-14)
+*   **Test Suite**: Added a comprehensive `test_resilience.py` ensuring that legacy data corruption or missing configuration defaults will not crash the integration.
+*   **Compatibility**: Fixed `ImportError` on Python 3.10 systems due to missing `typing.override` (feature only available in 3.12+).
+*   **Stability**: The test suite now validates that all integration modules can be imported and initialized successfully before release.
+
 ## v2.6.0-beta21 (2025-12-14)
 *   **Fix**: Added missing imports for the default values introduced in beta20. This resolves the `NameError: name 'DEFAULT_STOP_TOLERANCE' is not defined`.
 
