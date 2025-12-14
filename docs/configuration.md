@@ -32,7 +32,7 @@ After installation, click **Configure** on the integration entry to access advan
     *   *Balanced (Default)*: Moderate trust.
     *   *Pessimistic*: Assumes it's colder than forecasted. Safer, but uses more energy.
     *   *Optimistic*: Assumes it's warmer. Saves energy, risk of being cold.
-*   **Buffer (Minutes)**: Add extra minutes to the calculated start time just to be safe. Default: `0`.
+*   **Buffer (Minutes)**: Add extra minutes to the calculated start time just to be safe. Default: `10`.
 
 ### 🛑 Optimal Stop (Eco)
 

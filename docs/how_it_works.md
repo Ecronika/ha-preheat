@@ -7,8 +7,11 @@ Intelligent Preheating uses a physics-based model (First Order Time Delay - PT1)
 The system solves a differential equation for every room:
 
 $$
-\frac{dT}{dt} = \frac{1}{\tau} (T_{target} - T_{current}) - k_{loss} (T_{current} - T_{outdoor})
+\text{Duration} = \text{Deadtime} + (\text{Mass} \cdot \Delta T_{in}) + (\text{Loss} \cdot \Delta T_{out} \cdot \text{Scaling})
 $$
+
+*   **Scaling Factor**: The system intelligently scales the impact of outdoor cold ("Cold Weather Penalty") based on how much heating is actually required.
+*   **Deadtime**: A fixed delay before the room reacts (e.g. floor heating slab heat-up).
 
 Don't worry about the math. Here is what it means for you:
 
