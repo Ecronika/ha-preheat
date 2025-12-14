@@ -1,3 +1,6 @@
+## v2.6.0-beta12 (2025-12-14)
+*   **Critical Fix**: Fixed an `AttributeError` in `PreheatPlanner` where core prediction methods were briefly missing in beta10/11. The integration is now fully functional and safe again.
+
 ## v2.6.0-beta11 (2025-12-14)
 *   **Legacy Compatibility**: Improved downgrade protection for versions older than 2.5 (e.g. 2.4/2.2). Newer v3 data is now sequestered in a container key (`999`) preventing `ValueError` crashes in older versions that strictly expect integer storage keys.
 
