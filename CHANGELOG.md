@@ -1,3 +1,6 @@
+## v2.6.0-beta15 (2025-12-14)
+*   **Critical Fix**: Fixed Unavailable entities (Status, Confidence) caused by an accidental code deletion in beta14. Everything is back to normal now.
+
 ## v2.6.0-beta14 (2025-12-14)
 *   **Physics Refinement**: Improved prediction accuracy for small temperature differences. The "Cold Wall Effect" (heat loss compensation) now scales dynamically with the heating amount. This prevents implausibly long duration predictions for minor temperature adjustments (e.g. < 1°C).
 

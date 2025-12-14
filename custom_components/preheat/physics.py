@@ -84,7 +84,39 @@ class ThermalPhysics:
         duration = self.deadtime + (self.mass_factor * dt_in) + (self.loss_factor * dt_out * loss_scaler)
         return max(0.0, duration)
 
-    # ... (Rest of class) ...
+    
+    def update_deadtime(self, new_deadtime: float) -> None:
+        """Update the deadtime parameter (usually from DeadtimeAnalyzer)."""
+        # Smooth update? Or direct? Deadtime is physically constant.
+        # But measurement is noisy. Let's use EMA.
+        if self.deadtime == 0.0:
+            self.deadtime = new_deadtime
+        else:
+            # Slow adaptation for deadtime
+            self.deadtime = (0.2 * new_deadtime) + (0.8 * self.deadtime)
+            
+    def get_confidence(self) -> int:
+        """Return confidence score 0-100% based on sample count."""
+        if self.sample_count <= 0:
+            return 0
+        return min(100, int((self.sample_count / 20.0) * 100))
+
+    @property
+    def health_score(self) -> int:
+        """Return the health score of the model (0-100%)."""
+        score = 100
+        
+        if self.avg_error > 15.0:
+            penalty = (self.avg_error - 15.0) * 2.0 
+            score -= int(penalty)
+
+        if self.mass_factor < self.min_mass or self.mass_factor > self.max_mass:
+            score -= 20
+            
+        if self.loss_factor > 40.0:
+            score -= 10
+
+        return max(0, min(100, score))
 
     def update_model(self, actual_duration: float, delta_t_in: float, delta_t_out: float, valve_position: float | None = None) -> bool:
         """Update the model based on actual performance."""
