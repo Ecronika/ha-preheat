@@ -511,7 +511,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # Heuristic: Drop > 0.5K in 5 mins
         newly_detected = False
         if delta < -0.4: # Slightly sensitive
-             _LOGGER.warning("Window Open Detected! Gradient: %.2fK in %.1f min", delta, dt)
+             _LOGGER.info("[%s] Window Open Detected! Gradient: %.2fK in %.1f min", self.device_name, delta, dt)
              self._window_open_detected = True
              self._window_cooldown_counter = 30 # Paused for 30 mins
              newly_detected = True
