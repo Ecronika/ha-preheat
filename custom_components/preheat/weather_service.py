@@ -62,6 +62,16 @@ class WeatherService:
     async def _fetch_fresh_forecast(self) -> list[dict] | None:
         """Call API and parse results."""
         try:
+            # Check if entity exists (Startup Race Condition)
+            state = self.hass.states.get(self.entity_id)
+            if not state:
+                 _LOGGER.info("Weather entity %s not ready yet. Skipping forecast.", self.entity_id)
+                 return None
+            
+            if state.state in ("unavailable", "unknown"):
+                 _LOGGER.info("Weather entity %s is %s. Skipping forecast.", self.entity_id, state.state)
+                 return None
+
             _LOGGER.debug("Fetching fresh forecast for %s", self.entity_id)
             response = await self.hass.services.async_call(
                 "weather", "get_forecasts",

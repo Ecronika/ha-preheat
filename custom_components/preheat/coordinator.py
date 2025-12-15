@@ -183,6 +183,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._last_weather_check: datetime | None = None
         self.weather_service: WeatherService | None = None
         
+        self._startup_time = dt_util.utcnow()
         self._setup_listeners()
 
     @property
@@ -617,7 +618,31 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     self.weather_service = WeatherService(self.hass, weather_entity)
                 
                 # Fetch (Cached)
+                # Fetch (Cached)
                 forecasts = await self.weather_service.get_forecasts()
+                
+                # Diagnostic: Check for persistent weather failure
+                if forecasts is None:
+                    # If we are up for > 5 minutes and still fail:
+                    if (dt_util.utcnow() - self._startup_time).total_seconds() > 300:
+                         async_create_issue(
+                            self.hass,
+                            DOMAIN,
+                            f"weather_setup_failed_{self._entry.entry_id}",
+                            is_fixable=False,
+                            is_persistent=False,
+                            severity=IssueSeverity.TITANIUM,
+                            translation_key="weather_setup_failed",
+                            translation_placeholders={
+                                "weather_entity": self.weather_service.entity_id,
+                                "zone_name": self.device_name
+                            }
+                        )
+                else:
+                    # Success -> Clear issue
+                    async_delete_issue(
+                        self.hass, DOMAIN, f"weather_setup_failed_{self._entry.entry_id}"
+                    )
             
             if forecasts:
                 # ROOT FINDING LOGIC

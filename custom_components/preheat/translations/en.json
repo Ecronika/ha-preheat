@@ -156,6 +156,10 @@
             "title": "Missing entity in {name}",
             "description": "The entity `{entity}` configured in zone {name} is unavailable or missing. Please check configuration or the sensor."
         },
+        "weather_setup_failed": {
+            "title": "Weather Entity Unavailable",
+            "description": "The configured weather entity `{weather_entity}` for zone `{zone_name}` is not responding or does not exist. Please check your configuration."
+        },
         "data_migrated": {
             "title": "Migration completed for {name}",
             "description": "Historical data from v1 was converted. Precision may be reduced initially. Use 'Analyze History' button to rebuild from recorder data for better accuracy."
