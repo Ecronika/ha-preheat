@@ -1,3 +1,9 @@
+## v2.6.0-beta29
+- **Resilience**: Added robust checks for the Weather entity. If the weather service is not ready at startup, Preheat will wait gracefully instead of crashing.
+- **Diagnostic Issue**: If the weather configuration remains broken for > 5 minutes, a Repair Issue is created (asking the user to check config) and auto-resolved when fixed.
+- **Logs**: Improved "Window Open" logging (Downgraded to INFO, added Zone Name) to reduce alarm fatigue.
+- **Fix**: Multiple critical bugfixes for `ImportError` and `NameError` caused by the aggressive code cleanup in beta23.
+
 ## v2.6.0-beta23
 - **Diagnostic Upgrade**: Added a "Repair Issue" warning if the calculated heating duration exceeds your configured Maximum Duration logic.
 - **Learning Fix**: Preheating that times out (reaches Max Duration) now correctly triggers learning (teaching the model that heating was slower than expected), instead of just aborting.
