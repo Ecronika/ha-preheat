@@ -265,7 +265,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                         _LOGGER.info("Migrated legacy gain %.2f to mass_factor.", lg)
                     except ValueError: pass
 
-                mass = data.get(ATTR_MODEL_MASS, mass_factor if mass_factor is not None else data.get(ATTR_LEARNED_GAIN)) # Fallback
+                mass = data.get(ATTR_MODEL_MASS, mass_factor if mass_factor is not None else data.get("learned_gain")) # Fallback
                 # If we fallback to Gain, mass roughly equals Gain. Loss depends on defaults.
                 
                 # Get Configured Parameters
@@ -276,7 +276,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 p_data = ThermalModelData(
                     mass_factor=mass,
                     loss_factor=data.get(ATTR_MODEL_LOSS, 5.0), # Default
-                    sample_count=data.get(ATTR_SAMPLE_COUNT, 0),
+                    sample_count=data.get("sample_count", 0),
                     avg_error=data.get("avg_error", 0.0),
                     deadtime=data.get("deadtime", 0.0)
                 ) if mass is not None or ATTR_MODEL_LOSS in data else None
