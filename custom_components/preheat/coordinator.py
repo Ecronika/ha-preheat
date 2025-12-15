@@ -312,7 +312,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 ATTR_ARRIVAL_HISTORY: data_planner,
                 ATTR_MODEL_MASS: data_physics["mass_factor"],
                 ATTR_MODEL_LOSS: data_physics["loss_factor"],
-                ATTR_SAMPLE_COUNT: data_physics["sample_count"],
+                "sample_count": data_physics["sample_count"],
                 "avg_error": data_physics.get("avg_error", 0.0),
                 "last_comfort_setpoint": self._last_comfort_setpoint,
                 # V2.5
