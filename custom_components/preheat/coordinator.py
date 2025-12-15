@@ -628,7 +628,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                          async_create_issue(
                             self.hass,
                             DOMAIN,
-                            f"weather_setup_failed_{self._entry.entry_id}",
+                            f"weather_setup_failed_{self.entry.entry_id}",
                             is_fixable=False,
                             is_persistent=False,
                             severity=IssueSeverity.TITANIUM,
@@ -641,7 +641,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 else:
                     # Success -> Clear issue
                     async_delete_issue(
-                        self.hass, DOMAIN, f"weather_setup_failed_{self._entry.entry_id}"
+                        self.hass, DOMAIN, f"weather_setup_failed_{self.entry.entry_id}"
                     )
             
             if forecasts:
