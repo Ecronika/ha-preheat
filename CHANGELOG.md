@@ -1,3 +1,6 @@
+## v2.6.0-beta30
+- **Learning Fix**: Resolved an issue where the system would stop learning if the user arrived early (during the preheat phase). Now, partial preheating sessions are correctly analyzed by the physics model, provided there is enough data (at least 0.2K rise). This allows the system to auto-correct "Too Late" starts.
+
 ## v2.6.0-beta29
 - **Resilience**: Added robust checks for the Weather entity. If the weather service is not ready at startup, Preheat will wait gracefully instead of crashing.
 - **Diagnostic Issue**: If the weather configuration remains broken for > 5 minutes, a Repair Issue is created (asking the user to check config) and auto-resolved when fixed.

@@ -754,7 +754,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp)
                 # 2. User came home
                 elif is_occupied:
-                    await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=True)
+                    # User came home. Stop preheat, but ALLOW learning (aborted=False).
+                    # If we generated some heat (DeltaT > 0.2), we want to account for it.
+                    # This fixes the "Preheat starts too late -> User arrives -> Data discarded -> Loop" issue.
+                    _LOGGER.info("User arrived during preheat. Stopping and attempting to learn from partial run.")
+                    await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=False)
                 # 3. Timeout
                 elif self._preheat_started_at:
                     max_hours = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0)
