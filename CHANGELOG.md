@@ -1,3 +1,6 @@
+## v2.6.0-beta31
+- **Oscillation Fix**: Fixed a feedback loop in the "Optimal Stop" feature. Previously, if an external automation lowered the thermostat setpoint (e.g., Eco Mode) *after* Optimal Stop activated, the integration interpreted this as a user override and reset itself, causing an On/Off loop. Now, setpoint *decreases* are correctly ignored, while *increases* (user demand) still trigger a reset.
+
 ## v2.6.0-beta30
 - **Learning Fix**: Resolved an issue where the system would stop learning if the user arrived early (during the preheat phase). Now, partial preheating sessions are correctly analyzed by the physics model, provided there is enough data (at least 0.2K rise). This allows the system to auto-correct "Too Late" starts.
 
