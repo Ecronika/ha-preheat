@@ -20,6 +20,21 @@
           "arrival_window_end": "Ankunftsfenster Ende (Uhrzeit)",
           "enable_optimal_stop": "Optimal Stop aktivieren"
         }
+      },
+      "reconfigure": {
+        "title": "Zone umkonfigurieren",
+        "description": "Basis-Sensoren und Geräte aktualisieren.",
+        "data": {
+          "occupancy_sensor": "Belegungssensor",
+          "temperature_sensor": "Raumtemperatursensor",
+          "climate_entity": "Thermostat / Klimagerät",
+          "weather_entity": "Wetter-Dienst",
+          "heating_profile": "Heizsystem-Profil",
+          "arrival_window_start": "Ankunftsfenster Start",
+          "arrival_window_end": "Ankunftsfenster Ende",
+          "enable_optimal_stop": "Optimal Stop aktivieren (Nachlauf)",
+          "preset_mode": "Betriebsmodus"
+        }
       }
     },
     "error": {

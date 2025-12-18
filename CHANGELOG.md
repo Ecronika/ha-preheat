@@ -1,3 +1,6 @@
+## v2.6.0-beta39
+- **Translation**: Added German translations for the "Reconfigure" dialog.
+
 ## v2.6.0-beta38
 - **Translation**: Added missing translation keys for the new "Reconfigure" dialog.
 
