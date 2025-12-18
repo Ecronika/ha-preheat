@@ -1,3 +1,6 @@
+## v2.6.0-beta37
+- **Feature**: Added "Reconfigure" button support. Users can now change Core Entities (Occupancy, Climate, etc.) via the "Reconfigure" button in the Integrations dashboard.
+
 ## v2.6.0-beta36
 - **Hotfix**: Fixed `AttributeError` by renaming internal config entry storage to avoid collision with read-only property in `OptionsFlow`.
 

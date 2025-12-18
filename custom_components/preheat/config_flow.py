@@ -144,6 +144,85 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
 
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle re-configuration."""
+        errors = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            # Update Entry (maintain strict data/options separation)
+            return self.async_update_reload_and_abort(
+                entry,
+                data={
+                    CONF_OCCUPANCY: user_input[CONF_OCCUPANCY],
+                    CONF_CLIMATE: user_input[CONF_CLIMATE],
+                    CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
+                    CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
+                },
+                options={
+                    # Merge with existing options to preserve non-editable fields (like buffer, expert mode)
+                    **entry.options, 
+                    CONF_PRESET_MODE: user_input.get(CONF_PRESET_MODE, PRESET_BALANCED),
+                    CONF_HEATING_PROFILE: user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW),
+                    CONF_ARRIVAL_WINDOW_START: user_input.get(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START),
+                    CONF_ARRIVAL_WINDOW_END: user_input.get(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END),
+                    CONF_ENABLE_OPTIMAL_STOP: user_input.get(CONF_ENABLE_OPTIMAL_STOP, False),
+                }
+            )
+
+        # Pre-fill with existing data
+        data = {**entry.data, **entry.options}
+        
+        # Build Profile Options
+        profile_options = list(HEATING_PROFILES.keys())
+
+        data_schema = vol.Schema({
+            # Name is read-only in reconfigure usually, but we can't easily make it read-only in a schema.
+            # Usually reconfigure doesn't change title. We'll omit Name or keep it as optional but it won't change title.
+            # For simplicity, we omit Name in reconfigure as title change is handled via UI rename.
+            
+            vol.Required(CONF_OCCUPANCY): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            vol.Required(CONF_CLIMATE): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="climate")
+            ),
+            vol.Optional(CONF_TEMPERATURE): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "input_number"])
+            ),
+            vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="weather")
+            ),
+            
+            # Key Learning Settings
+            vol.Required(CONF_HEATING_PROFILE, default=PROFILE_RADIATOR_NEW): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=profile_options,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    translation_key="heating_profile"
+                )
+            ),
+            vol.Optional(CONF_ARRIVAL_WINDOW_START, default=DEFAULT_ARRIVAL_WINDOW_START): selector.TimeSelector(),
+            vol.Optional(CONF_ARRIVAL_WINDOW_END, default=DEFAULT_ARRIVAL_WINDOW_END): selector.TimeSelector(),
+            
+            vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=False): selector.BooleanSelector(),
+
+            vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                     options=[PRESET_AGGRESSIVE, PRESET_BALANCED, PRESET_CONSERVATIVE],
+                     mode=selector.SelectSelectorMode.DROPDOWN,
+                     translation_key="preset_mode"
+                 )
+            ),
+        })
+
+        return self.async_show_form(
+            step_id="reconfigure", 
+            data_schema=self.add_suggested_values_to_schema(data_schema, data), 
+            errors=errors
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> PreheatingOptionsFlow:
