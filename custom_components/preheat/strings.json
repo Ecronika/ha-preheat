@@ -111,6 +111,11 @@
         "name": "Learning Confidence"
       }
     },
+    "switch": {
+      "preheat": {
+        "name": "Preheat"
+      }
+    },
     "button": {
       "reset_gain": {
         "name": "Reset Thermal Model"

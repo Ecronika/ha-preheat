@@ -222,6 +222,11 @@
         "name": "Optimal Stop Aktiv"
       }
     },
+    "switch": {
+      "preheat": {
+        "name": "Vorheizen"
+      }
+    },
     "button": {
       "reset_gain": {
         "name": "Thermisches Modell zurücksetzen"

@@ -114,14 +114,14 @@ class OptimalStopManager:
              # Only reset if the setpoint INCREASES (User calls for heat).
              # If setpoint decreases (e.g. automation sets Eco mode because we are coasting),
              # that is consistent with our goal, so we shouldn't abort.
-             if target_temp > (self._last_target_temp + 0.1):
+             if target_temp > (self._last_target_temp + 0.5):
                 if self._active:
                     _LOGGER.info("Optimal Stop RESET: Target temp increased (%.1f -> %.1f).", self._last_target_temp, target_temp)
                     self._active = False
                     self._reason = "setpoint_increase"
                     self._last_target_temp = target_temp
                     return
-             elif target_temp < (self._last_target_temp - 0.1):
+             elif target_temp < (self._last_target_temp - 0.5):
                  # Setpoint decreased. Log it but don't reset.
                  _LOGGER.debug("Target temp decreased (%.1f -> %.1f). Maintaining Optimal Stop.", self._last_target_temp, target_temp)
         

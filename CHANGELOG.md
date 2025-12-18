@@ -1,3 +1,6 @@
+## v2.6.0-beta32
+- **Optimal Stop Stability**: Increased the tolerance for user-override detection from 0.1K to 0.5K. This prevents the "Optimal Stop" feature from aborting prematurely if the thermostat reports small fluctuations in the setpoint (e.g., electronic noise or internal adjustments).
+
 ## v2.6.0-beta31
 - **Oscillation Fix**: Fixed a feedback loop in the "Optimal Stop" feature. Previously, if an external automation lowered the thermostat setpoint (e.g., Eco Mode) *after* Optimal Stop activated, the integration interpreted this as a user override and reset itself, causing an On/Off loop. Now, setpoint *decreases* are correctly ignored, while *increases* (user demand) still trigger a reset.
 
