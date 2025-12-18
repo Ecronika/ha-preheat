@@ -1,3 +1,6 @@
+## v2.6.0-beta36
+- **Hotfix**: Fixed `AttributeError` by renaming internal config entry storage to avoid collision with read-only property in `OptionsFlow`.
+
 ## v2.6.0-beta35
 - **Hotfix**: Fixed critical `TypeError` when opening Options Flow. Added missing `__init__` method to `PreheatingOptionsFlow`.
 

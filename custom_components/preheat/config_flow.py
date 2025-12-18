@@ -154,10 +154,10 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     def _get_val(self, key, default=None):
-        return self.config_entry.options.get(key, self.config_entry.data.get(key, default))
+        return self._config_entry.options.get(key, self._config_entry.data.get(key, default))
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage options."""
@@ -211,7 +211,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 )
             
             # 3. Save (Merge with existing options to preserve hidden Expert fields)
-            new_options = {**self.config_entry.options, **user_input}
+            new_options = {**self._config_entry.options, **user_input}
             return self.async_create_entry(title="", data=new_options)
 
         # First Open: Use stored expert state
@@ -314,7 +314,8 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
 
         # Fill defaults
         # 1. Start with Stored Data
-        data = {**self.config_entry.data, **self.config_entry.options}
+        # 1. Start with Stored Data
+        data = {**self._config_entry.data, **self._config_entry.options}
         
         # 2. Merge with User Input (if reloading form)
         if user_input:
