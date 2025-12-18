@@ -185,6 +185,14 @@ class OptimalStopManager:
                  max_minutes=max_coast
              )
              
+             # Apply Inertia Bonus (Radiator Latent Heat)
+             # The 'deadtime' proxy represents how long the system continues to emit heat after valve closure.
+             # We add this to the coast duration because the room won't start cooling immediately.
+             inertia = config.get("system_inertia", 0.0)
+             if duration_min > 0: # Only apply if we can coast at all
+                 duration_min += inertia
+             
+             
              # Computed Stop Time
              computed_stop = schedule_end - timedelta(minutes=duration_min)
              

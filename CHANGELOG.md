@@ -1,3 +1,6 @@
+## v2.6.0-beta33
+- **Inertia Compensation**: Added logic to account for the "Latent Heat" (Nachlaufzeit) of radiators. The "Optimal Stop" calculation now adds the system's `deadtime` (default 15-30min depending on profile) to the coast duration. This allows the system to shut off earlier, anticipating that the radiator will continue to heat the room for a while after the valve closes.
+
 ## v2.6.0-beta32
 - **Optimal Stop Stability**: Increased the tolerance for user-override detection from 0.1K to 0.5K. This prevents the "Optimal Stop" feature from aborting prematurely if the thermostat reports small fluctuations in the setpoint (e.g., electronic noise or internal adjustments).
 

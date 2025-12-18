@@ -820,7 +820,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 # Config Dict
                 opt_config = {
                      CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
-                     CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS)
+                     CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
+                     "system_inertia": self.physics.deadtime
                 }
                 
                 self.optimal_stop_manager.update(
