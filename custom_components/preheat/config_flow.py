@@ -152,6 +152,10 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class PreheatingOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow."""
 
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
     def _get_val(self, key, default=None):
         return self.config_entry.options.get(key, self.config_entry.data.get(key, default))
 

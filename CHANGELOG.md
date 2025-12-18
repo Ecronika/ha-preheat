@@ -1,3 +1,6 @@
+## v2.6.0-beta35
+- **Hotfix**: Fixed critical `TypeError` when opening Options Flow. Added missing `__init__` method to `PreheatingOptionsFlow`.
+
 ## v2.6.0-beta34
 - **Config Flow Modernization**: Major refactor of the configuration flow (strict core/options separation, robust migration v1->v3, safe merging of expert options).
 - **Internationalization**: Full i18n support for all selectors and error messages (keys added to strings.json).
