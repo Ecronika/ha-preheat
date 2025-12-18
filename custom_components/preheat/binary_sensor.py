@@ -25,6 +25,7 @@ async def async_setup_entry(
     
     sensors = [
         PreheatOptimalStopBinarySensor(coordinator, entry),
+        PreheatActiveLegacyBinarySensor(coordinator, entry),
     ]
     
     async_add_entities(sensors)
@@ -66,3 +67,20 @@ class PreheatOptimalStopBinarySensor(PreheatBaseBinarySensor):
             "coast_tau_hours": round(data.coast_tau, 2),
             "tau_confidence": round(data.tau_confidence * 100, 1)
         }
+
+class PreheatActiveLegacyBinarySensor(PreheatBaseBinarySensor):
+    """
+    Legacy binary sensor for backward compatibility.
+    Duplicates the state of 'switch.preheat' as a read-only sensor.
+    """
+    _attr_translation_key = "preheat_active"
+    _attr_icon = "mdi:radiator"
+    _attr_entity_registry_enabled_default = False # Deprecated
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_preheat_active"
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.data.preheat_active

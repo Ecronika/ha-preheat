@@ -9,7 +9,16 @@ from homeassistant.core import HomeAssistant
 
 from .coordinator import PreheatingCoordinator, PreheatData
 
-TO_REDACT = {"unique_id", "entry_id"}
+from .const import (
+    CONF_OCCUPANCY, CONF_CLIMATE, CONF_TEMPERATURE, CONF_SETPOINT, 
+    CONF_OUTDOOR_TEMP, CONF_WEATHER_ENTITY, CONF_WORKDAY, CONF_SCHEDULE_ENTITY
+)
+
+TO_REDACT = {
+    "unique_id", "entry_id",
+    CONF_OCCUPANCY, CONF_CLIMATE, CONF_TEMPERATURE, CONF_SETPOINT,
+    CONF_OUTDOOR_TEMP, CONF_WEATHER_ENTITY, CONF_WORKDAY, CONF_SCHEDULE_ENTITY
+}
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
@@ -31,7 +40,7 @@ async def async_get_config_entry_diagnostics(
         "outdoor_temp": coordinator.data.outdoor_temp,
         "next_arrival": coordinator.data.next_arrival.isoformat() if coordinator.data.next_arrival else None,
         "valve_position": coordinator.data.valve_signal,
-        "window_open_detected": coordinator.window_open_detected, # To be implemented
+        "window_open_detected": getattr(coordinator, "window_open_detected", None), # To be implemented
         "learning_active": coordinator.data.learning_active,
     }
 

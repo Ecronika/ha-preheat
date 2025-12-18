@@ -40,7 +40,7 @@ Every minute, the system runs a simulation:
 3.  Simulate backwards: "If I want to be 21°C at 07:00, and it's 0°C outside...":
     *   Floor heating needs 4 hours.
     *   Radiator needs 1.5 hours.
-4.  If the result says "Start Time" is **NOW** (or in the past), the `preheat_active` sensor turns **ON**.
+4.  If the result says "Start Time" is **NOW** (or in the past), the `switch.preheat` turns **ON**.
 
 ## History & Occupancy
 

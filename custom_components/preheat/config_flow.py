@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from typing import Any
-import datetime
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -16,8 +15,6 @@ from .const import (
     CONF_OCCUPANCY,
     CONF_TEMPERATURE,
     CONF_CLIMATE,
-    CONF_SETPOINT,
-    CONF_OUTDOOR_TEMP,
     CONF_WEATHER_ENTITY,
     CONF_WORKDAY,
     CONF_ONLY_ON_WORKDAYS,
@@ -35,17 +32,16 @@ from .const import (
     # Keys
     CONF_EMA_ALPHA,
     CONF_BUFFER_MIN,
-    CONF_INITIAL_GAIN,
     CONF_MAX_PREHEAT_HOURS,
     CONF_DONT_START_IF_WARM,
     CONF_ARRIVAL_WINDOW_START,
     CONF_ARRIVAL_WINDOW_END,
     CONF_AIR_TO_OPER_BIAS,
-    CONF_EARLIEST_START,
+    CONF_INITIAL_GAIN,      # Re-added
+    CONF_EARLIEST_START,    # Re-added
     # Defaults
     DEFAULT_EMA_ALPHA,
     DEFAULT_BUFFER_MIN,
-    DEFAULT_INITIAL_GAIN,
     DEFAULT_MAX_HOURS,
     DEFAULT_ARRIVAL_WINDOW_START,
     DEFAULT_ARRIVAL_WINDOW_END,
@@ -82,22 +78,27 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-             # V3: Profile defines defaults. We just save the selection.
-             return self.async_create_entry(
+            # V3: Split Core (Data) vs Behavior (Options)
+            return self.async_create_entry(
                 title=user_input[CONF_NAME],
-                data={},
+                data={
+                CONF_OCCUPANCY: user_input[CONF_OCCUPANCY],
+                CONF_CLIMATE: user_input[CONF_CLIMATE],
+                CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
+                CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
+                },
                 options={
-                    CONF_PRESET_MODE: user_input.get(CONF_PRESET_MODE, PRESET_BALANCED),
-                    CONF_EXPERT_MODE: False,
-                    **user_input
+                CONF_PRESET_MODE: user_input.get(CONF_PRESET_MODE, PRESET_BALANCED),
+                CONF_HEATING_PROFILE: user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW),
+                CONF_ARRIVAL_WINDOW_START: user_input.get(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START),
+                CONF_ARRIVAL_WINDOW_END: user_input.get(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END),
+                CONF_ENABLE_OPTIMAL_STOP: user_input.get(CONF_ENABLE_OPTIMAL_STOP, False),
+                CONF_EXPERT_MODE: False,
                 }
             )
 
         # Build Profile Options
-        profile_options = [
-            {"value": k, "label": v["name"]} 
-            for k,v in HEATING_PROFILES.items()
-        ]
+        profile_options = list(HEATING_PROFILES.keys())
 
         data_schema = vol.Schema({
             vol.Required(CONF_NAME, default="Office"): str,
@@ -130,25 +131,23 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Key Feature: Optimal Stop (Promoted)
             vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=False): selector.BooleanSelector(),
 
-             vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
+            vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=[
-                        {"value": PRESET_AGGRESSIVE, "label": "Aggressive"},
-                        {"value": PRESET_BALANCED, "label": "Balanced"},
-                        {"value": PRESET_CONSERVATIVE, "label": "Eco"},
-                    ],
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                    translation_key="preset_mode"
-                )
+                     options=[PRESET_AGGRESSIVE, PRESET_BALANCED, PRESET_CONSERVATIVE],
+                     mode=selector.SelectSelectorMode.DROPDOWN,
+                     translation_key="preset_mode"
+                 )
             ),
         })
+
+
 
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> PreheatingOptionsFlow:
-        return PreheatingOptionsFlow()
+        return PreheatingOptionsFlow(config_entry)
 
 class PreheatingOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow."""
@@ -169,13 +168,13 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         
         if user_input is not None:
              # 1. Validation
-            if user_input.get(CONF_BUFFER_MIN, 0) > 60:
+            if user_input.get(CONF_BUFFER_MIN, 0) > 120:
                  errors[CONF_BUFFER_MIN] = "buffer_too_high"
-            if user_input.get(CONF_MAX_PREHEAT_HOURS, 3.0) > 5.0:
+            if user_input.get(CONF_MAX_PREHEAT_HOURS, 3.0) > 12.0:
                  errors[CONF_MAX_PREHEAT_HOURS] = "max_duration_too_high"
             
             # 2. Logic: Should we Reload or Save?
-            requested_expert = user_input.get(CONF_EXPERT_MODE, False)
+            requested_expert = user_input.get(CONF_EXPERT_MODE, stored_expert)
             
             # Case A: We want to switch Mode (Simple <-> Expert)
             # This happens if requested mode != what we see. 
@@ -195,14 +194,21 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             
             # If errors exist, always reload (to show errors)
             if errors or should_reload:
+                 # Logic Fix: If errors occurred on expert fields, FORCE expert mode to stay open
+                 # otherwise the error is hidden (and form unusable)
+                 force_expert = requested_expert
+                 if errors and is_submitting_expert_form:
+                     force_expert = True
+
                  return self.async_show_form(
                     step_id="init", 
-                    data_schema=self._build_schema(show_expert=requested_expert, user_input=user_input),
+                    data_schema=self._build_schema(show_expert=force_expert, user_input=user_input),
                     errors=errors
                 )
             
-            # 3. Save
-            return self.async_create_entry(title="", data=user_input)
+            # 3. Save (Merge with existing options to preserve hidden Expert fields)
+            new_options = {**self.config_entry.options, **user_input}
+            return self.async_create_entry(title="", data=new_options)
 
         # First Open: Use stored expert state
         return self.async_show_form(step_id="init", data_schema=self._build_schema(show_expert=stored_expert), errors=errors)
@@ -210,17 +216,11 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
     def _build_schema(self, show_expert: bool, user_input: dict[str, Any] | None = None) -> vol.Schema:
 
         # Build Profile Options
-        profile_options = [
-            {"value": k, "label": v["name"]} 
-            for k,v in HEATING_PROFILES.items()
-        ]
+        profile_options = list(HEATING_PROFILES.keys())
 
         schema = {
-            vol.Optional(CONF_OCCUPANCY): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
-            vol.Optional(CONF_TEMPERATURE): selector.EntitySelector(selector.EntitySelectorConfig(domain=["sensor", "input_number"])),
-            vol.Optional(CONF_CLIMATE): selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
-            # Removed: Setpoint Sensor
-            vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
+            # Core Fields (Occupancy, Climate, etc.) are in Config Entry Data and not editable here.
+            # Use 'Reconfigure' or delete/add for core changes.
             
             vol.Required(CONF_HEATING_PROFILE, default=PROFILE_RADIATOR_NEW): selector.SelectSelector(
                 selector.SelectSelectorConfig(
@@ -230,15 +230,12 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 )
             ),
 
-            vol.Optional(CONF_PRESET_MODE): selector.SelectSelector(
+            vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=[
-                        {"value": PRESET_AGGRESSIVE, "label": "Aggressive"},
-                        {"value": PRESET_BALANCED, "label": "Balanced"},
-                        {"value": PRESET_CONSERVATIVE, "label": "Eco"},
-                    ],
-                    mode=selector.SelectSelectorMode.DROPDOWN
-                )
+                     options=[PRESET_AGGRESSIVE, PRESET_BALANCED, PRESET_CONSERVATIVE],
+                     mode=selector.SelectSelectorMode.DROPDOWN,
+                     translation_key="preset_mode"
+                 )
             ),
             
             # Key Settings (Moved from Expert)
@@ -262,14 +259,10 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_USE_FORECAST): selector.BooleanSelector(),
                 vol.Optional(CONF_RISK_MODE): selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=[
-                            {"value": RISK_BALANCED, "label": "Balanced (Integral)"},
-                            {"value": RISK_PESSIMISTIC, "label": "Pessimistic (P10 - Comfort)"},
-                            {"value": RISK_OPTIMISTIC, "label": "Optimistic (P90 - Savings)"},
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                        translation_key="risk_mode"
-                    )
+                        options=[RISK_BALANCED, RISK_PESSIMISTIC, RISK_OPTIMISTIC],
+                         mode=selector.SelectSelectorMode.DROPDOWN,
+                         translation_key="risk_mode"
+                     )
                 ),
 
                 # Optimal Stop (Advanced Tuning)
@@ -283,11 +276,14 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                      selector.NumberSelectorConfig(min=0.5, max=12.0, step=0.5, unit_of_measurement="h", mode="box")
                 ),
                 
-                # Removed: Initial Gain
+                # Re-added: Initial Gain
+                vol.Optional(CONF_INITIAL_GAIN): selector.NumberSelector(
+                     selector.NumberSelectorConfig(min=5.0, max=60.0, step=1.0, unit_of_measurement="min/K", mode="box")
+                ),
                 vol.Optional(CONF_EMA_ALPHA): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.05, mode="slider")
                 ),
-                vol.Optional(CONF_BUFFER_MIN): selector.NumberSelector(
+                vol.Optional(CONF_BUFFER_MIN, default=DEFAULT_BUFFER_MIN): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0, max=120, mode="box")
                 ),
                 vol.Optional(CONF_MAX_PREHEAT_HOURS): selector.NumberSelector(
@@ -298,7 +294,9 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_AIR_TO_OPER_BIAS): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=-5.0, max=5.0, step=0.5, unit_of_measurement="K", mode="box")
                 ),
-                # Removed: Earliest Start (Redundant with Max Duration)
+                vol.Optional(CONF_EARLIEST_START): selector.NumberSelector(
+                     selector.NumberSelectorConfig(min=0, max=1440, step=15, unit_of_measurement="min", mode="box")
+                ),
                 vol.Optional(CONF_COMFORT_MIN): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="°C", mode="box")
                 ),

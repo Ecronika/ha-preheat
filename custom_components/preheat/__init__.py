@@ -51,31 +51,45 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: PreheatConfigEn
     """Migrate old entry."""
     _LOGGER.debug("Migrating from version %s", config_entry.version)
 
+    current_version = config_entry.version
+
     # v1 -> v2
-    if config_entry.version == 1:
+    if current_version == 1:
+        _LOGGER.info("Migrating v1 -> v2")
         new_options = {**config_entry.options}
         new_options[CONF_PRESET_MODE] = PRESET_BALANCED
         new_options[CONF_EXPERT_MODE] = True
-        hass.config_entries.async_update_entry(config_entry, options=new_options, version=2)
-
-    # v2 -> v3: Move data to options
-    if config_entry.version == 2:
-        new_options = {**config_entry.options}
-        if config_entry.data:
-            new_options.update(config_entry.data)
         
-        # Ensure defaults
-        if CONF_PRESET_MODE not in new_options:
-            new_options[CONF_PRESET_MODE] = PRESET_BALANCED
-        if CONF_EXPERT_MODE not in new_options:
-            new_options[CONF_EXPERT_MODE] = True
+        hass.config_entries.async_update_entry(config_entry, options=new_options, version=2)
+        current_version = 2
+
+    # v2 -> v3: Move options to data
+    if current_version == 2:
+        _LOGGER.info("Migrating v2 -> v3")
+        data = dict(config_entry.data)
+        options = dict(config_entry.options)
+        
+        # Move core keys into data if they were previously stored in options
+        # We need to import these keys here or ensure they are available
+        from .const import CONF_OCCUPANCY, CONF_CLIMATE, CONF_TEMPERATURE, CONF_WEATHER_ENTITY
+
+        for k in (CONF_OCCUPANCY, CONF_CLIMATE, CONF_TEMPERATURE, CONF_WEATHER_ENTITY):
+            if k not in data and k in options:
+                data[k] = options.pop(k)
+        
+        # Ensure defaults for Behavior
+        if CONF_PRESET_MODE not in options:
+            options[CONF_PRESET_MODE] = PRESET_BALANCED
+        if CONF_EXPERT_MODE not in options:
+            options[CONF_EXPERT_MODE] = False # Default to Simple
 
         hass.config_entries.async_update_entry(
             config_entry, 
-            data={}, 
-            options=new_options, 
+            data=data, 
+            options=options, 
             version=3
         )
+        current_version = 3
         _LOGGER.info("Migration v2->v3 successful")
 
     return True

@@ -1,3 +1,9 @@
+## v2.6.0-beta34
+- **Config Flow Modernization**: Major refactor of the configuration flow (strict core/options separation, robust migration v1->v3, safe merging of expert options).
+- **Internationalization**: Full i18n support for all selectors and error messages (keys added to strings.json).
+- **Validation Consistency**: Aligned UI limits with backend validation (120 min buffer, 12h duration).
+- **Inertia Compensation**: Added logic to account for the "Latent Heat" (Nachlaufzeit) of radiators.
+
 ## v2.6.0-beta33
 - **Inertia Compensation**: Added logic to account for the "Latent Heat" (Nachlaufzeit) of radiators. The "Optimal Stop" calculation now adds the system's `deadtime` (default 15-30min depending on profile) to the coast duration. This allows the system to shut off earlier, anticipating that the radiator will continue to heat the room for a while after the valve closes.
 

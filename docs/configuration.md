@@ -49,8 +49,10 @@ After installation, click **Configure** on the integration entry to access advan
 
 ## Entity Explanations
 
-### `binary_sensor.preheat_active`
-Is **ON** when the system thinks you should be heating *right now* to hit your target. You can use this in automations to switch your thermostat to "Comfort".
+### `switch.preheat`
+Is **ON** when the system determines you should be heating *right now* to hit your target. You can also toggle this switch manually to force preheating or stop it.
+
+> **Legacy Note:** This entity was previously named `binary_sensor.preheat_active`. A deprecated alias still exists for backward compatibility but will be removed in v3.0.
 
 ### `binary_sensor.optimal_stop_active`
 Is **ON** when the system calculates that you can turn **OFF** the heating early, because the residual heat will carry you to the end of the schedule.

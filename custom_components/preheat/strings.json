@@ -25,8 +25,8 @@
     "error": {
       "invalid_occupancy_sensor": "Invalid occupancy sensor selected",
       "invalid_temperature_sensor": "Invalid temperature sensor selected",
-      "buffer_too_high": "Safety buffer exceeds 60 minutes - value too high",
-      "max_duration_too_high": "Maximum preheat duration over 5 hours poses safety risk"
+      "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
+      "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk"
     },
     "abort": {
       "already_configured": "This zone is already configured"
@@ -65,12 +65,18 @@
           "enable_optimal_stop": "Enable Optimal Stop (Coast)",
           "schedule_entity": "Schedule Helper",
           "stop_tolerance": "Stop Tolerance (K)",
-          "max_coast_hours": "Max Coast Duration (Hours)"
+          "max_coast_hours": "Max Coast Duration (Hours)",
+          "heating_profile": "Heating System Profile",
+          "only_on_workdays": "Only preheat on workdays",
+          "use_forecast": "Use Weather Forecast",
+          "risk_mode": "Forecast Risk Strategy"
         }
       }
     },
     "error": {
-      "invalid_time_format": "Invalid time format (must be HH:MM:SS)"
+      "invalid_time_format": "Invalid time format (must be HH:MM:SS)",
+      "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
+      "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk"
     }
   },
   "selector": {
@@ -79,6 +85,22 @@
         "aggressive": "Aggressive (Early & Safe)",
         "balanced": "Balanced (Recommended)",
         "conservative": "Eco (Late & Efficient)"
+      }
+    },
+    "heating_profile": {
+      "options": {
+        "infrared_air": "Infrared / Air (Fast)",
+        "radiator_new": "Radiator (Modern)",
+        "radiator_old": "Radiator (Old / Cast Iron)",
+        "floor_dry": "Floor Heating (Dry / Light)",
+        "floor_concrete": "Floor Heating (Concrete / Massive)"
+      }
+    },
+    "risk_mode": {
+      "options": {
+        "balanced": "Balanced (Integral / Default)",
+        "pessimistic": "Pessimistic (Comfort / P10)",
+        "optimistic": "Optimistic (Savings / P90)"
       }
     }
   },
@@ -109,6 +131,29 @@
       },
       "confidence": {
         "name": "Learning Confidence"
+      },
+      "optimal_stop_time": {
+        "name": "Optimal Stop Time",
+        "state_attributes": {
+          "savings_total_min": {
+            "name": "Total Savings (min)"
+          },
+          "savings_remaining_min": {
+            "name": "Remaining Savings"
+          },
+          "reason": {
+            "name": "Stop Reason"
+          },
+          "coast_tau_hours": {
+            "name": "Cooling Constant (Tau)"
+          },
+          "tau_confidence": {
+            "name": "Tau Confidence"
+          },
+          "is_active": {
+            "name": "Stop Active"
+          }
+        }
       }
     },
     "switch": {
@@ -126,6 +171,14 @@
       "analyze_history": {
         "name": "Analyze History"
       }
+    },
+    "binary_sensor": {
+      "optimal_stop_active": {
+        "name": "Optimal Stop Active"
+      },
+      "preheat_active": {
+        "name": "Preheat Active (Legacy)"
+      }
     }
   },
   "issues": {
@@ -136,6 +189,14 @@
     "data_migrated": {
       "title": "Migration completed for {name}",
       "description": "Historical data from v1 was converted. Precision may be reduced initially. Use 'Analyze History' button to rebuild from recorder data for better accuracy."
+    },
+    "weather_setup_failed": {
+      "title": "Weather Entity Unavailable",
+      "description": "The configured weather entity `{weather_entity}` for zone `{zone_name}` is not responding or does not exist. Please check your configuration."
+    },
+    "duration_limit_exceeded": {
+      "title": "Max Heating Duration Exceeded in {name}",
+      "description": "The calculated required preheat duration is **{predicted} hours**, which exceeds your configured limit of **{limit} hours**. Please increase the 'Max Preheat Duration' in the integration options to ensure the target temperature is reached."
     }
   }
 }
