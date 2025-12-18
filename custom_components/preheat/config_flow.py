@@ -160,15 +160,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
                     CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
                 },
-                options={
-                    # Merge with existing options to preserve non-editable fields (like buffer, expert mode)
-                    **entry.options, 
-                    CONF_PRESET_MODE: user_input.get(CONF_PRESET_MODE, PRESET_BALANCED),
-                    CONF_HEATING_PROFILE: user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW),
-                    CONF_ARRIVAL_WINDOW_START: user_input.get(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START),
-                    CONF_ARRIVAL_WINDOW_END: user_input.get(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END),
-                    CONF_ENABLE_OPTIMAL_STOP: user_input.get(CONF_ENABLE_OPTIMAL_STOP, False),
-                }
+                options=entry.options # Preserve existing options
             )
 
         # Pre-fill with existing data
@@ -194,28 +186,13 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="weather")
             ),
-            
-            # Key Learning Settings
-            vol.Required(CONF_HEATING_PROFILE, default=PROFILE_RADIATOR_NEW): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=profile_options,
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                    translation_key="heating_profile"
-                )
-            ),
-            vol.Optional(CONF_ARRIVAL_WINDOW_START, default=DEFAULT_ARRIVAL_WINDOW_START): selector.TimeSelector(),
-            vol.Optional(CONF_ARRIVAL_WINDOW_END, default=DEFAULT_ARRIVAL_WINDOW_END): selector.TimeSelector(),
-            
-            vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=False): selector.BooleanSelector(),
-
-            vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                     options=[PRESET_AGGRESSIVE, PRESET_BALANCED, PRESET_CONSERVATIVE],
-                     mode=selector.SelectSelectorMode.DROPDOWN,
-                     translation_key="preset_mode"
-                 )
-            ),
         })
+
+        return self.async_show_form(
+            step_id="reconfigure", 
+            data_schema=self.add_suggested_values_to_schema(data_schema, data), 
+            errors=errors
+        )
 
         return self.async_show_form(
             step_id="reconfigure", 

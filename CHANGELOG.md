@@ -1,3 +1,6 @@
+## v2.6.0-beta40
+- **Flow Refactor**: Enforced strict separation between **Reconfigure** (Hardware/Sensors only) and **Configure** (Tuning/Options). Removed duplication of Time/Profile settings from the Reconfigure dialog.
+
 ## v2.6.0-beta39
 - **Translation**: Added German translations for the "Reconfigure" dialog.
 
