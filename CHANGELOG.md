@@ -1,3 +1,6 @@
+## v2.6.0-beta38
+- **Translation**: Added missing translation keys for the new "Reconfigure" dialog.
+
 ## v2.6.0-beta37
 - **Feature**: Added "Reconfigure" button support. Users can now change Core Entities (Occupancy, Climate, etc.) via the "Reconfigure" button in the Integrations dashboard.
 

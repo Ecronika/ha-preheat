@@ -20,6 +20,21 @@
           "arrival_window_end": "Arrival Window End",
           "enable_optimal_stop": "Enable Optimal Stop (Coast)"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Zone",
+        "description": "Update core sensors and devices.",
+        "data": {
+          "occupancy_sensor": "Occupancy Sensor",
+          "temperature_sensor": "Room Temperature Sensor",
+          "climate_entity": "Thermostat / Climate Control",
+          "weather_entity": "Weather Forecast",
+          "heating_profile": "Heating System Profile",
+          "arrival_window_start": "Arrival Window Start",
+          "arrival_window_end": "Arrival Window End",
+          "enable_optimal_stop": "Enable Optimal Stop (Coast)",
+          "preset_mode": "Operation Mode"
+        }
       }
     },
     "error": {
