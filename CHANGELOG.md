@@ -1,3 +1,8 @@
+## v2.6.0-beta41
+- **UX Improvement**: Refined "Optimal Stop" setup. `Schedule Entity` is now clearly labeled and strictly required when Optimal Stop is enabled.
+- **Config Flow**: Added validation to prevent enabling Optimal Stop without a schedule. Moved schedule selection out of "Expert Mode".
+- **Documentation**: Updated configuration guide to reflect these changes.
+
 ## v2.6.0-beta40
 - **Flow Refactor**: Enforced strict separation between **Reconfigure** (Hardware/Sensors only) and **Configure** (Tuning/Options). Removed duplication of Time/Profile settings from the Reconfigure dialog.
 

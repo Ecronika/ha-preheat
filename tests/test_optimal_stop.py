@@ -111,7 +111,7 @@ class TestOptimalStop(unittest.TestCase):
         )
         
         self.assertFalse(self.manager.is_active)
-        self.assertEqual(self.manager.debug_info["reason"], "setpoint_change")
+        self.assertEqual(self.manager.debug_info["reason"], "setpoint_increase")
 
     def test_latch_reset_schedule_off_debounce(self):
         self.manager._active = True

@@ -21,7 +21,10 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
     
     async def asyncSetUp(self):
         self.hass = MagicMock()
-        self.hass.states.get.return_value = None
+        # Mock State
+        mock_state = MagicMock()
+        mock_state.state = "sunny"
+        self.hass.states.get.return_value = mock_state
         
         # AsyncMock for services
         async def async_call_side_effect(*args, **kwargs):

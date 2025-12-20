@@ -78,24 +78,33 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # V3: Split Core (Data) vs Behavior (Options)
-            return self.async_create_entry(
-                title=user_input[CONF_NAME],
-                data={
-                CONF_OCCUPANCY: user_input[CONF_OCCUPANCY],
-                CONF_CLIMATE: user_input[CONF_CLIMATE],
-                CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
-                CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
-                },
-                options={
-                CONF_PRESET_MODE: user_input.get(CONF_PRESET_MODE, PRESET_BALANCED),
-                CONF_HEATING_PROFILE: user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW),
-                CONF_ARRIVAL_WINDOW_START: user_input.get(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START),
-                CONF_ARRIVAL_WINDOW_END: user_input.get(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END),
-                CONF_ENABLE_OPTIMAL_STOP: user_input.get(CONF_ENABLE_OPTIMAL_STOP, False),
-                CONF_EXPERT_MODE: False,
-                }
-            )
+            # Validation logic
+            if user_input.get(CONF_ENABLE_OPTIMAL_STOP, False) and not user_input.get(CONF_SCHEDULE_ENTITY):
+                 errors[CONF_SCHEDULE_ENTITY] = "required_for_optimal_stop"
+
+            if errors:
+                # If errors exist, re-show form without creating entry
+                pass
+            else:
+                 # V3: Split Core (Data) vs Behavior (Options)
+                 return self.async_create_entry(
+                    title=user_input[CONF_NAME],
+                    data={
+                        CONF_OCCUPANCY: user_input[CONF_OCCUPANCY],
+                        CONF_CLIMATE: user_input[CONF_CLIMATE],
+                        CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
+                        CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
+                    },
+                    options={
+                        CONF_PRESET_MODE: user_input.get(CONF_PRESET_MODE, PRESET_BALANCED),
+                        CONF_HEATING_PROFILE: user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW),
+                        CONF_ARRIVAL_WINDOW_START: user_input.get(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START),
+                        CONF_ARRIVAL_WINDOW_END: user_input.get(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END),
+                        CONF_ENABLE_OPTIMAL_STOP: user_input.get(CONF_ENABLE_OPTIMAL_STOP, False),
+                        CONF_SCHEDULE_ENTITY: user_input.get(CONF_SCHEDULE_ENTITY),
+                        CONF_EXPERT_MODE: False,
+                    }
+                 )
 
         # Build Profile Options
         profile_options = list(HEATING_PROFILES.keys())
@@ -130,6 +139,9 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             # Key Feature: Optimal Stop (Promoted)
             vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=False): selector.BooleanSelector(),
+            vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="schedule")
+            ),
 
             vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
                 selector.SelectSelectorConfig(
@@ -233,6 +245,11 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             if user_input.get(CONF_MAX_PREHEAT_HOURS, 3.0) > 12.0:
                  errors[CONF_MAX_PREHEAT_HOURS] = "max_duration_too_high"
             
+            # Validation: Schedule required if Optimal Stop enabled
+            if user_input.get(CONF_ENABLE_OPTIMAL_STOP, False) and not user_input.get(CONF_SCHEDULE_ENTITY):
+                 errors[CONF_SCHEDULE_ENTITY] = "required_for_optimal_stop"
+            
+            
             # 2. Logic: Should we Reload or Save?
             requested_expert = user_input.get(CONF_EXPERT_MODE, stored_expert)
             
@@ -302,6 +319,9 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(CONF_ARRIVAL_WINDOW_START): selector.TimeSelector(),
             vol.Optional(CONF_ARRIVAL_WINDOW_END): selector.TimeSelector(),
             vol.Optional(CONF_ENABLE_OPTIMAL_STOP): selector.BooleanSelector(),
+            vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="schedule")
+            ),
 
             vol.Optional(CONF_EXPERT_MODE): selector.BooleanSelector()
         }
@@ -326,9 +346,6 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 ),
 
                 # Optimal Stop (Advanced Tuning)
-                vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
-                     selector.EntitySelectorConfig(domain="schedule")
-                ),
                 vol.Optional(CONF_STOP_TOLERANCE): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=0.1, max=2.0, step=0.1, unit_of_measurement="K", mode="box")
                 ),

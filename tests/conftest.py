@@ -11,9 +11,12 @@ if "homeassistant" not in sys.modules:
     
     ha.core = MagicMock()
     ha.config_entries = MagicMock()
+    ha.data_entry_flow = MagicMock()
+    ha.data_entry_flow.FlowResultType = type('FlowResultType', (), {'FORM': 'form', 'CREATE_ENTRY': 'create_entry', 'ABORT': 'abort'})
     ha.const = MagicMock()
     ha.exceptions = MagicMock()
     ha.helpers = MagicMock()
+    ha.helpers.selector = MagicMock()
     ha.helpers.event = MagicMock()
     ha.helpers.update_coordinator = MagicMock()
     ha.helpers.storage = MagicMock()
@@ -25,9 +28,11 @@ if "homeassistant" not in sys.modules:
     # Submodules
     sys.modules["homeassistant.core"] = ha.core
     sys.modules["homeassistant.config_entries"] = ha.config_entries
+    sys.modules["homeassistant.data_entry_flow"] = ha.data_entry_flow
     sys.modules["homeassistant.const"] = ha.const
     sys.modules["homeassistant.exceptions"] = ha.exceptions
     sys.modules["homeassistant.helpers"] = ha.helpers
+    sys.modules["homeassistant.helpers.selector"] = ha.helpers.selector
     sys.modules["homeassistant.helpers.event"] = ha.helpers.event
     sys.modules["homeassistant.helpers.update_coordinator"] = ha.helpers.update_coordinator
     sys.modules["homeassistant.helpers.storage"] = ha.helpers.storage
@@ -48,4 +53,12 @@ if "homeassistant" not in sys.modules:
     ha.components.climate = MagicMock()
     sys.modules["homeassistant.components"] = ha.components
     sys.modules["homeassistant.components.sensor"] = ha.components.sensor
+    sys.modules["homeassistant.components.sensor"] = ha.components.sensor
     sys.modules["homeassistant.components.climate"] = ha.components.climate
+
+@pytest.fixture
+def hass():
+    """Fixture to provide a mocked Home Assistant Core."""
+    import sys
+    return sys.modules["homeassistant"]
+

@@ -4,13 +4,14 @@
 
 When you add the integration, you will be asked for the essential entities:
 
-| Field | Description | Required |
+| **Setting** | **Description** | **Required** |
 | :--- | :--- | :--- |
-| **Occupancy Sensor** | A `binary_sensor` that is **ON** when the room is in use (occupied) and **OFF** when empty. This is the master trigger for learning and scheduling. | ✅ Yes |
-| **Climate Entity** | The thermostat itself. Used to read target temp and valve positions. This is now the primary source of truth. | ✅ Yes |
-| **Temperature Sensor** | A `sensor` measuring the current room temperature. Optional if your Climate entity reports accurate room temperature (`current_temperature`). | Optional |
-| **Target Setpoint** | Read directly from the Climate entity. Only needed if you don't use a Climate entity (deprecated setup). | Optional |
-| **Weather Entity** | A `weather.*` entity for forecast-based adjustments. | Optional |
+| **Occupancy Sensor** | A `binary_sensor` that is **ON** when the room is in use (occupied). | ✅ Yes |
+| **Climate Entity** | The thermostat itself. | ✅ Yes |
+| **Temperature Sensor** | Room temperature sensor. Optional if Climate entity is accurate. | Optional |
+| **Weather Entity** | `weather.*` entity for forecast logic. | Optional |
+| **Enable Optimal Stop** | Activates "Coast-to-Stop" logic to save energy. | Optional |
+| **Schedule Entity** | A `schedule` helper defining when the day ends. **Required** if Optimal Stop is enabled. | **Conditionally** |
 
 ---
 
@@ -37,7 +38,9 @@ After installation, click **Configure** on the integration entry to access advan
 ### 🛑 Optimal Stop (Eco)
 
 *   **Enable Optimal Stop**: Turns on the coast-to-stop calculation.
-*   **Schedule Entity**: A `schedule` or `binary_sensor` that defines your "Day". The system needs to know when the "End of Day" is to calculate when to shut off.
+*   **Schedule Entity**: A `schedule` helper that defines your "Day". The system needs to know when the "End of Day" is to calculate when to shut off.
+    *   *Tip*: Create one in Settings → Helpers → Schedule.
+    *   **Note**: If Optimal Stop is enabled, this field is **mandatory**. You cannot save the configuration without it.
 *   **Stop Tolerance**: How many degrees drop is acceptable during the coasting phase? Default: `0.5°C`.
 
 ### 🕐 Triggers

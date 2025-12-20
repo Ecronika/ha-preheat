@@ -18,7 +18,8 @@
           "heating_profile": "Heating System Profile (Required)",
           "arrival_window_start": "Arrival Window Start",
           "arrival_window_end": "Arrival Window End",
-          "enable_optimal_stop": "Enable Optimal Stop (Coast)"
+          "enable_optimal_stop": "Enable Optimal Stop (Coast)",
+          "schedule_entity": "Schedule Helper (required when Optimal Stop is enabled)"
         }
       },
       "reconfigure": {
@@ -36,7 +37,8 @@
       "invalid_occupancy_sensor": "Invalid occupancy sensor selected",
       "invalid_temperature_sensor": "Invalid temperature sensor selected",
       "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
-      "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk"
+      "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk",
+      "required_for_optimal_stop": "Schedule entity is required when Optimal Stop is enabled."
     },
     "abort": {
       "already_configured": "This zone is already configured"
@@ -73,7 +75,7 @@
           "valve_position_sensor": "Valve Position (Optional)",
           "max_preheat_hours": "Max Preheat Duration (Hours)",
           "enable_optimal_stop": "Enable Optimal Stop (Coast)",
-          "schedule_entity": "Schedule Helper",
+          "schedule_entity": "Schedule Helper (used for Optimal Stop)",
           "stop_tolerance": "Stop Tolerance (K)",
           "max_coast_hours": "Max Coast Duration (Hours)",
           "heating_profile": "Heating System Profile",
@@ -86,7 +88,8 @@
     "error": {
       "invalid_time_format": "Invalid time format (must be HH:MM:SS)",
       "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
-      "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk"
+      "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk",
+      "required_for_optimal_stop": "Schedule entity is required when Optimal Stop is enabled."
     }
   },
   "selector": {

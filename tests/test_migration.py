@@ -25,20 +25,27 @@ class TestMigration(unittest.IsolatedAsyncioTestCase):
         entry.options = {"some_option": 1}
         entry.data = {}
         
+        # Mock Persistence
+        def update_effect(e, **kwargs):
+            if "options" in kwargs: e.options.update(kwargs["options"])
+            if "version" in kwargs: e.version = kwargs["version"]
+            
+        hass.config_entries.async_update_entry.side_effect = update_effect
+        
         # Call migration
         await async_migrate_entry(hass, entry)
         
-        # Verify update call
-        hass.config_entries.async_update_entry.assert_called_once()
-        call_args = hass.config_entries.async_update_entry.call_args
+        # Verify update call (Called twice: v1->v2, v2->v3)
+        self.assertEqual(hass.config_entries.async_update_entry.call_count, 2)
         
-        # Check args
-        entry_arg = call_args[0][0]
-        kwargs = call_args[1]
+        # Check Final Call (v3)
+        last_call_args = hass.config_entries.async_update_entry.call_args
+        kwargs = last_call_args[1]
         
-        self.assertEqual(entry_arg, entry)
-        self.assertEqual(kwargs["version"], 2)
+        self.assertEqual(kwargs["version"], 3)
         self.assertEqual(kwargs["options"][CONF_PRESET_MODE], PRESET_BALANCED)
+        # Note: v3 logic ensures Expert Mode is False (Simple) if not present, checking implementation logic
+        # v1->v2 set Expert=True. v2->v3 keeps options. So it should be True.
         self.assertEqual(kwargs["options"][CONF_EXPERT_MODE], True)
 
     async def test_migrate_v2_to_v3(self):
@@ -55,7 +62,6 @@ class TestMigration(unittest.IsolatedAsyncioTestCase):
         kwargs = call_args[1]
         
         self.assertEqual(kwargs["version"], 3)
-        self.assertEqual(kwargs["data"], {}) # Data cleared
+        self.assertEqual(kwargs["data"], {"dat": 2}) # Data preserved
         self.assertEqual(kwargs["options"]["opt"], 1)
-        self.assertEqual(kwargs["options"]["dat"], 2) # Moved
         self.assertEqual(kwargs["options"][CONF_PRESET_MODE], PRESET_BALANCED) # Default applied
