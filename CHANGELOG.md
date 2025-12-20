@@ -1,3 +1,6 @@
+## v2.6.0-beta43
+- **Translation**: Added missing German translation for the "Reconfiguration Successful" message.
+
 ## v2.6.0-beta42
 - **UX Fix**: Fixed an issue where the Setup Wizard would reset all fields if the "Optimal Stop" validation failed. Now, your entered data is preserved.
 - **Translation**: Added missing German translation for the "Schedule Entity Required" error message.

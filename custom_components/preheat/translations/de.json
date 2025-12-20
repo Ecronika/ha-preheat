@@ -40,7 +40,8 @@
       "required_for_optimal_stop": "Zeitplan-Helfer (Schedule) ist erforderlich, wenn Optimal Stop aktiviert ist."
     },
     "abort": {
-      "already_configured": "Diese Zone ist bereits konfiguriert"
+      "already_configured": "Diese Zone ist bereits konfiguriert",
+      "reconfigure_successful": "Die Konfiguration wurde erfolgreich aktualisiert."
     }
   },
   "options": {
