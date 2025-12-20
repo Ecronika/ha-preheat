@@ -1,3 +1,32 @@
+## v2.6.0 (2025-12-20)
+**Official Stable Release of Optimal Stop & Context Intelligence**
+
+This release introduces the "Optimal Stop" energy-saving feature, intelligent schedule detection for shift-workers, and a modernized configuration experience.
+
+### ⚠️ Upgrade Notes / Behavior Changes
+- **Optimal Stop Requirement**: If you enable "Optimal Stop", you **must** now provide a `schedule` entity (Helper). The configuration will enforce this.
+- **Legacy Sensors**: The `binary_sensor.preheat_active` is deprecated and disabled by default. Please use `switch.preheat` (state) or `sensor.status` (attributes) instead.
+- **Configuration Storage**: Internal storage has been refactored to strictly separate Hardware (Sensors) from Behavior (Options). Migration is automatic, but downgrading to <2.5.0 requires a backup.
+
+### 🌟 New Features
+- **Optimal Stop (Coast-to-Vacancy)**: The system can now turn off heating *early* (coasting to a stop) if a scheduled absence is approaching. Requires a Schedule Helper.
+- **Smart Shift-Work Detection**: The new v3 Planner detects complex patterns (e.g. alternating early/late shifts) and weekend-skipping logic.
+- **Reconfigure Dialog**: You can now change core hardware sensors (like changing a thermostat) via the "Reconfigure" button without deleting the integration.
+
+### 🔨 Improvements
+- **Robust Config Flow**: Validation is now stricter and preserves your input if errors occur.
+- **Better Diagnostics**: Added "Repair Issues" for missing weather entities or insufficient heating duration.
+- **Internationalization**: Full English and German translations for all new features and errors.
+
+### 🐛 Fixes
+- Fixed an oscillation loop where "Eco Mode" changes were interpreted as User Overrides.
+- Fixed `ImportError` on Python 3.10 systems.
+- Fixed data corruption issues with legacy `None` values in storage.
+
+---
+
+### Beta History (v2.6.0-beta1 to beta44)
+
 ## v2.6.0-beta44
 - **Translation**: Added missing German translations for `preheat_active` (Legacy Sensor) and `weather_setup_failed` (Repair Issue).
 
