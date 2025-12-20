@@ -1,3 +1,6 @@
+## v2.6.0-beta44
+- **Translation**: Added missing German translations for `preheat_active` (Legacy Sensor) and `weather_setup_failed` (Repair Issue).
+
 ## v2.6.0-beta43
 - **Translation**: Added missing German translation for the "Reconfiguration Successful" message.
 

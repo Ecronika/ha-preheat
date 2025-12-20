@@ -232,6 +232,9 @@
     "binary_sensor": {
       "optimal_stop_active": {
         "name": "Optimal Stop Aktiv"
+      },
+      "preheat_active": {
+        "name": "Vorheizen Aktiv (Legacy)"
       }
     },
     "switch": {
@@ -259,6 +262,10 @@
     "data_migrated": {
       "title": "Migration für {name} abgeschlossen",
       "description": "Historische Daten der v1 wurden konvertiert. Die Genauigkeit kann anfangs reduziert sein. Nutze 'Historie analysieren', um die Daten aus dem Recorder neu aufzubauen."
+    },
+    "weather_setup_failed": {
+      "title": "Wetter-Entität nicht verfügbar",
+      "description": "Die konfigurierte Wetter-Entität `{weather_entity}` für die Zone `{zone_name}` antwortet nicht oder existiert nicht. Bitte überprüfe deine Konfiguration."
     },
     "duration_limit_exceeded": {
       "title": "Maximale Vorheizdauer in {name} überschritten",
