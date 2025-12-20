@@ -1,3 +1,7 @@
+## v2.6.0-beta42
+- **UX Fix**: Fixed an issue where the Setup Wizard would reset all fields if the "Optimal Stop" validation failed. Now, your entered data is preserved.
+- **Translation**: Added missing German translation for the "Schedule Entity Required" error message.
+
 ## v2.6.0-beta41
 - **UX Improvement**: Refined "Optimal Stop" setup. `Schedule Entity` is now clearly labeled and strictly required when Optimal Stop is enabled.
 - **Config Flow**: Added validation to prevent enabling Optimal Stop without a schedule. Moved schedule selection out of "Expert Mode".

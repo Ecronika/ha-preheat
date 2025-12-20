@@ -159,6 +159,21 @@ class TestConfigFlowUX(unittest.IsolatedAsyncioTestCase):
         self.flow.async_show_form.assert_called()
         call_kwargs = self.flow.async_show_form.call_args[1]
         self.assertEqual(call_kwargs["errors"], {CONF_SCHEDULE_ENTITY: "required_for_optimal_stop"})
+        
+        # Verify Persistence: Schema defaults should reflect user_input
+        # We can inspect the schema passed to show_form
+        schema = call_kwargs["data_schema"]
+        
+        # Helper to check default value of a schema Key
+        def get_default(schema, key):
+            for k in schema.schema:
+                if k.schema == key:
+                    return k.default() if callable(k.default) else k.default
+            return None
+            
+        self.assertEqual(get_default(schema, CONF_NAME), "Test Zone")
+        self.assertEqual(get_default(schema, CONF_OCCUPANCY), "binary_sensor.occupancy")
+        self.assertEqual(get_default(schema, CONF_ENABLE_OPTIMAL_STOP), True)
 
     async def test_setup_without_optimal_stop(self):
         """Test without optimal stop (Schedule not required)."""

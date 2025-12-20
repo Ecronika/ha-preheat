@@ -108,42 +108,43 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Build Profile Options
         profile_options = list(HEATING_PROFILES.keys())
+        defaults = user_input or {}
 
         data_schema = vol.Schema({
-            vol.Required(CONF_NAME, default="Office"): str,
-            vol.Required(CONF_OCCUPANCY): selector.EntitySelector(
+            vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Office")): str,
+            vol.Required(CONF_OCCUPANCY, default=defaults.get(CONF_OCCUPANCY)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
             # Climate is now REQUIRED (Central control unit)
-            vol.Required(CONF_CLIMATE): selector.EntitySelector(
+            vol.Required(CONF_CLIMATE, default=defaults.get(CONF_CLIMATE)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate")
             ),
             # Temperature is now OPTIONAL (Fallback if Climate is inaccurate)
-            vol.Optional(CONF_TEMPERATURE): selector.EntitySelector(
+            vol.Optional(CONF_TEMPERATURE, default=defaults.get(CONF_TEMPERATURE, vol.UNDEFINED)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["sensor", "input_number"])
             ),
             # Weather & Outdoor (Recommended for Physics)
-            vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
+            vol.Optional(CONF_WEATHER_ENTITY, default=defaults.get(CONF_WEATHER_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="weather")
             ),
             # Key Learning Settings (Now on Main Page)
-            vol.Required(CONF_HEATING_PROFILE, default=PROFILE_RADIATOR_NEW): selector.SelectSelector(
+            vol.Required(CONF_HEATING_PROFILE, default=defaults.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=profile_options,
                     mode=selector.SelectSelectorMode.DROPDOWN,
                     translation_key="heating_profile"
                 )
             ),
-            vol.Optional(CONF_ARRIVAL_WINDOW_START, default=DEFAULT_ARRIVAL_WINDOW_START): selector.TimeSelector(),
-            vol.Optional(CONF_ARRIVAL_WINDOW_END, default=DEFAULT_ARRIVAL_WINDOW_END): selector.TimeSelector(),
+            vol.Optional(CONF_ARRIVAL_WINDOW_START, default=defaults.get(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START)): selector.TimeSelector(),
+            vol.Optional(CONF_ARRIVAL_WINDOW_END, default=defaults.get(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END)): selector.TimeSelector(),
             
             # Key Feature: Optimal Stop (Promoted)
-            vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=False): selector.BooleanSelector(),
-            vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
+            vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=defaults.get(CONF_ENABLE_OPTIMAL_STOP, False)): selector.BooleanSelector(),
+            vol.Optional(CONF_SCHEDULE_ENTITY, default=defaults.get(CONF_SCHEDULE_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="schedule")
             ),
 
-            vol.Optional(CONF_PRESET_MODE, default=PRESET_BALANCED): selector.SelectSelector(
+            vol.Optional(CONF_PRESET_MODE, default=defaults.get(CONF_PRESET_MODE, PRESET_BALANCED)): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                      options=[PRESET_AGGRESSIVE, PRESET_BALANCED, PRESET_CONSERVATIVE],
                      mode=selector.SelectSelectorMode.DROPDOWN,
