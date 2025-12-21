@@ -1,3 +1,10 @@
+## v2.7.0-beta0
+**Initial Beta for Shadow Mode & Autonomous Engine**
+
+*   **Shadow Mode**: Introduces the foundational "Shadow Mode" where the autonomous engine runs in the background. It calculates predictions and decisions but **does not** control the thermostat.
+*   **Decision Trace**: New `decision_trace` attribute on the status sensor provides detailed insight into the engine's decision-making process (e.g., why it would have started/stopped heating).
+*   **Zero Risk**: This version collects data and learns your home's behavior (session lengths, cooling rates) without interfering with your existing schedules/automations.
+
 ## v2.6.0 (2025-12-20)
 **Official Stable Release of Optimal Stop & Context Intelligence**
 

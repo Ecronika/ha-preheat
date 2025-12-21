@@ -898,22 +898,27 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             elif learned_decision.is_valid and not learned_decision.is_shadow:
                 selected_provider = PROVIDER_LEARNED
             
+            # 4b. Global Checks
+            if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
+                 # Check for missing schedule entity (Migration UX)
+                 sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
+                 if not sched_ent:
+                    async_create_issue(
+                        self.hass,
+                        DOMAIN,
+                        f"missing_schedule_{self.entry.entry_id}",
+                        is_fixable=False,
+                        severity=IssueSeverity.WARNING,
+                        translation_key="missing_schedule_entity",
+                        learn_more_url="https://github.com/Ecronika/ha-preheat#configuration"
+                    )
+                 else:
+                    async_delete_issue(self.hass, DOMAIN, f"missing_schedule_{self.entry.entry_id}")
+
             # 5. Apply Output
             # Map back to legacy variables for PreheatData
             if selected_provider == PROVIDER_SCHEDULE:
-                 if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
-                     # Check for missing schedule entity (Migration UX)
-                     sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
-                     if not sched_ent:
-                        async_create_issue(
-                            self.hass,
-                            DOMAIN,
-                            f"missing_schedule_{self.entry.entry_id}",
-                            is_fixable=False,
-                            severity=IssueSeverity.WARNING,
-                            translation_key="missing_schedule_entity",
-                            learn_more_url="https://github.com/Ecronika/ha-preheat#configuration"
-                        )
+
                      # Read detailed state from manager (updated by provider)
                      opt_active = self.optimal_stop_manager.is_active
                      opt_time = self.optimal_stop_manager.stop_time

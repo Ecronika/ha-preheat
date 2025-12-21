@@ -83,6 +83,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "learned_setpoint": data.last_comfort_setpoint,
             "deadtime_min": round(data.deadtime, 1),
             "health_score": physics.health_score,
+            "decision_trace": data.decision_trace,
         }
 
 class NextEventSensor(PreheatBaseSensor):
