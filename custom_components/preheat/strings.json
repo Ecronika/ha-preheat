@@ -210,6 +210,10 @@
     "duration_limit_exceeded": {
       "title": "Max Heating Duration Exceeded in {name}",
       "description": "The calculated required preheat duration is **{predicted} hours**, which exceeds your configured limit of **{limit} hours**. Please increase the 'Max Preheat Duration' in the integration options to ensure the target temperature is reached."
+    },
+    "missing_schedule_entity": {
+      "title": "Missing Schedule for Optimal Stop",
+      "description": "Optimal Stop is enabled for zone {name} (ID: {entry_id}), but no Schedule Entity is configured. The feature will not work correctly. Please reconfigure the integration and select a valid Schedule or Calendar entity, or disable Optimal Stop."
     }
   }
 }

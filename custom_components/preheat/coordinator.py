@@ -9,13 +9,11 @@ from typing import Any, TYPE_CHECKING
 import math
 import random
 
+from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import storage
 from homeassistant.core import HomeAssistant, callback
 
-from homeassistant.helpers.issue_registry import (
-    async_create_issue, 
-    async_delete_issue,
-    IssueSeverity
-)
+from homeassistant.helpers.issue_registry import async_create_issue, async_delete_issue, IssueSeverity
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -81,6 +79,23 @@ from .const import (
     CONF_STOP_TOLERANCE,
     CONF_MAX_COAST_HOURS,
     CONF_SCHEDULE_ENTITY,
+    # V3 Provider Constants
+    PROVIDER_SCHEDULE,
+    PROVIDER_LEARNED,
+    PROVIDER_MANUAL,
+    PROVIDER_NONE,
+    ATTR_DECISION_TRACE,
+    SCHEMA_VERSION,
+    KEY_EVALUATED_AT,
+    KEY_PROVIDER_SELECTED,
+    KEY_PROVIDER_CANDIDATES,
+    KEY_PROVIDERS_INVALID,
+    KEY_GATES_FAILED,
+    KEY_GATE_INPUTS,
+    GATE_FAIL_MANUAL,
+    GATE_MIN_SAVINGS_MIN,
+    GATE_MIN_TAU_CONF,
+    GATE_MIN_PATTERN_CONF
 )
 
 from .planner import PreheatPlanner
@@ -90,6 +105,11 @@ from .weather_service import WeatherService
 from .optimal_stop import OptimalStopManager, SessionResolver
 from .cooling_analyzer import CoolingAnalyzer
 from . import math_preheat
+from .providers import (
+    ScheduleProvider,
+    LearnedDepartureProvider,
+    ProviderDecision
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -132,6 +152,9 @@ class PreheatData:
     pattern_stability: float = 0.0
     detected_modes: dict[str, int] | None = None
     fallback_used: bool = False
+    
+    # v3.0 Trace
+    decision_trace: dict[str, Any] | None = None
 
 class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     """Coordinator to manage preheating logic."""
@@ -161,6 +184,18 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self.cooling_analyzer = CoolingAnalyzer()
         self.session_resolver = None
         
+        # V3.0: Providers & Arbitration
+        self.hold_active = False
+        
+        self.schedule_provider = ScheduleProvider(hass, entry, self.optimal_stop_manager)
+        
+        gate_thresholds = {
+            "savings_min": GATE_MIN_SAVINGS_MIN,
+            "tau_conf_min": GATE_MIN_TAU_CONF,
+            "pattern_conf_min": GATE_MIN_PATTERN_CONF
+        }
+        self.learned_provider = LearnedDepartureProvider(self.planner, gate_thresholds)
+        
         # Init Physics with minimal default until loaded
         self.physics = ThermalPhysics()
         
@@ -183,8 +218,22 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._last_weather_check: datetime | None = None
         self.weather_service: WeatherService | None = None
         
+        # Shadow Metrics (In-Memory)
+        self._shadow_metrics = {
+            "safety_violations": 0,
+            "cumulative_shadow_savings": 0.0,
+            "simulated_error_count": 0
+        }
+        
         self._startup_time = dt_util.utcnow()
         self._setup_listeners()
+        
+    async def set_hold(self, active: bool) -> None:
+        """Set manual hold switch."""
+        if self.hold_active != active:
+            self.hold_active = active
+            _LOGGER.info("Manual Hold Override changed to %s", active)
+            await self.async_request_refresh()
 
     @property
     def window_open_detected(self) -> bool:
@@ -793,51 +842,155 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             if v_pos is not None and v_pos > 0: is_heating_now = True
             if self._preheat_active: is_heating_now = True
 
-            if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
-                # 1. Session Resolver
-                sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
-                if not self.session_resolver or self.session_resolver._entity_id != sched_ent:
-                      self.session_resolver = SessionResolver(self.hass, sched_ent)
-                
-                session_end = self.session_resolver.get_current_session_end()
-                
-                # 2. Feed Analyzer
-                self.cooling_analyzer.add_data_point(
-                    now, operative_temp, outdoor_temp, is_heating_now,
-                    window_open=self._window_open_detected
-                )
-                
-                if now.minute % 30 == 0: # Analyze periodically
-                     self.cooling_analyzer.analyze()
+            # --- V3.0 Provider Arbitration & Optimal Stop ---
+            
+            # 1. Update Cooling Analyzer (Always needed for logic/gates)
+            # Legacy: Was only inside Optimal Stop block. Safe to run always (passive).
+            session_end_legacy = None
+            if self.session_resolver:
+                 session_end_legacy = self.session_resolver.get_current_session_end()
 
-                # 3. Manager Update
-                def _forecast_provider_cb(s, e):
-                    if forecasts:
-                         mode = self._get_conf(CONF_RISK_MODE, RISK_BALANCED)
-                         return math_preheat.calculate_risk_metric(forecasts, s, e, mode)
-                    return outdoor_temp
+            self.cooling_analyzer.add_data_point(
+                now, operative_temp, outdoor_temp, is_heating_now,
+                window_open=self._window_open_detected
+            )
+            if now.minute % 30 == 0:
+                 self.cooling_analyzer.analyze()
 
-                # Config Dict
-                opt_config = {
-                     CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
-                     CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
-                     "system_inertia": self.physics.deadtime
+            # 2. Prepare Context
+            context = {
+                "now": now,
+                "operative_temp": operative_temp,
+                "target_setpoint": target_setpoint,
+                "forecasts": forecasts, # Scope from above
+                "tau_hours": self.cooling_analyzer.learned_tau,
+                "physics_deadtime": self.physics.deadtime,
+                "outdoor_temp": outdoor_temp,
+                # Shadow Inputs
+                 "tau_confidence": self.cooling_analyzer.confidence,
+                 "pattern_confidence": pattern_conf
+            }
+
+            # 3. Provider Query
+            sched_decision = self.schedule_provider.get_decision(context)
+            
+            # Forward Schedule Data to Shadow (Proxy for v2.7)
+            context["potential_savings"] = sched_decision.predicted_savings if sched_decision.predicted_savings else 0.0
+            learned_decision = self.learned_provider.get_decision(context)
+            
+            # 4. Arbitration
+            selected_provider = PROVIDER_NONE
+            valid_providers = []
+            invalid_reasons = {}
+            gates_failed = learned_decision.gates_failed
+            
+            if sched_decision.is_valid: valid_providers.append(PROVIDER_SCHEDULE)
+            else: invalid_reasons[PROVIDER_SCHEDULE] = sched_decision.invalid_reason
+            
+            if learned_decision.is_valid: valid_providers.append(PROVIDER_LEARNED)
+            else: invalid_reasons[PROVIDER_LEARNED] = learned_decision.invalid_reason
+            
+            if self.hold_active:
+                selected_provider = PROVIDER_MANUAL
+                gates_failed.append(GATE_FAIL_MANUAL)
+            elif sched_decision.is_valid:
+                selected_provider = PROVIDER_SCHEDULE
+            elif learned_decision.is_valid and not learned_decision.is_shadow:
+                selected_provider = PROVIDER_LEARNED
+            
+            # 5. Apply Output
+            # Map back to legacy variables for PreheatData
+            if selected_provider == PROVIDER_SCHEDULE:
+                 if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
+                     # Check for missing schedule entity (Migration UX)
+                     sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
+                     if not sched_ent:
+                        async_create_issue(
+                            self.hass,
+                            DOMAIN,
+                            f"missing_schedule_{self.entry.entry_id}",
+                            is_fixable=False,
+                            severity=IssueSeverity.WARNING,
+                            translation_key="missing_schedule_entity",
+                            learn_more_url="https://github.com/Ecronika/ha-preheat#configuration"
+                        )
+                     # Read detailed state from manager (updated by provider)
+                     opt_active = self.optimal_stop_manager.is_active
+                     opt_time = self.optimal_stop_manager.stop_time
+                     opt_reason = self.optimal_stop_manager.debug_info["reason"]
+                     savings_total = self.optimal_stop_manager._savings_total
+                     savings_remaining = self.optimal_stop_manager._savings_remaining
+            
+            # 6. Trace Building
+            decision_trace = {
+                "schema_version": SCHEMA_VERSION,
+                KEY_EVALUATED_AT: now.isoformat(),
+                KEY_PROVIDER_SELECTED: selected_provider,
+                KEY_PROVIDER_CANDIDATES: valid_providers,
+                KEY_PROVIDERS_INVALID: invalid_reasons,
+                KEY_GATES_FAILED: gates_failed,
+                KEY_GATE_INPUTS: learned_decision.gate_inputs,
+                "providers": {
+                    PROVIDER_SCHEDULE: {
+                        "should_stop": sched_decision.should_stop,
+                        "savings": sched_decision.predicted_savings,
+                        "session_end": sched_decision.session_end.isoformat() if sched_decision.session_end else None
+                    },
+                    PROVIDER_LEARNED: {
+                        "should_stop": learned_decision.should_stop,
+                        "is_shadow": learned_decision.is_shadow
+                    }
                 }
-                
-                self.optimal_stop_manager.update(
-                    current_temp=operative_temp,
-                    target_temp=target_setpoint,
-                    schedule_end=session_end,
-                    forecast_provider=_forecast_provider_cb,
-                    tau_hours=self.cooling_analyzer.learned_tau,
-                    config=opt_config
-                )
-                
-                opt_active = self.optimal_stop_manager.is_active
-                opt_time = self.optimal_stop_manager.stop_time
-                opt_reason = self.optimal_stop_manager.debug_info["reason"]
-                savings_total = self.optimal_stop_manager._savings_total
-                savings_remaining = self.optimal_stop_manager._savings_remaining
+            }
+            
+            # 7. Shadow Logging & Metrics
+            # A. Check for Simulated Safety Violation
+            # If Learned Provider wanted to stop (is_shadow=True, should_stop=True)
+            # BUT we are currently ACTIVE (Schedule is ON)
+            # AND Temp drops below Safe Threshold (Target - Tolerance - Buffer)
+            # THEN -> Safety Violation
+            
+            # We need to know if the Learned Provider is *persistently* asking to stop, 
+            # or if this is just a transient frame.
+            # Assuming 'shadow_active' concept:
+            # If (Legacy=ON) AND (Learned=STOP), we are efficiently "In Shadow Coast".
+            
+            is_shadow_coasting = False
+            if selected_provider == PROVIDER_SCHEDULE and not learned_decision.is_shadow: 
+                 # If Learned is "Real" (not shadow), it would have been selected (unless Schedule selected).
+                 # Wait, arbitration says: if hold -> Man, else if Sched -> Sched.
+                 # So if Schedule is Valid, it wins.
+                 # Shadow State is: Schedule says RUN (or Coast), Learned says STOP (earlier).
+                 pass
+            
+            # Simplified Logic:
+            # If Learned says STOP (should_stop=True) AND Actual System is HEATING (Valve > 0 or Temp increasing check?)
+            # Actually, "System state" is easier: ScheduleProvider.should_stop says what the legacy system does.
+            # If Schedule says "Keep ON" (should_stop=False) AND Learned says "Turn OFF" (should_stop=True)
+            # AND is_valid=True. 
+            # THEN we are in "Shadow Savings Zone".
+            
+            in_shadow_zone = (
+                sched_decision.is_valid and not sched_decision.should_stop and
+                learned_decision.is_valid and learned_decision.should_stop
+            )
+            
+            if in_shadow_zone:
+                 # Check Safety
+                 # Allow 0.2 buffer (same as optimal stop)
+                 tol = self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE)
+                 safe_floor = target_setpoint - tol - 0.2
+                 
+                 if operative_temp < safe_floor:
+                      self._shadow_metrics["safety_violations"] += 1
+                      _LOGGER.warning("Shadow Mode Safety Violation! Temp %.1f < %.1f", operative_temp, safe_floor)
+            
+            # For now, just debug log if meaningful difference
+            if learned_decision.should_stop and not opt_active:
+                 _LOGGER.debug("Shadow Mode: Learned Provider would STOP now. (Confidence: %.2f)", learned_decision.confidence if learned_decision.confidence else 0.0)
+
+            # Add metrics to trace
+            decision_trace["metrics"] = self._shadow_metrics
             
             # Update output
             return PreheatData(
@@ -865,11 +1018,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 coast_tau=self.cooling_analyzer.learned_tau,
                 tau_confidence=self.cooling_analyzer.confidence,
                 # V2.6
+                # V2.6
                 pattern_type=pattern_type,
                 pattern_confidence=pattern_conf,
                 pattern_stability=pattern_stab,
                 detected_modes=detected_modes,
-                fallback_used=fallback_used
+                fallback_used=fallback_used,
+                # v3.0
+                decision_trace=decision_trace
             )
 
         except Exception as err:

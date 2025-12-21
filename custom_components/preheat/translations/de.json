@@ -270,6 +270,10 @@
     "duration_limit_exceeded": {
       "title": "Maximale Vorheizdauer in {name} überschritten",
       "description": "Die berechnete Vorheizdauer beträgt **{predicted} Stunden**, dein konfiguriertes Limit liegt aber bei **{limit} Stunden**. Bitte erhöhe die 'Max. Vorheizdauer' in den Einstellungen, damit die Zieltemperatur erreicht werden kann."
+    },
+    "missing_schedule_entity": {
+      "title": "Zeitplan fehlt für Optimal Stop",
+      "description": "Optimal Stop ist für Zone {name} (ID: {entry_id}) aktiviert, aber es ist keine Zeitplan-Entität konfiguriert. Die Funktion wird nicht korrekt arbeiten. Bitte konfiguriere die Integration neu und wähle einen gültigen Zeitplan oder Kalender, oder deaktiviere Optimal Stop."
     }
   }
 }

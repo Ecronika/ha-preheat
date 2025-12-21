@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.6.0"
+VERSION = "2.7.0-beta0"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -172,3 +172,47 @@ CONF_VALVE_POSITION: Final = "valve_position_sensor"
 DEFAULT_MASS_FACTOR: Final = 10.0 # Minutes to raise 1°C (Perfect insulation)
 DEFAULT_LOSS_FACTOR: Final = 5.0  # Additional minutes per 1°C of outdoor delta
 DEFAULT_LEARNING_RATE: Final = 0.1
+
+# --- V3.0 Autonomous Features (Shadow Mode) ---
+CONF_PREHEAT_HOLD: Final = "preheat_hold" # Internal switch key
+
+# Gate Thresholds
+GATE_MIN_SAVINGS_MIN: Final = 15.0
+GATE_MIN_TAU_CONF: Final = 0.6
+GATE_MIN_PATTERN_CONF: Final = 0.7
+GATE_MAX_FALSE_COASTS: Final = 0.05
+
+# Decision Trace Keys (Contract)
+ATTR_DECISION_TRACE: Final = "decision_trace"
+SCHEMA_VERSION: Final = 1
+
+KEY_EVALUATED_AT: Final = "evaluated_at"
+KEY_PROVIDER_SELECTED: Final = "provider_selected"
+KEY_PROVIDER_CANDIDATES: Final = "provider_candidates"
+KEY_PROVIDERS_INVALID: Final = "providers_invalid"
+KEY_GATES_FAILED: Final = "gates_failed"
+KEY_GATE_INPUTS: Final = "gate_inputs"
+
+# Provider IDs
+PROVIDER_SCHEDULE: Final = "schedule"
+PROVIDER_LEARNED: Final = "learned"
+PROVIDER_MANUAL: Final = "manual"
+PROVIDER_NONE: Final = "none"
+
+# Invalid/Block Reasons (Taxonomy)
+REASON_UNAVAILABLE: Final = "unavailable"
+REASON_UNKNOWN: Final = "unknown"
+REASON_OFF: Final = "off" # Switch is off
+REASON_NO_NEXT_EVENT: Final = "no_next_event"
+REASON_PARSE_ERROR: Final = "parse_error"
+REASON_END_TOO_SOON: Final = "end_too_soon"
+REASON_LOW_CONFIDENCE: Final = "low_confidence"
+REASON_BLOCKED_BY_GATES: Final = "blocked_by_gates"
+REASON_INSUFFICIENT_SESSIONS: Final = "insufficient_sessions"
+
+# Gate Failure Keys
+GATE_FAIL_SAVINGS: Final = "low_savings"
+GATE_FAIL_TAU: Final = "low_tau_conf"
+GATE_FAIL_PATTERN: Final = "low_pattern_conf"
+GATE_FAIL_LATCH: Final = "setpoint_latch"
+GATE_FAIL_MANUAL: Final = "manual_hold"
