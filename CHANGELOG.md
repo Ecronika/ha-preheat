@@ -1,3 +1,6 @@
+## v2.7.0-beta1
+*   **Fix**: Added missing translation context variables (`name`, `entry_id`) for the "Missing Schedule" repair issue, fixing a generated error in Home Assistant logs.
+
 ## v2.7.0-beta0
 **Initial Beta for Shadow Mode & Autonomous Engine**
 

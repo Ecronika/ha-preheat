@@ -910,6 +910,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                         is_fixable=False,
                         severity=IssueSeverity.WARNING,
                         translation_key="missing_schedule_entity",
+                        translation_placeholders={
+                            "name": self.device_name,
+                            "entry_id": self.entry.entry_id
+                        },
                         learn_more_url="https://github.com/Ecronika/ha-preheat#configuration"
                     )
                  else:
