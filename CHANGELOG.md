@@ -1,3 +1,6 @@
+## v2.7.0-beta2
+*   **Fix**: Fixed a bug where the "Missing Schedule" repair issue persisted even after disabling "Optimal Stop". The issue is now correctly removed when the feature is turned off.
+
 ## v2.7.0-beta1
 *   **Fix**: Added missing translation context variables (`name`, `entry_id`) for the "Missing Schedule" repair issue, fixing a generated error in Home Assistant logs.
 

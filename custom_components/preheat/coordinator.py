@@ -918,6 +918,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     )
                  else:
                     async_delete_issue(self.hass, DOMAIN, f"missing_schedule_{self.entry.entry_id}")
+            else:
+                 # Clean up issue if feature is disabled
+                 async_delete_issue(self.hass, DOMAIN, f"missing_schedule_{self.entry.entry_id}")
 
             # 5. Apply Output
             # Map back to legacy variables for PreheatData
