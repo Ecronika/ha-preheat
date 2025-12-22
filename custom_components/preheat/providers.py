@@ -227,10 +227,17 @@ class LearnedDepartureProvider(SessionEndProvider):
         tau_conf = context.get("tau_confidence", 0.0)
         pattern_conf = context.get("pattern_confidence", 0.0)
         
+        # Get Session Count (Arrivals as proxy for maturity)
+        weekday = context["now"].weekday()
+        # History is {weekday: [(date, min), ...]}
+        sessions = self.planner.history.get(weekday, [])
+        session_count = len(sessions)
+        
         gate_inputs = {
             "savings": savings,
             "tau_conf": tau_conf,
-            "pattern_conf": pattern_conf
+            "pattern_conf": pattern_conf,
+            "session_count": session_count
         }
         
         if savings < GATE_MIN_SAVINGS_MIN:

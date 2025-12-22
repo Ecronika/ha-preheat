@@ -1,3 +1,6 @@
+## v2.7.0-beta3
+*   **Improvement**: The `decision_trace` attribute now includes a `session_count` field, exposing the number of learned arrival sessions for the current weekday. This helps users understand the "Data Maturity" and why the Autonomous Engine might be blocked (Requires >3 sessions).
+
 ## v2.7.0-beta2
 *   **Fix**: Fixed a bug where the "Missing Schedule" repair issue persisted even after disabling "Optimal Stop". The issue is now correctly removed when the feature is turned off.
 
