@@ -84,6 +84,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "deadtime_min": round(data.deadtime, 1),
             "health_score": physics.health_score,
             "decision_trace": data.decision_trace,
+            "pattern_data": data.detected_modes,
         }
 
 class NextEventSensor(PreheatBaseSensor):

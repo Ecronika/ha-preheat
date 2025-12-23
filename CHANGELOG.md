@@ -1,3 +1,6 @@
+## v2.7.0-beta4
+*   **Improvement**: Exposed internal "Detected Patterns" (V3 Clusters) to the sensor attributes. The "Autonomous Engine Cockpit" card can now visualize exactly which time clusters the AI has learned and how they are weighted.
+
 ## v2.7.0-beta3
 *   **Improvement**: The `decision_trace` attribute now includes a `session_count` field, exposing the number of learned arrival sessions for the current weekday. This helps users understand the "Data Maturity" and why the Autonomous Engine might be blocked (Requires >3 sessions).
 
