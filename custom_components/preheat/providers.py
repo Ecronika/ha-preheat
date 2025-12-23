@@ -93,6 +93,30 @@ class ScheduleProvider(SessionEndProvider):
         if key in self.entry.data: return self.entry.data[key]
         return default
 
+    def _update_manager_passive(self, context: dict[str, Any]) -> None:
+        """Update manager with 'No Session' to trigger resets."""
+        if not self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
+            return
+            
+        # Minimal config for reset
+        opt_config = {
+             CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
+             CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
+             "system_inertia": 0.0
+        }
+        
+        # Dummy forecast provider
+        def _dummy_cb(s, e): return 10.0
+
+        self.manager.update(
+            current_temp=context["operative_temp"],
+            target_temp=context["target_setpoint"],
+            schedule_end=None, # Explicitly NONE to trigger reset
+            forecast_provider=_dummy_cb,
+            tau_hours=context["tau_hours"],
+            config=opt_config
+        )
+
     def get_decision(self, context: dict[str, Any]) -> ProviderDecision:
         """
         Context must contain:
@@ -112,12 +136,13 @@ class ScheduleProvider(SessionEndProvider):
             
         state = self.hass.states.get(sched_entity)
         if not state or state.state == "unavailable":
+            self._update_manager_passive(context)
             return ProviderDecision(False, None, False, False, invalid_reason=REASON_UNAVAILABLE)
         
         if state.state != "on":
              # Legacy: If schedule is OFF, we are not in a session.
-             # Coordinator handles "Preheating" vs "Heating". 
-             # But here we are asked for Session End.
+             # Ensure Optimal Stop Manager sees the "OFF" state to reset latches
+             self._update_manager_passive(context)
              return ProviderDecision(False, None, False, False, invalid_reason=REASON_OFF)
 
         # 2. Resolve Session End
