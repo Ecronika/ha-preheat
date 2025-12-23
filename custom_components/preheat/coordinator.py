@@ -54,10 +54,7 @@ from .const import (
     CONF_COMFORT_FALLBACK,
     DEFAULT_COMFORT_MIN,
     DEFAULT_COMFORT_FALLBACK,
-    # CONF_DISABLE_SCHOOL,
-    # CONF_SCHOOL_KEYWORD,
     # PRESETS, # Replaced by Profiles logic in _get_conf
-    # PRESET_BALANCED,
     DEFAULT_ARRIVAL_WINDOW_START,
     DEFAULT_STOP_TOLERANCE,
     DEFAULT_MAX_COAST_HOURS,
@@ -513,15 +510,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         return INVALID_TEMP
 
     async def _get_target_setpoint(self) -> float:
-        # V3: Removed dedicated Setpoint Sensor.
-        # Primary Source: Climate Entity Attributes or User Overrides (via Service?)
-        # For now, we rely on Climate Entity or Fallback.
-        
-        # 1. Learned Comfort Temp (Highest Priority for precision if validated?)
-        # Actually logic V2 was: Climate > Learned > Fallback.
-        # But if Climate is in Eco (17C), we don't want to target 17C? We want to target Comfort (21C).
-        # So: If Climate >= ComfortMin -> Use Climate.
-        # If Climate < ComfortMin -> Use Learned/Fallback.
+        # Determine Target Temperature Hierarchy:
+        # 1. Climate Entity Current Setpoint (if valid and >= comfort min)
+        # 2. Last Learned Comfort Setpoint (from previous sessions)
+        # 3. Configured Fallback Temperature
         
         # Check Climate
         climate = self._get_conf(CONF_CLIMATE)
@@ -666,8 +658,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 if not self.weather_service or self.weather_service.entity_id != weather_entity:
                     self.weather_service = WeatherService(self.hass, weather_entity)
                 
-                # Fetch (Cached)
-                # Fetch (Cached)
+                # Fetch Weather Data
                 forecasts = await self.weather_service.get_forecasts()
                 
                 # Diagnostic: Check for persistent weather failure
@@ -975,12 +966,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  # Shadow State is: Schedule says RUN (or Coast), Learned says STOP (earlier).
                  pass
             
-            # Simplified Logic:
-            # If Learned says STOP (should_stop=True) AND Actual System is HEATING (Valve > 0 or Temp increasing check?)
-            # Actually, "System state" is easier: ScheduleProvider.should_stop says what the legacy system does.
-            # If Schedule says "Keep ON" (should_stop=False) AND Learned says "Turn OFF" (should_stop=True)
-            # AND is_valid=True. 
-            # THEN we are in "Shadow Savings Zone".
+            # Shadow Logic:
+            # We are in "Shadow Mocking" if the legacy system (Schedule) wants to HEAT,
+            # but the new AI (Learned) says STOP. This delta represents potential savings.
             
             in_shadow_zone = (
                 sched_decision.is_valid and not sched_decision.should_stop and

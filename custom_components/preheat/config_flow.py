@@ -183,9 +183,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         profile_options = list(HEATING_PROFILES.keys())
 
         data_schema = vol.Schema({
-            # Name is read-only in reconfigure usually, but we can't easily make it read-only in a schema.
-            # Usually reconfigure doesn't change title. We'll omit Name or keep it as optional but it won't change title.
-            # For simplicity, we omit Name in reconfigure as title change is handled via UI rename.
+            # Name cannot be changed in reconfigure flow, use Rename Entity in HA.
             
             vol.Required(CONF_OCCUPANCY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
@@ -207,11 +205,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors
         )
 
-        return self.async_show_form(
-            step_id="reconfigure", 
-            data_schema=self.add_suggested_values_to_schema(data_schema, data), 
-            errors=errors
-        )
+
 
     @staticmethod
     @callback
@@ -388,7 +382,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
 
         # Fill defaults
         # 1. Start with Stored Data
-        # 1. Start with Stored Data
+
         data = {**self._config_entry.data, **self._config_entry.options}
         
         # 2. Merge with User Input (if reloading form)

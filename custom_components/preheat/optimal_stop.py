@@ -169,9 +169,7 @@ class OptimalStopManager:
         if schedule_end:
              # Calculate T_out_eff
              # We need a window from NOW to SCHEDULE_END
-             # Logic: Prediction phase uses Forecast Mean or P90 (hardcoded or config?)
-             # For now, let's assume we pass a resolved t_out value or a provider
-             # To keep it simple, we ask the provider for the 'coast_temp'
+             # Calculate effective outdoor temperature for the coasting window
              
              t_out = forecast_provider(now, schedule_end)
              self.forecast_used = t_out
@@ -211,9 +209,7 @@ class OptimalStopManager:
              
              # Latch ON Condition
              if not self._active:
-                 # Only activate if we passed the stop time? 
-                 # Wait, Optimal Stop means "Turn Off NOW".
-                 # So if Now >= computed_stop, we activate.
+                 # Activate if current time has passed the computed stop time
                  
                  # Also check Minimum Savings threshold
                  if duration_min < MIN_SAVINGS_THRESHOLD_MIN:
@@ -234,7 +230,6 @@ class OptimalStopManager:
                  # Update savings info, but generally stay active unless Safety Break hits
                  self._reason = "coasting"
                  # Optional: Update stop time if it drifts significantly?
-                 # Spec says: "Only recalculate if result changes > X min".
-                 # For now, we update internal state for dashboard, but decision is sticky.
+                 # Optional: Update stop time if it drifts significantly (Hysteresis)
                  pass
 

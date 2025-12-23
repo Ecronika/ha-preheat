@@ -191,33 +191,12 @@ class LearnedDepartureProvider(SessionEndProvider):
 
     def get_decision(self, context: dict[str, Any]) -> ProviderDecision:
         # 1. Get Prediction
-        # Need pattern info from context or planner?
-        # Planner has existing logic?
-        # Actually planner currently forecasts ARRIVAL.
-        # We need DEPARTURE prediction.
-        # This was part of "Smart Departure".
-        # For v2.7 beta, do we have departure clustering?
-        # Roadmap: "Lernen von Session-Längen-Verteilungen (Median/P90) pro Cluster"
-        # Since we don't have the clustering fully adapted for Departures yet in v2.6 code,
-        # we might need to rely on a simpler metric or "Next Occupancy Off" prediction if available?
-        #
-        # WAIT. The user prompt said: "Phase 3: Autonomous Departure... Lernen von Session-Längen... Shadow Mode & Metrics"
-        # It implies we need to IMPLEMENT the learning part now?
-        # Or just the metrics infrastructure?
-        # "Lernen von Session-Längen (Median/P90) im Hintergrund."
-        # If the planner doesn't have it, we return "Insufficient Data".
+        # In v2.7 (Foundations), we do not yet predict departure times autonomously.
+        # This phase focuses on metrics collection ("Shadow Mode") and safety gate validation.
+        # Future (v3.0): Implement "Smart Departure" clustering to predict session length.
         
-        # For this skeleton, we will assume we can ask the planner or a new logic.
-        # Given we are in "Foundations", maybe we just check if we have data?
-        # Let's return a "Not Ready" decision until the clustering logic is implemented (which is part of the "Smart Departure" ticket?).
-        # The roadmap puts "Smart Departure" in v3.0, but "Shadow Mode Foundations" in v2.7 includes "Lernen".
-        
-        # To facilitate Testing/Shadow Mode:
-        # We'll just check "gates" against dummy values or contextual values if available.
-        # For v2.7, simply returning "is_valid=False" with reason "insufficient_sessions" is a valid implementation 
-        # that satisfies the architecture without needing the full ML engine yet.
-        # BUT, we want to test "Safety Gates".
-        # So let's check gates against *inputs* even if prediction is missing.
+        # For now, we return a "Not Ready" decision but populate the trace with
+        # gate results so the user can see what *would* happen if data were sufficient.
         
         gates_failed = []
         gate_inputs = {}
