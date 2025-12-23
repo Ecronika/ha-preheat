@@ -172,6 +172,9 @@
     "switch": {
       "preheat": {
         "name": "Preheat"
+      },
+      "preheat_hold": {
+        "name": "Preheat Hold"
       }
     },
     "button": {

@@ -1,3 +1,6 @@
+## v2.7.0-beta5
+*   **Fix**: Corrected missing translation for the "Preheat Hold" switch (displayed as `switch.xxx_none`). It is now correctly labeled as **"Vorheizen blockieren (Hold)"**.
+
 ## v2.7.0-beta4
 *   **Improvement**: Exposed internal "Detected Patterns" (V3 Clusters) to the sensor attributes. The "Autonomous Engine Cockpit" card can now visualize exactly which time clusters the AI has learned and how they are weighted.
 
