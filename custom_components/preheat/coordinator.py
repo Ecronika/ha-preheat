@@ -834,7 +834,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
             # Workday Sensor Override (Fix for Issue: Starting on Holidays)
             if self._get_conf(CONF_ONLY_ON_WORKDAYS, False):
-                 wd_ent = self._get_conf(CONF_WORKDAY_SENSOR)
+                 wd_ent = self._get_conf(CONF_WORKDAY)
                  if wd_ent:
                       wd_state = self.hass.states.get(wd_ent)
                       # If Workday Sensor is explicitly 'off', it is a holiday/weekend -> BLOCK.

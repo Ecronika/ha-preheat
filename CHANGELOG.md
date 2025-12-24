@@ -1,3 +1,9 @@
+## v2.7.3 (2025-12-24) - Critical Hotfix
+**Bug Fix Release**
+
+### 🐛 Fixes
+- **NameError Loop**: Fixed a crash (`name 'CONF_WORKDAY_SENSOR' is not defined`) caused by an incorrect variable reference in the v2.7.2 update. The Workday logic now loads the correct configuration constant.
+
 ## v2.7.2 (2025-12-24) - Autonomous Engine Polish
 **Release Candidate for Autonomous Features (v3)**
 
