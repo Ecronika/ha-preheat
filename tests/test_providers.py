@@ -130,6 +130,7 @@ class TestLearnedProvider(unittest.TestCase):
         self.planner = MagicMock()
         self.provider = LearnedDepartureProvider(self.planner, {})
         self.context = {
+            "now": datetime(2023, 1, 1, 12, 0),
             "potential_savings": 10.0,
             "tau_confidence": 0.5,
             "pattern_confidence": 0.8

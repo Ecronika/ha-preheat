@@ -277,6 +277,10 @@
     "missing_schedule_entity": {
       "title": "Zeitplan fehlt für Optimal Stop",
       "description": "Optimal Stop ist für Zone {name} (ID: {entry_id}) aktiviert, aber es ist keine Zeitplan-Entität konfiguriert. Die Funktion wird nicht korrekt arbeiten. Bitte konfiguriere die Integration neu und wähle einen gültigen Zeitplan oder Kalender, oder deaktiviere Optimal Stop."
+    },
+    "physics_partial_reset": {
+      "title": "Thermisches Modell teilweise neu kalibriert (v2.7.1)",
+      "description": "Die Physik-Engine wurde in v2.7.1 aktualisiert. Ihre Heizhistorie ({samples} Sitzungen) wurde beibehalten, aber Isolationsdaten wurden auf Profil-Standardwerte zurückgesetzt. Das System lernt Außeneinflüsse über die nächsten 5-10 Heizzyklen neu.\n\nKeine Handlung erforderlich. [Mehr erfahren]({learn_more_url})"
     }
   }
 }

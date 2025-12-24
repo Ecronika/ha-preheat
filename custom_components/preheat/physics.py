@@ -22,7 +22,31 @@ class ThermalModelData:
     deadtime: float = 0.0 # V3: Deadtime (Totzeit) in minutes
 
 class ThermalPhysics:
-    """Calculates preheat duration and updates model."""
+    """
+    V2 Physics Model (Updated v2.7.1)
+    
+    Model: duration = deadtime + (mass * delta_t_in) + (loss * delta_t_out)
+    
+    Parameters:
+        mass_factor (float): Minutes to raise 1K internally [min/K]
+            - Represents thermal capacity of room + furnishings
+            - Typical: 10-40 for radiators, 50-120 for floor heating
+        
+        loss_factor (float): Additional minutes per 1K outdoor delta [min/K]
+            - Represents transmission losses through envelope
+            - Physical: Inverse of (UA / Power) normalized to temp lift
+            - Typical: 2-10 depending on insulation quality
+            - V2 change: Previously scaled by (delta_t_in/2), now linear.
+            - Migration: Old values are automatically reset to profile defaults.
+        
+        deadtime (float): System lag before heat reaches room [min]
+            - Radiator inertia + valve response + piping delay
+            - Typical: 5-15 min (radiators), 45-120 min (floor)
+            
+    Example:
+        # Radiator system, 2K lift, 10K outdoor delta:
+        # duration = 15 (deadtime) + 20*2 (mass) + 5*10 (loss) = 105 min
+    """
 
     def __init__(self, data: ThermalModelData | None = None, 
                  profile_data: dict | None = None,
@@ -68,9 +92,8 @@ class ThermalPhysics:
     def calculate_duration(self, delta_t_internal: float, delta_t_external: float) -> float:
         """
         Calculate required preheat minutes.
-        V3 Refined: Duration = Deadtime + (Mass * Delta_In) + (Loss * Delta_Out * Scaling)
-        Scaling = Delta_In / 2.0 (Reference Lift)
-        This ensures the "Cold Weather Penalty" scales down for small target lifts.
+        V3 Refined (v2.7.1 Fix): Duration = Deadtime + (Mass * Delta_In) + (Loss * Delta_Out)
+        Removed incorrect loss_scaler (dt_in/2.0) causing physical inconsistency.
         """
         # 1. If we are already at or above target, no preheat needed.
         if delta_t_internal <= 0:
@@ -79,21 +102,13 @@ class ThermalPhysics:
         dt_in = delta_t_internal
         dt_out = max(0.0, delta_t_external) 
 
-        # Scaling Factor:
-        # We assume the learned Loss Factor is calibrated for a "Standard Preheat" of ~2.0K.
-        # If we only need to heat 0.5K, the loss impact should be roughly 1/4.
-        # We clamp the scaler to avoiding exploding duration for huge Delta_In (though that would be rare).
-        loss_scaler = dt_in / 2.0
-        
-        # Time = Deadtime + (Mass * Delta_In) + (Loss * Delta_Out * Scaler)
-        duration = self.deadtime + (self.mass_factor * dt_in) + (self.loss_factor * dt_out * loss_scaler)
+        # Time = Deadtime + (Mass * Delta_In) + (Loss * Delta_Out)
+        duration = self.deadtime + (self.mass_factor * dt_in) + (self.loss_factor * dt_out)
         return max(0.0, duration)
-
     
     def update_deadtime(self, new_deadtime: float) -> None:
         """Update the deadtime parameter (usually from DeadtimeAnalyzer)."""
-        # Smooth update? Or direct? Deadtime is physically constant.
-        # But measurement is noisy. Let's use EMA.
+        # Apply EMA smoothing to deadtime updates to reject measurement noise.
         if self.deadtime == 0.0:
             self.deadtime = new_deadtime
         else:
@@ -125,12 +140,13 @@ class ThermalPhysics:
 
     def update_model(self, actual_duration: float, delta_t_in: float, delta_t_out: float, valve_position: float | None = None) -> bool:
         """Update the model based on actual performance."""
-        if delta_t_in < 0.2:
+        # 1. Reject Noise (Input Guard)
+        if delta_t_in < 0.3:
             _LOGGER.debug("Skipping learning: Internal DeltaT %.1f too small (Noise)", delta_t_in)
             return False
 
         if valve_position is not None:
-             expected_min = min(15.0, delta_t_in * 2.0)
+             expected_min = min(15.0, delta_t_in * 5.0) # V2.7.1: Relaxed from 2.0 to 5.0 check
              if valve_position < expected_min:
                  _LOGGER.debug("Skipping learning: Valve %.1f%% below expected %.1f%%", valve_position, expected_min)
                  return False
@@ -141,36 +157,57 @@ class ThermalPhysics:
         abs_error = abs(error)
         self.avg_error = (0.2 * abs_error) + (0.8 * self.avg_error)
 
+        # 2. Learning Rate Scheduling
         lr = self.learning_rate 
-        if delta_t_in < 0.5:
-            lr = lr * 0.2 
+        if delta_t_in < 0.8:
+            # Dampen learning for small maintenace heating (0.3 - 0.8K)
+            lr = lr * 0.2 # V2.7.1: Increased from 0.1 to 0.2 to allow slow convergence
         
-        # V3 Refined Logic gradients
-        loss_scaler = delta_t_in / 2.0
-        
+        # 3. Calculate Weighting
         term_mass = self.mass_factor * delta_t_in
-        term_loss = self.loss_factor * delta_t_out * loss_scaler
+        term_loss = self.loss_factor * delta_t_out
         total_term = term_mass + term_loss + 0.001
         
         weight_mass = term_mass / total_term
         weight_loss = term_loss / total_term
         
-        if delta_t_in > 0.1:
-            self.mass_factor += lr * (error * weight_mass) / delta_t_in
+        # 4. Calculate Deltas
         
-        # Update Loss Factor considering the scaler
-        # Effective Loss contribution was (Loss * D_Out * Scaler).
-        # We want to adjust Loss.
-        # d(Duration)/d(Loss) = D_Out * Scaler
-        if delta_t_out > 1.0 and loss_scaler > 0.1: 
-            self.loss_factor += lr * (error * weight_loss) / (delta_t_out * loss_scaler)
+        # Mass connects to Delta_In
+        delta_mass = lr * (error * weight_mass) / delta_t_in
+        delta_mass = self._clip_dual(delta_mass, self.mass_factor, 0.05, 5.0)
+        self.mass_factor += delta_mass
 
-        # V3 Constraints (Dynamic based on Profile)
+        # Loss connects to Delta_Out
+        # GUARD: Only learn loss if significant outdoor delta exists to avoid division by zero/noise
+        if delta_t_out > 0.5: 
+            # Strong Signal
+            delta_loss = lr * (error * weight_loss) / delta_t_out
+            delta_loss = self._clip_dual(delta_loss, self.loss_factor, 0.05, 2.0)
+            self.loss_factor += delta_loss
+        elif delta_t_out > 0.1:
+            # Weak Signal (0.1 < dt_out < 0.5) - e.g. mild spring/autumn
+            # Learn with reduced confidence to prevent drift but allow adaptation
+            delta_loss = lr * (error * weight_loss) / max(delta_t_out, 0.5) # Clamp divisor
+            delta_loss *= 0.3 # Dampen update
+            delta_loss = self._clip_dual(delta_loss, self.loss_factor, 0.05, 2.0)
+            self.loss_factor += delta_loss
+
+        # Enforce bounds
         self.mass_factor = max(self.min_mass, min(self.max_mass, self.mass_factor))
-        self.loss_factor = max(0.0, min(50.0, self.loss_factor))
+        # Loss can go to 0.0 if perfectly insulated/warm
+        self.loss_factor = max(0.0, min(50.0, self.loss_factor)) 
         
         self.sample_count += 1
         return True
+
+    def _clip_dual(self, delta: float, current: float, rel_limit: float, abs_limit: float) -> float:
+        """Dual clipping: relative AND absolute limits."""
+        # Allow at least some change even if current is small
+        current_safe = max(abs(current), 1.0) 
+        rel_bound = current_safe * rel_limit
+        max_change = min(rel_bound, abs_limit)
+        return max(-max_change, min(max_change, delta))
 
     def to_dict(self) -> dict:
         """Export data."""

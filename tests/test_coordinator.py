@@ -1,15 +1,18 @@
-"""Integration tests for V2.7 Arbitration & Trace."""
+"""
+Consolidated Unit Tests for Preheat Coordinator.
+Includes Window Detection (v2.2) and Arbitration Logic (v2.7).
+"""
 import sys
 import os
 import unittest
 import asyncio
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch, AsyncMock
 
 # Add parent dir
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Mock HA
+# --- MOCK Home Assistant ---
 import types
 ha = types.ModuleType("homeassistant")
 ha.__path__ = []
@@ -24,7 +27,8 @@ sys.modules["homeassistant.helpers"] = MagicMock()
 sys.modules["homeassistant.helpers.event"] = MagicMock()
 sys.modules["homeassistant.helpers.storage"] = MagicMock()
 sys.modules["homeassistant.helpers.issue_registry"] = MagicMock()
-sys.modules["homeassistant.exceptions"] = MagicMock() # Added mock
+sys.modules["homeassistant.exceptions"] = MagicMock()
+
 # Mock DUC
 class MockDataUpdateCoordinator:
     def __init__(self, hass, logger, name, update_interval, **kwargs):
@@ -46,7 +50,7 @@ mock_duc_mod.DataUpdateCoordinator = MockDataUpdateCoordinator
 mock_duc_mod.UpdateFailed = MockUpdateFailed
 sys.modules["homeassistant.helpers.update_coordinator"] = mock_duc_mod
 
-# Import classes
+# Import Component
 from custom_components.preheat.coordinator import PreheatingCoordinator, PreheatData
 from custom_components.preheat.providers import ProviderDecision
 from custom_components.preheat.const import (
@@ -55,7 +59,60 @@ from custom_components.preheat.const import (
     PROVIDER_MANUAL, PROVIDER_SCHEDULE, PROVIDER_LEARNED, PROVIDER_NONE
 )
 
-class TestCoordinatorV27(unittest.TestCase):
+class TestCoordinatorWindowLogic(unittest.TestCase):
+    """Test v2.2 Window Detection Logic."""
+    
+    def test_window_detection(self):
+        # Setup
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test"
+        entry.options = {}
+        entry.data = {}
+        
+        # Patch init to avoid heavy loading if needed
+        with patch("custom_components.preheat.coordinator.PreheatingCoordinator._setup_listeners"), \
+             patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
+             coord = PreheatingCoordinator(hass, entry)
+        
+        # Mock Time
+        now = datetime(2023, 1, 1, 12, 0, 0)
+        
+        # 1. Initialization
+        coord._track_temperature_gradient(20.0, now)
+        self.assertFalse(coord.window_open_detected)
+        self.assertEqual(coord._prev_temp, 20.0)
+        
+        # 2. Stable Temp (5 mins later)
+        now += timedelta(minutes=5)
+        coord._track_temperature_gradient(20.0, now)
+        self.assertFalse(coord.window_open_detected)
+        
+        # 3. Slow Drop (-0.1K in 5 mins) -> OK
+        now += timedelta(minutes=5)
+        coord._track_temperature_gradient(19.9, now)
+        self.assertFalse(coord.window_open_detected)
+        
+        # 4. FAST DROP (-0.6K in 5 mins) -> DETECT!
+        now += timedelta(minutes=5)
+        coord._track_temperature_gradient(19.3, now) 
+        self.assertTrue(coord.window_open_detected)
+        self.assertEqual(coord._window_cooldown_counter, 30)
+        
+        # 5. Cooldown Logic
+        now += timedelta(minutes=10)
+        coord._track_temperature_gradient(19.5, now)
+        self.assertTrue(coord.window_open_detected) # Still in cooldown
+        self.assertEqual(coord._window_cooldown_counter, 20)
+        
+        # 25 mins later (total 35), cooldown done
+        now += timedelta(minutes=25)
+        coord._track_temperature_gradient(19.5, now)
+        self.assertFalse(coord.window_open_detected)
+
+class TestCoordinatorArbitration(unittest.TestCase):
+    """Test v2.7 Arbitration & Trace Logic."""
+    
     def setUp(self):
         self.hass = MagicMock()
         self.entry = MagicMock()
@@ -110,7 +167,7 @@ class TestCoordinatorV27(unittest.TestCase):
         # Learned says Valid
         self.coord.learned_provider.get_decision.return_value = ProviderDecision(
             should_stop=True, session_end=None, is_valid=True, is_shadow=True
-        ) # Currently Learned is always shadow
+        )
 
         data = self.run_async(self.coord._async_update_data())
         
@@ -137,9 +194,6 @@ class TestCoordinatorV27(unittest.TestCase):
         
         trace = data.decision_trace
         self.assertEqual(trace[KEY_PROVIDER_SELECTED], PROVIDER_SCHEDULE)
-        # Verify legacy output mapping
-        # optimal_stop_active should come from Schedule decision (if enabled in config, usually)
-        # Here default enabled=False, so opt_active=False. But let's verify selected.
 
     def test_arbitration_learned_shadow(self):
         """Test Learned is selected if Schedule Invalid? (Actually Learned is Shadow)"""
@@ -158,11 +212,7 @@ class TestCoordinatorV27(unittest.TestCase):
         data = self.run_async(self.coord._async_update_data())
         
         trace = data.decision_trace
-        # Learned is VALID, but is_shadow=True.
-        # Logic: elif learned_decision.is_valid and not learned_decision.is_shadow: selected = LEARNED
-        # Since is_shadow=True, selected matches nothing -> NONE
-        # This confirms Shadow Safety (Learned does not control).
-        
+        # Learned is VALID, but is_shadow=True -> Selection NONE
         self.assertEqual(trace[KEY_PROVIDER_SELECTED], PROVIDER_NONE)
         self.assertTrue(PROVIDER_LEARNED in trace["provider_candidates"])
 
@@ -182,11 +232,6 @@ class TestCoordinatorV27(unittest.TestCase):
     def test_shadow_safety_metrics(self):
         """Test that safety violations are counted in Shadow Mode."""
         self.coord.hold_active = False
-        
-        # Scenario: 
-        # Schedule says Run (should_stop=False)
-        # Learned says Stop (should_stop=True)
-        # Actual Temp is VERY Low (Safety Violation)
         
         self.coord.schedule_provider.get_decision.return_value = ProviderDecision(False, None, True, False)
         self.coord.learned_provider.get_decision.return_value = ProviderDecision(True, None, True, True)

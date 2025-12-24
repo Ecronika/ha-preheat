@@ -193,8 +193,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         }
         self.learned_provider = LearnedDepartureProvider(self.planner, gate_thresholds)
         
+
+        
         # Init Physics with minimal default until loaded
         self.physics = ThermalPhysics()
+        
+        # Internal store for non-physics meta-data (like migration versions)
+        self.extra_store_data = {}
         
         # State
         self._preheat_started_at: datetime | None = None
@@ -221,6 +226,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "cumulative_shadow_savings": 0.0,
             "simulated_error_count": 0
         }
+        
+        # Logging state
+        self._last_shadow_log_state: bool = False
         
         self._startup_time = dt_util.utcnow()
         self._setup_listeners()
@@ -280,8 +288,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                         translation_placeholders={"name": self.device_name}
                     )
                     
-                    # Legacy was {weekday: average_min}. Hard to migrate cleanly to raw stamps.
-                    # We'll just start fresh for patterns, or seed it?
+                    # Legacy data format {weekday: average_min} provides insufficient granularity for clustering.
+                    # We inject simulated variance to seed the new history model.
                     legacy = data["learned_arrivals"]
                     history = {}
                     for k, v in legacy.items():
@@ -301,10 +309,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 
                 # Load Physics
                 mass_factor = None
-                # Map legacy gain to mass_factor if reasonable?
-                # Legacy 'learned_gain' was min/K.
-                # v2 'mass_factor' is also min/K (Minutes to raise 1C).
-                # So we can direct port it.
+                # Legacy 'learned_gain' [min/K] maps directly to v2 'mass_factor' [min/K].
                 if "learned_gain" in data:
                     try:
                         lg = float(data["learned_gain"])
@@ -341,6 +346,50 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 self.cooling_analyzer.confidence = data.get("cooling_confidence", 0.0)
                 
                 self._last_comfort_setpoint = data.get("last_comfort_setpoint")
+                
+                # --- Smart Migration v2.7.1 ---
+                # Check Physics Version
+                physics_version = data.get("physics_version", 1)
+                
+                if physics_version < 2:
+                    _LOGGER.warning("Migrating Thermal Model to Physics v2 (removing scaler artifact)")
+                    
+                    # 1. Preserve Mass Factor (It was valid/independent)
+                    # 2. Reset Loss Factor (It was calibrated to dt_in/2 scaler, now invalid)
+                    profile_key = self._get_conf(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
+                    profile_data = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
+                    default_loss = profile_data.get("default_loss", 5.0)
+                    
+                    old_loss = self.physics.loss_factor
+                    self.physics.loss_factor = default_loss
+                    # Slight penalty to reduce confidence, but preserve learning progress
+                    # (User had X samples, now X-2 but mass_factor stays valid)
+                    self.physics.sample_count = max(0, self.physics.sample_count - 2)
+                    
+                    _LOGGER.info(f"Migration: Mass {self.physics.mass_factor:.2f} kept. Loss {old_loss:.2f} -> {default_loss:.2f} reset.")
+                    
+                    # Create Repair Issue (Informational)
+                    async_create_issue(
+                        self.hass,
+                        DOMAIN,
+                        f"physics_partial_reset_{self.entry.entry_id}",
+                        is_fixable=False,
+                        is_persistent=True,
+                        severity=IssueSeverity.WARNING,
+                        translation_key="physics_partial_reset",
+                        translation_placeholders={
+                            "samples": str(self.physics.sample_count),
+                            "learn_more_url": "https://github.com/Ecronika/ha-preheat/releases/tag/v2.7.1"
+                        },
+                        learn_more_url="https://github.com/Ecronika/ha-preheat/releases/tag/v2.7.1"
+                    )
+                    
+                    # Mark as Migrated
+                    self.extra_store_data["physics_version"] = 2
+                    # IMPORTANT: Save immediately to prevent re-running migration (and double penalty) on crash/restart
+                    await self._async_save_data()
+                else:
+                    self.extra_store_data["physics_version"] = physics_version
             else:
                 _LOGGER.info("No data found. Analyzing history...")
                 await self.analyze_history()
@@ -356,6 +405,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             data_planner = self.planner.to_dict()
             
             data = {
+                "version": 1,
+                "physics_version": self.extra_store_data.get("physics_version", 2),
                 ATTR_ARRIVAL_HISTORY: data_planner,
                 ATTR_MODEL_MASS: data_physics["mass_factor"],
                 ATTR_MODEL_LOSS: data_physics["loss_factor"],
@@ -451,9 +502,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     async def _learn_arrival_event(self) -> None:
         now = dt_util.now()
         
-        # Debounce: One per day? No, one per Cluster Window?
-        # Planner handles storage constraints.
-        # We just filter Config Window here.
+        # Filter availability to the configured arrival window.
+        # Storage constraints and clustering are handled by the Planner.
         win_start_str = self._get_conf(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START)
         win_end_str = self._get_conf(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END)
         win_start = self._parse_time_to_minutes(win_start_str, DEFAULT_ARRIVAL_WINDOW_START)
@@ -500,9 +550,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  try:
                      raw = float(state.attributes["current_temperature"])
                      if -40 < raw < 80:
-                         # No Bias for Climate sensor (usually already calibrated)
-                         # Or should we apply bias? Assuming Climate is "Air Temp", likely yes.
-                         # But let's assume it's good for now.
+                         # Climate entities typically report Air Temperature. 
+                         # No additional bias is applied for now, assuming sensor calibration.
                          return raw
                  except (ValueError, TypeError):
                      pass
@@ -671,7 +720,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                             f"weather_setup_failed_{self.entry.entry_id}",
                             is_fixable=False,
                             is_persistent=False,
-                            severity=IssueSeverity.TITANIUM,
+                            severity=IssueSeverity.WARNING,
                             translation_key="weather_setup_failed",
                             translation_placeholders={
                                 "weather_entity": self.weather_service.entity_id,
@@ -755,8 +804,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     start_time = earliest_dt
                 
                 # Check Triggers
-                # Logic: IF now >= start_time AND now < target_event (don't start if already late... actually we should if < target?)
-                # Let's say: Start if Now >= Start AND Now < Target
+                # Trigger preheat if within the active window (Start Time <= Now < Arrival).
                 if start_time <= now < next_event:
                      should_start = True
             
@@ -883,6 +931,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             
             if self.hold_active:
                 selected_provider = PROVIDER_MANUAL
+                # Create copy before mutating
+                gates_failed = list(learned_decision.gates_failed or [])
                 gates_failed.append(GATE_FAIL_MANUAL)
             elif sched_decision.is_valid:
                 selected_provider = PROVIDER_SCHEDULE
@@ -932,7 +982,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 KEY_PROVIDER_CANDIDATES: valid_providers,
                 KEY_PROVIDERS_INVALID: invalid_reasons,
                 KEY_GATES_FAILED: gates_failed,
-                KEY_GATE_INPUTS: learned_decision.gate_inputs,
+                KEY_GATE_INPUTS: learned_decision.gate_inputs or {},
                 "providers": {
                     PROVIDER_SCHEDULE: {
                         "should_stop": sched_decision.should_stop,
@@ -960,10 +1010,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             
             is_shadow_coasting = False
             if selected_provider == PROVIDER_SCHEDULE and not learned_decision.is_shadow: 
-                 # If Learned is "Real" (not shadow), it would have been selected (unless Schedule selected).
-                 # Wait, arbitration says: if hold -> Man, else if Sched -> Sched.
-                 # So if Schedule is Valid, it wins.
-                 # Shadow State is: Schedule says RUN (or Coast), Learned says STOP (earlier).
+                 # If Learned was not "Shadow", it would have participated in arbitration.
                  pass
             
             # Shadow Logic:
@@ -985,9 +1032,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                       self._shadow_metrics["safety_violations"] += 1
                       _LOGGER.warning("Shadow Mode Safety Violation! Temp %.1f < %.1f", operative_temp, safe_floor)
             
-            # For now, just debug log if meaningful difference
-            if learned_decision.should_stop and not opt_active:
+            # For now, just debug log if meaningful difference (Edge Triggered)
+            # We use 'in_shadow_zone' (Schedule=RUN, Learned=STOP) as the exact condition.
+            should_shadow_log = in_shadow_zone
+            
+            if should_shadow_log and not self._last_shadow_log_state:
                  _LOGGER.debug("Shadow Mode: Learned Provider would STOP now. (Confidence: %.2f)", learned_decision.confidence if learned_decision.confidence else 0.0)
+            
+            self._last_shadow_log_state = should_shadow_log
 
             # Add metrics to trace
             decision_trace["metrics"] = self._shadow_metrics

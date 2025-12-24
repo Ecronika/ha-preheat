@@ -217,6 +217,10 @@
     "missing_schedule_entity": {
       "title": "Missing Schedule for Optimal Stop",
       "description": "Optimal Stop is enabled for zone {name} (ID: {entry_id}), but no Schedule Entity is configured. The feature will not work correctly. Please reconfigure the integration and select a valid Schedule or Calendar entity, or disable Optimal Stop."
+    },
+    "physics_partial_reset": {
+      "title": "Thermal Model Partially Recalibrated (v2.7.1)",
+      "description": "The physics engine was updated in v2.7.1 for improved stability. Your heating history ({samples} sessions) was preserved, but insulation data was reset to profile defaults. The system will re-learn outdoor influences over the next 5-10 heating cycles.\n\nNo action required. [Learn more]({learn_more_url})"
     }
   }
 }

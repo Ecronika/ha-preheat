@@ -1,3 +1,17 @@
+## v2.7.1 (2025-12-23) - Physics Hotfix
+**Critical Release targeting Model Stability**
+
+### 🐛 Fixes
+- **Physics Core**: Removed incorrect scaling factor (`loss_scaler`) that effectively penalized the heat loss model based on internal temperature lift. The model now strictly follows linear superposition (Duration = Deadtime + Mass*dIn + Loss*dOut).
+- **Learning Stability**: Implemented "Dual Gradient Clipping". Parameter updates are now capped at **5% relative change** (or a fixed absolute max) per session. This completely solves the "Gradient Explosion" issue where small temperature updates caused wild swings in model parameters.
+- **Input Guards**: The model now rejects noise (`< 0.3K`) and dampens learning for small updates (`< 0.8K`), protecting the learned Thermal Mass from corruption during maintenance heating.
+
+### 🛡️ Smart Migration
+- This update includes a **Smart Migration** logic. When you update:
+    - Your **Thermal Mass** (heating speed) data is **preserved**.
+    - Your **Insulation/Loss Factor** is **reset** to defaults (since the old values were calibrated to the broken scaler).
+    - A **Repair Issue** ("Thermal Model Recalibration") will appear to inform you of this one-time reset. No action is required from you.
+
 ## v2.7.0-beta5
 *   **Fix**: Corrected missing translation for the "Preheat Hold" switch (displayed as `switch.xxx_none`). It is now correctly labeled as **"Vorheizen blockieren (Hold)"**.
 
