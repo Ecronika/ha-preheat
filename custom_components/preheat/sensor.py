@@ -85,6 +85,10 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "health_score": physics.health_score,
             "decision_trace": data.decision_trace,
             "pattern_data": data.detected_modes,
+            "next_start_time": data.next_start_time.isoformat() if data.next_start_time else None,
+            "next_arrival": data.next_arrival.isoformat() if data.next_arrival else None,
+            "next_departure": data.next_departure.isoformat() if data.next_departure else None,
+            "optimal_stop_time": data.optimal_stop_time.isoformat() if data.optimal_stop_time else None,
         }
 
 class NextEventSensor(PreheatBaseSensor):

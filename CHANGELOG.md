@@ -1,3 +1,17 @@
+## v2.7.2 (2025-12-24) - Autonomous Engine Polish
+**Release Candidate for Autonomous Features (v3)**
+
+This release finalizes the "Departure Logic" and "Optimal Stop" integration, ensuring robust behavior in all edge cases.
+
+### 🐛 Critical Fixes
+- **Workday Sensor Loophole**: Fixed a bug where preheating could start on holidays/weekends even if `Only on workdays` was enabled. The system now strictly checks the sensor state before actuating.
+- **Manual Hold Override**: Activating the `Preheat Hold` switch now immediately disables the "Optimal Stop" feature, resetting any "coasting" state. This ensures manual control always takes precedence.
+
+### 🔨 Improvements
+- **Effective Departure Trace**: The `decision_trace` now explicitly shows the "Effective Departure" time and its source (`Schedule` vs `AI`), making it easy to see who is in control.
+- **Timeline Logic**: "Optimal Stop" and "Next Departure" calculations are now strictly tied to the *effective* session, preventing ghost events when the schedule is off.
+- **Lovelace Debug Card**: Updated the "Autonomous Engine Cockpit" template with improved visualization and ISO-standard timestamps.
+
 ## v2.7.1 (2025-12-23) - Physics Hotfix
 **Critical Release targeting Model Stability**
 

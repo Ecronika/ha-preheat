@@ -134,6 +134,9 @@ class PreheatData:
     last_comfort_setpoint: float | None = None
     deadtime: float = 0.0 # V3
     
+    # Scheduled Stop
+    next_departure: datetime | None = None
+    
     # Optimal Stop V2.5
     optimal_stop_active: bool = False
     optimal_stop_time: datetime | None = None
@@ -829,6 +832,15 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 is_occupied = True
                 should_start = False # User is home, no Pre-heat (Normal heat takes over)
 
+            # Workday Sensor Override (Fix for Issue: Starting on Holidays)
+            if self._get_conf(CONF_ONLY_ON_WORKDAYS, False):
+                 wd_ent = self._get_conf(CONF_WORKDAY_SENSOR)
+                 if wd_ent:
+                      wd_state = self.hass.states.get(wd_ent)
+                      # If Workday Sensor is explicitly 'off', it is a holiday/weekend -> BLOCK.
+                      if wd_state and wd_state.state == "off":
+                           should_start = False
+
 
 
             # 5. Actuate
@@ -911,13 +923,22 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             }
 
             # 3. Provider Query
+            # 3. Provider Query
+            # Log schedule attributes for debugging (traceability)
+            sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
+            if sched_ent:
+                st = self.hass.states.get(sched_ent)
+                if st:
+                    _LOGGER.debug("Schedule Attributes (%s): State=%s, Attrs=%s", sched_ent, st.state, st.attributes)
+            
             sched_decision = self.schedule_provider.get_decision(context)
+            scheduled_end = sched_decision.session_end
             
             # Forward Schedule Data to Shadow (Proxy for v2.7)
             context["potential_savings"] = sched_decision.predicted_savings if sched_decision.predicted_savings else 0.0
             learned_decision = self.learned_provider.get_decision(context)
             
-            # 4. Arbitration
+            # 4. Arbitration & Effective Departure
             selected_provider = PROVIDER_NONE
             valid_providers = []
             invalid_reasons = {}
@@ -929,6 +950,24 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             if learned_decision.is_valid: valid_providers.append(PROVIDER_LEARNED)
             else: invalid_reasons[PROVIDER_LEARNED] = learned_decision.invalid_reason
             
+            # --- Effective Departure Logic ---
+            effective_departure = None
+            effective_departure_source = "none"
+            
+            scheduled_end = sched_decision.session_end
+            ai_end = learned_decision.session_end
+            
+            if learned_decision.is_valid and not learned_decision.is_shadow:
+                 effective_departure = ai_end
+                 effective_departure_source = "ai"
+            elif scheduled_end is not None:
+                 effective_departure = scheduled_end
+                 effective_departure_source = "schedule"
+            else:
+                 effective_departure = None
+                 effective_departure_source = "none"
+
+            # --- Provider Selection ---
             if self.hold_active:
                 selected_provider = PROVIDER_MANUAL
                 # Create copy before mutating
@@ -939,7 +978,44 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             elif learned_decision.is_valid and not learned_decision.is_shadow:
                 selected_provider = PROVIDER_LEARNED
             
-            # 4b. Global Checks
+            # --- Optimal Stop & Manager Update (Centralized) ---
+            # We ALWAYS update the manager to ensure state consistency (latches reset etc).
+            # If feature is disabled, we pass schedule_end=None which ensures "Reset/Inactive".
+            
+            # Prepare config (even if disabled, for consistent call)
+            opt_config = {
+                CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
+                CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
+                "system_inertia": context.get("physics_deadtime", 0.0)
+            }
+            
+            # Helper for forecast callback
+            def _forecast_cb(s, e):
+                if forecasts:
+                    return math_preheat.calculate_risk_metric(forecasts, s, e, "balanced")
+                return context.get("outdoor_temp", 10.0)
+
+            # Determine Target Departure for Manager
+            # Only use real departure if:
+            # 1. Feature is enabled
+            # 2. Manual Hold is NOT active (Kill Switch)
+            # Otherwise None force-resets logic.
+            target_departure_for_manager = effective_departure
+            
+            if self.hold_active or not self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
+                target_departure_for_manager = None
+            
+            # Update Manager
+            self.optimal_stop_manager.update(
+                current_temp=operative_temp,
+                target_temp=target_setpoint,
+                schedule_end=target_departure_for_manager, 
+                forecast_provider=_forecast_cb,
+                tau_hours=self.cooling_analyzer.learned_tau,
+                config=opt_config
+            )            
+            
+            # Feature Migration/Warning UX (Preserved)
             if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
                  # Check for missing schedule entity (Migration UX)
                  sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
@@ -962,27 +1038,35 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             else:
                  # Clean up issue if feature is disabled
                  async_delete_issue(self.hass, DOMAIN, f"missing_schedule_{self.entry.entry_id}")
-
-            # 5. Apply Output
-            # Map back to legacy variables for PreheatData
-            if selected_provider == PROVIDER_SCHEDULE:
-
-                     # Read detailed state from manager (updated by provider)
-                     opt_active = self.optimal_stop_manager.is_active
-                     opt_time = self.optimal_stop_manager.stop_time
-                     opt_reason = self.optimal_stop_manager.debug_info["reason"]
-                     savings_total = self.optimal_stop_manager._savings_total
-                     savings_remaining = self.optimal_stop_manager._savings_remaining
+            
+            # Read detailed state from manager (Always, to catch active/savings state)
+            opt_active = self.optimal_stop_manager.is_active
+            opt_time = self.optimal_stop_manager.stop_time
+            opt_reason = self.optimal_stop_manager.debug_info["reason"]
+            savings_total = self.optimal_stop_manager._savings_total
+            savings_remaining = self.optimal_stop_manager._savings_remaining
             
             # 6. Trace Building
+            # Polish: Only show global gates_failed if AI was the intended target or candidate.
+            # If we selected Schedule, the global "failed gates" might be confusing.
+            trace_gates_failed = gates_failed
+            if effective_departure_source == "schedule":
+                 trace_gates_failed = []
+
             decision_trace = {
                 "schema_version": SCHEMA_VERSION,
                 KEY_EVALUATED_AT: now.isoformat(),
                 KEY_PROVIDER_SELECTED: selected_provider,
                 KEY_PROVIDER_CANDIDATES: valid_providers,
                 KEY_PROVIDERS_INVALID: invalid_reasons,
-                KEY_GATES_FAILED: gates_failed,
+                KEY_GATES_FAILED: trace_gates_failed,
                 KEY_GATE_INPUTS: learned_decision.gate_inputs or {},
+                "timeline": {
+                    "scheduled_departure": scheduled_end.isoformat() if scheduled_end else None,
+                    "ai_departure": ai_end.isoformat() if ai_end else None,
+                    "effective_departure": effective_departure.isoformat() if effective_departure else None,
+                    "effective_departure_source": effective_departure_source
+                },
                 "providers": {
                     PROVIDER_SCHEDULE: {
                         "should_stop": sched_decision.should_stop,
@@ -990,8 +1074,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                         "session_end": sched_decision.session_end.isoformat() if sched_decision.session_end else None
                     },
                     PROVIDER_LEARNED: {
-                        "should_stop": learned_decision.should_stop,
-                        "is_shadow": learned_decision.is_shadow
+                         "gates_failed": gates_failed, # Explicitly visible here
+                         "confidence": learned_decision.confidence,
+                         "savings": learned_decision.predicted_savings,
+                         "session_end": learned_decision.session_end.isoformat() if learned_decision.session_end else None,
+                         "should_stop": learned_decision.should_stop,
+                         "is_shadow": learned_decision.is_shadow
                     }
                 }
             }
@@ -1077,7 +1165,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 detected_modes=detected_modes,
                 fallback_used=fallback_used,
                 # v3.0
-                decision_trace=decision_trace
+                decision_trace=decision_trace,
+                next_departure=effective_departure
             )
 
         except Exception as err:

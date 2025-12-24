@@ -135,14 +135,14 @@ class ScheduleProvider(SessionEndProvider):
             return ProviderDecision(False, None, False, False, invalid_reason=REASON_UNAVAILABLE)
             
         state = self.hass.states.get(sched_entity)
-        if not state or state.state == "unavailable":
-            self._update_manager_passive(context)
+        if not state or state.state in ("unavailable", "unknown"):
+            # self._update_manager_passive(context) # Removed: Centralized
             return ProviderDecision(False, None, False, False, invalid_reason=REASON_UNAVAILABLE)
         
         if state.state != "on":
              # Legacy: If schedule is OFF, we are not in a session.
-             # Ensure Optimal Stop Manager sees the "OFF" state to reset latches
-             self._update_manager_passive(context)
+             # Manager reset is handled centrally in Coordinator.
+             # self._update_manager_passive(context) # Removed: Centralized
              return ProviderDecision(False, None, False, False, invalid_reason=REASON_OFF)
 
         # 2. Resolve Session End
@@ -154,49 +154,18 @@ class ScheduleProvider(SessionEndProvider):
         if not session_end:
              return ProviderDecision(False, None, False, False, invalid_reason=REASON_NO_NEXT_EVENT)
              
-        # 3. Optimal Stop Logic (Should we stop early?)
-        should_stop = False
-        savings = 0.0
-        reason = None
-        
-        if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
-            # Prepare config for manager
-            opt_config = {
-                 CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
-                 CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
-                 "system_inertia": context.get("physics_deadtime", 0.0)
-            }
-            
-            # Helper for forecast callback
-            forecasts = context.get("forecasts")
-            def _forecast_cb(s, e):
-                if forecasts:
-                    # Risk mode assumed balanced or passed in context
-                    return calculate_risk_metric(forecasts, s, e, "balanced")
-                return context.get("outdoor_temp", 10.0)
-
-            self.manager.update(
-                current_temp=context["operative_temp"],
-                target_temp=context["target_setpoint"],
-                schedule_end=session_end,
-                forecast_provider=_forecast_cb,
-                tau_hours=context["tau_hours"],
-                config=opt_config
-            )
-            
-            should_stop = self.manager.is_active
-            savings = self.manager._savings_remaining # Remaining potential
-            if should_stop:
-                reason = "optimal_stop"
+        # 3. Optimal Stop Logic is now CENTRALIZED in Coordinator.
+        # This provider just reports the Schedule's Intent (Run until session_end).
+        # We perform NO side-effects on the manager here.
         
         # Construct decision
         return ProviderDecision(
-            should_stop=should_stop,
+            should_stop=False, # Schedule entity means "Stay On". Coasting is an override layer.
             session_end=session_end,
             is_valid=True,
             is_shadow=False, # Schedule is never shadow
-            predicted_savings=savings,
-            invalid_reason=reason # Optional info
+            predicted_savings=0.0, # Calculated centrally
+            invalid_reason=None
         )
 
 
@@ -256,16 +225,24 @@ class LearnedDepartureProvider(SessionEndProvider):
         # If we had a prediction...
         predicted_end = None # TODO: Implement clustering query
         
+        # Validity Logic
         valid = (len(gates_failed) == 0) and (predicted_end is not None)
+        
+        reason = None
+        if not valid:
+            if gates_failed:
+                reason = REASON_BLOCKED_BY_GATES
+            else:
+                reason = REASON_INSUFFICIENT_SESSIONS # or "no_prediction" if logic added
             
         return ProviderDecision(
             should_stop=False, # Always False for now as we have no prediction
-            session_end=None,
+            session_end=None,  # STRICTLY None if no prediction
             is_valid=valid,
             is_shadow=True,
             confidence=pattern_conf,
             predicted_savings=savings,
             gates_failed=gates_failed,
             gate_inputs=gate_inputs,
-            invalid_reason=REASON_INSUFFICIENT_SESSIONS if not valid else None
+            invalid_reason=reason
         )
