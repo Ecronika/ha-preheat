@@ -1,3 +1,9 @@
+## v2.7.4 (2025-12-24) - Debugging Polish
+**Transparency Update**
+
+### 🔨 Improvements
+- **Debug Visibility**: Added an explicit DEBUG log entry (`Preheat BLOCKED by Workday Sensor`) when the Workday Sensor override is active. This helps verify that the "Holiday Skipping" logic is working correctly in the logs.
+
 ## v2.7.3 (2025-12-24) - Critical Hotfix
 **Bug Fix Release**
 

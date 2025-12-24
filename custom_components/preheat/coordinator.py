@@ -839,6 +839,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                       wd_state = self.hass.states.get(wd_ent)
                       # If Workday Sensor is explicitly 'off', it is a holiday/weekend -> BLOCK.
                       if wd_state and wd_state.state == "off":
+                           if should_start:
+                                _LOGGER.debug("Preheat BLOCKED by Workday Sensor (State: Off)")
                            should_start = False
 
 
