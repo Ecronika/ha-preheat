@@ -669,7 +669,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
         comfort_min = self._get_conf(CONF_COMFORT_MIN, DEFAULT_COMFORT_MIN)
         
-        if climate_temp and climate_temp >= comfort_min:
+        if climate_temp and climate_temp > comfort_min:
             return climate_temp
 
         if self._last_comfort_setpoint is not None:

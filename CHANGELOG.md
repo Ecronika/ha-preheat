@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.8.0-beta2 (Hotfix) - 2025-12-31
+**Bug Fix: Preheating Not Starting**
+
+This release fixes a critical logic flaw where the system failed to identify a heating demand if the thermostat was in "Eco Mode" matching the configured `Minimum Comfort Temperature`.
+
+### 🐛 Critical Fixes
+*   **Target Temperature Logic**: Fixed an issue where `target_setpoint` defaulted to the current thermostat setting (e.g., 19.5°C) instead of the calculated comfort target (e.g., 21°C) when the values were close. The system now strictly enforces `Target > Min Comfort` before accepting the current thermostat setting as valid intent. This ensures preheating triggers correctly even from Eco mode.
+
 ## v2.8.0-beta1 (The Recorder) - 2025-12-31
 **Initial Beta for the Autonomous Brain Update**
 
