@@ -50,6 +50,7 @@ from .const import (
     CONF_ARRIVAL_WINDOW_START,
     CONF_ARRIVAL_WINDOW_END,
     CONF_VALVE_POSITION,
+    CONF_DEBOUNCE_MIN,
     CONF_COMFORT_MIN,
     CONF_COMFORT_FALLBACK,
     DEFAULT_COMFORT_MIN,
@@ -59,6 +60,7 @@ from .const import (
     DEFAULT_STOP_TOLERANCE,
     DEFAULT_MAX_COAST_HOURS,
     DEFAULT_ARRIVAL_WINDOW_END,
+    DEFAULT_DEBOUNCE_MIN,
 
     ATTR_MODEL_MASS,
     ATTR_MODEL_LOSS,
@@ -107,6 +109,81 @@ from .providers import (
     LearnedDepartureProvider,
     ProviderDecision
 )
+
+class OccupancyDebouncer:
+    """
+    Session State Machine (v2.8).
+    Filters short 'flapping' (OFF->ON) to determine true session end.
+    """
+    def __init__(self, debounce_min: float, parent_coordinator: "PreheatingCoordinator"):
+        self._debounce_limit_sec = debounce_min * 60.0
+        self._coordinator = parent_coordinator
+        
+        # State
+        self._off_start_time: datetime | None = None
+        self._is_debouncing = False
+        self._last_committed_time: datetime | None = None
+        
+    def handle_change(self, new_state_on: bool, now: datetime) -> None:
+        """Called when occupancy sensor changes state."""
+        if not new_state_on:
+            # ON -> OFF (Potential Session End)
+            if not self._is_debouncing:
+                _LOGGER.debug("[Debounce] Session End Candidate? Starting timer (%.1f min). Off at: %s", 
+                              self._debounce_limit_sec/60, now)
+                self._off_start_time = now
+                self._is_debouncing = True
+        else:
+            # OFF -> ON (Flapping / Return)
+            if self._is_debouncing and self._off_start_time:
+                # RACE CONDITION CHECK:
+                # If OFF duration > Limit, but check() missed it (jitter), we MUST commit now before resetting!
+                elapsed = (now - self._off_start_time).total_seconds()
+                if elapsed >= self._debounce_limit_sec:
+                    _LOGGER.info("[Debounce] Race Condition Caught! Session actually ended before return. Committing.")
+                    self._commit_departure(self._off_start_time)
+                else:
+                    _LOGGER.debug("[Debounce] False Alarm (Flapping). Session continues. (Off duration: %.1fs)", elapsed)
+                
+                # Reset
+                self._is_debouncing = False
+                self._off_start_time = None
+
+    def _commit_departure(self, departure_time: datetime) -> None:
+        """Helper to commit and save."""
+        # Double-Commit Guard
+        if self._last_committed_time == departure_time:
+            _LOGGER.debug("[Debounce] Skipped duplicate commit for %s", departure_time)
+            return
+
+        self._coordinator.planner.record_departure(departure_time)
+        self._last_committed_time = departure_time
+        
+        # Throttled Save (Write Coalescing) - 10s delay to protect SD cards
+        if hasattr(self._coordinator._store, "async_delay_save"):
+             self._coordinator._store.async_delay_save(self._coordinator._get_data_for_storage, 10.0)
+        else:
+             # Fallback (should not happen on modern HA)
+             self._coordinator.hass.async_create_task(self._coordinator._async_save_data())
+                
+    async def check(self, now: datetime) -> None:
+        """Called periodically to check if debounce timer expired."""
+        if not self._is_debouncing or self._off_start_time is None:
+            return
+
+        elapsed = (now - self._off_start_time).total_seconds()
+        if elapsed >= self._debounce_limit_sec:
+            # TIMEOUT! It's a real departure.
+            final_departure_time = self._off_start_time
+            _LOGGER.info("[Debounce] Session End CONFIRMED. Departed at: %s (Latency: %.1fs)", 
+                         final_departure_time, elapsed)
+            
+            # Commit
+            self._commit_departure(final_departure_time)
+            
+            # Reset
+            self._is_debouncing = False
+            self._off_start_time = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -186,6 +263,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # V3.0: Providers & Arbitration
         self.hold_active = False
+        
+        # V2.8: Session State Machine
+        debounce_min = self._get_conf(CONF_DEBOUNCE_MIN, DEFAULT_DEBOUNCE_MIN)
+        self.occupancy_debouncer = OccupancyDebouncer(debounce_min, self)
         
         self.schedule_provider = ScheduleProvider(hass, entry, self.optimal_stop_manager)
         
@@ -310,6 +391,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 
                 self.planner = PreheatPlanner(history)
                 
+                # Fix: Update Provider's reference to the new planner object
+                self.learned_provider.planner = self.planner
+                
                 # Load Physics
                 mass_factor = None
                 # Legacy 'learned_gain' [min/K] maps directly to v2 'mass_factor' [min/K].
@@ -401,25 +485,29 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             _LOGGER.exception("Failed loading data")
             await self._async_save_data()
 
+    def _get_data_for_storage(self) -> dict:
+        """Prepare data for storage (sync helper)."""
+        data_physics = self.physics.to_dict()
+        data_planner = self.planner.to_dict()
+        
+        return {
+            "version": 1,
+            "physics_version": self.extra_store_data.get("physics_version", 2),
+            ATTR_ARRIVAL_HISTORY: data_planner,
+            ATTR_MODEL_MASS: data_physics["mass_factor"],
+            ATTR_MODEL_LOSS: data_physics["loss_factor"],
+            "sample_count": data_physics["sample_count"],
+            "avg_error": data_physics.get("avg_error", 0.0),
+            "last_comfort_setpoint": self._last_comfort_setpoint,
+            # V2.5
+            "model_cooling_tau": self.cooling_analyzer.learned_tau,
+            "cooling_confidence": self.cooling_analyzer.confidence,
+        }
+
     async def _async_save_data(self) -> None:
         """Save learned data to storage."""
         try:
-            data_physics = self.physics.to_dict()
-            data_planner = self.planner.to_dict()
-            
-            data = {
-                "version": 1,
-                "physics_version": self.extra_store_data.get("physics_version", 2),
-                ATTR_ARRIVAL_HISTORY: data_planner,
-                ATTR_MODEL_MASS: data_physics["mass_factor"],
-                ATTR_MODEL_LOSS: data_physics["loss_factor"],
-                "sample_count": data_physics["sample_count"],
-                "avg_error": data_physics.get("avg_error", 0.0),
-                "last_comfort_setpoint": self._last_comfort_setpoint,
-                # V2.5
-                "model_cooling_tau": self.cooling_analyzer.learned_tau,
-                "cooling_confidence": self.cooling_analyzer.confidence,
-            }
+            data = self._get_data_for_storage()
             await self._store.async_save(data)
         except Exception as err:
             _LOGGER.error("Failed to save preheat data: %s", err)
@@ -498,9 +586,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             self._occupancy_on_since = dt_util.utcnow()
             # Feed planner
             self.hass.async_create_task(self._learn_arrival_event())
+            self.occupancy_debouncer.handle_change(True, dt_util.utcnow())
         
         if old_state.state == STATE_ON and new_state.state != STATE_ON:
             self._occupancy_on_since = None
+            self.occupancy_debouncer.handle_change(False, dt_util.utcnow())
 
     async def _learn_arrival_event(self) -> None:
         now = dt_util.now()
@@ -631,6 +721,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # Feed History Buffer (V3)
             op_temp_raw = await self._get_operative_temperature()
             valve_pos_raw = self._get_valve_position()
+            
+            # V2.8: Check Session End (Debounce)
+            # Use UTC to match internal debouncer logic
+            await self.occupancy_debouncer.check(dt_util.utcnow())
             
             if op_temp_raw > INVALID_TEMP:
                  v_val = valve_pos_raw if valve_pos_raw is not None else (100.0 if self._preheat_active else 0.0)

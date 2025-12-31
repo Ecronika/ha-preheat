@@ -73,6 +73,7 @@
           "off_only_when_warm": "Heizen bis Zieltemperatur (auch bei Ankunft)",
           "arrival_window_start": "Ankunftsfenster Start (Uhrzeit)",
           "arrival_window_end": "Ankunftsfenster Ende (Uhrzeit)",
+          "occupancy_debounce_minutes": "Anwesenheit-Debounce Zeit (Minuten)",
           "use_forecast": "Wetter-Vorhersage nutzen (Prognose)",
           "risk_mode": "Forecast Risiko-Strategie",
           "air_to_oper_bias_k": "Korrektur für gefühlte Temp. (Bias)",

@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.7.4"
+VERSION = "2.8.0-beta1"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -121,6 +121,8 @@ CONF_ARRIVAL_WINDOW_START: Final = "arrival_window_start"
 CONF_ARRIVAL_WINDOW_END: Final = "arrival_window_end"
 CONF_EARLIEST_START: Final = "earliest_start_minutes"
 CONF_ONLY_ON_WORKDAYS: Final = "only_on_workdays"
+# V2.8
+CONF_DEBOUNCE_MIN: Final = "occupancy_debounce_minutes"
 
 # Forecast Integration (V2.4)
 CONF_USE_FORECAST: Final = "use_forecast"
@@ -142,6 +144,7 @@ DEFAULT_EMA_ALPHA: Final = 0.3
 DEFAULT_ARRIVAL_MIN: Final = 300
 DEFAULT_EARLIEST_START: Final = 180
 DEFAULT_BUFFER_MIN: Final = 10
+DEFAULT_DEBOUNCE_MIN: Final = 15
 DEFAULT_COMFORT_MIN: Final = 19.0
 DEFAULT_COMFORT_MAX: Final = 23.5
 DEFAULT_COMFORT_FALLBACK: Final = 21.0

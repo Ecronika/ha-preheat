@@ -1,3 +1,21 @@
+# Changelog
+
+## v2.8.0-beta1 (The Recorder) - 2025-12-31
+**Initial Beta for the Autonomous Brain Update**
+
+This version lays the foundation for fully autonomous heating by recording your actual departure habits.
+**Note:** It runs in "Data Collection Mode". It records *when* you leave but does **NOT yet** change your heating schedule autonomously.
+
+### 🌟 New Features
+*   **Session State Machine**: A new "Occupancy Debouncer" (Default: 15min) intelligently filters out short absences (e.g., taking out trash) to determine true "Session Ends".
+*   **Departure History**: The system now records your daily departure times into a persistent, privacy-focused history database.
+*   **Expert Config**: Added `occupancy_debounce_minutes` setting (Expert Mode) to tune the sensitivity of the departure detection.
+
+### 🔧 Technical Changes
+*   **Persistence**: Implemented "Safe Container" storage (Key `888`) for departure history, ensuring forward compatibility with v3.0.
+*   **Resilience**: Added "Save Throttling" (10s) to protect SD cards from frequent writes during flapping occupancy.
+*   **Safety**: Fixed race conditions in the debounce logic to prevent data loss during short return intervals.
+
 ## v2.7.4 (2025-12-24) - Debugging Polish
 **Transparency Update**
 

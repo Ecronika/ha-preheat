@@ -80,6 +80,7 @@
           "max_coast_hours": "Max Coast Duration (Hours)",
           "heating_profile": "Heating System Profile",
           "only_on_workdays": "Only preheat on workdays",
+          "occupancy_debounce_minutes": "Occupancy Debounce Time (Minutes)",
           "use_forecast": "Use Weather Forecast",
           "risk_mode": "Forecast Risk Strategy"
         }

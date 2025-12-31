@@ -378,6 +378,11 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_COMFORT_FALLBACK): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="°C", mode="box")
                 ),
+                
+                # New v2.8 Expert Setting
+                vol.Optional(CONF_DEBOUNCE_MIN, default=DEFAULT_DEBOUNCE_MIN): selector.NumberSelector(
+                     selector.NumberSelectorConfig(min=0, max=60, step=1, unit_of_measurement="min", mode="box")
+                ),
             })
 
         # Fill defaults

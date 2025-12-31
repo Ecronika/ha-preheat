@@ -29,6 +29,9 @@ class PreheatPlanner:
         
         # v3 History: {weekday_int: [(date, minutes), ...]}
         self.history: dict[int, list[tuple[date, int]]] = defaultdict(list)
+
+        # v2.8 Departure History: {weekday_int: [{"date": iso_date, "minutes": int, "dst_flag": bool}, ...]}
+        self.history_departure: dict[int, list[dict]] = defaultdict(list)
         
         # v2 History (Legacy): {weekday_int: [minutes, ...]}
         self.history_v2: dict[int, list[int]] = defaultdict(list)
@@ -47,6 +50,10 @@ class PreheatPlanner:
                 # They will just load this garbage data into `history[999]` and ignore it (looping 0-6).
                 if k == "999" and isinstance(v, dict):
                     self._load_v3_container(v)
+                    continue
+
+                if k == "888" and isinstance(v, dict):
+                    self._load_departure_container(v)
                     continue
 
                 # 2. Legacy: Handle "v3_X" keys (from Beta 10, deprecated but supported for migration)
@@ -79,6 +86,9 @@ class PreheatPlanner:
 
             except Exception as e:
                 _LOGGER.warning("Failed to load history for weekday %s: %s", k, e)
+                
+        # Global Maintenance on Startup
+        self.prune_all_history()
 
     def _load_v3_container(self, container: dict) -> None:
         """Unpack v3 data from the safe container."""
@@ -86,6 +96,17 @@ class PreheatPlanner:
             try:
                 weekday = int(k)
                 self._parse_v3_list(weekday, v)
+            except Exception:
+                pass
+
+    def _load_departure_container(self, container: dict) -> None:
+        """Unpack departure history (v2.8)."""
+        for k, v in container.items():
+            try:
+                weekday = int(k)
+                if isinstance(v, list):
+                    # Validate dict structure if needed, but trust input mostly
+                    self.history_departure[weekday] = v
             except Exception:
                 pass
 
@@ -122,6 +143,69 @@ class PreheatPlanner:
         self.history_v2[weekday].append(minutes)
         if len(self.history_v2[weekday]) > 20: # Keep v2 limit
              self.history_v2[weekday] = self.history_v2[weekday][-20:]
+
+    def record_departure(self, dt: datetime, max_age_days: int = 60, max_entries: int = 10) -> None:
+        """Video Recorder for Departures (v2.8)."""
+        dt_local = dt_util.as_local(dt)
+        weekday = dt_local.weekday()
+        minutes = dt_local.hour * 60 + dt_local.minute
+        today_date = dt_local.date()
+        date_iso = today_date.isoformat()
+        
+        # 1. DST Detection
+        # Compare Timezone Offset of Today 03:00 vs Yesterday 03:00
+        # If diff -> DST Switch Night
+        dst_flag = False
+        try:
+            today_3am = datetime.combine(today_date, datetime.min.time()) + timedelta(hours=3)
+            today_3am = today_3am.replace(tzinfo=dt_local.tzinfo)
+            yesterday_3am = today_3am - timedelta(days=1)
+            
+            if today_3am.utcoffset() != yesterday_3am.utcoffset():
+                dst_flag = True
+                _LOGGER.info("DST Switch Detected for %s. Flagging departure.", date_iso)
+        except Exception:
+            pass # Fallback safe
+            
+        # 2. Add New Entry
+        # Dedup by date:
+        # BETA 1 LIMITATION: We only record 1 departure per day (the first one that sticks).
+        # This simplifies storage but misses multi-session days. Improving this requires a full Session ID concept (v3.0).
+        existing = next((x for x in self.history_departure[weekday] if x["date"] == date_iso), None)
+        if not existing:
+            entry = {
+                "date": date_iso,
+                "minutes": minutes,
+                "dst_flag": dst_flag
+            }
+            self.history_departure[weekday].append(entry)
+            
+            # 3. Pruning (Age First)
+            cutoff_date = (today_date - timedelta(days=max_age_days)).isoformat()
+            self.history_departure[weekday] = [
+                x for x in self.history_departure[weekday] 
+                if x["date"] > cutoff_date
+            ]
+            
+            # 4. Pruning (Count Second - FIFO)
+            if len(self.history_departure[weekday]) > max_entries:
+                self.history_departure[weekday] = self.history_departure[weekday][-max_entries:]
+
+    def prune_all_history(self, max_age_days: int = 60, max_entries: int = 10) -> None:
+        """Global Pruning for all weekdays (Startup Maintenance)."""
+        today_date = dt_util.now().date()
+        cutoff_date = (today_date - timedelta(days=max_age_days)).isoformat()
+        
+        for weekday in list(self.history_departure.keys()): # Safe iteration
+            # 1. Age
+            self.history_departure[weekday] = [
+                x for x in self.history_departure[weekday] 
+                if x["date"] > cutoff_date
+            ]
+            
+            # 2. Count
+            if len(self.history_departure[weekday]) > max_entries:
+                self.history_departure[weekday] = self.history_departure[weekday][-max_entries:]
 
     def get_schedule_for_today(self, now: datetime, is_holiday: bool = False) -> list[datetime]:
         """
@@ -303,5 +387,13 @@ class PreheatPlanner:
         
         if v3_container:
             export["999"] = v3_container
+            
+        # 3. Save Departure History (v2.8) -> Key "888"
+        # Safe Container for dicts. Older versions ignore it.
+        if self.history_departure:
+            dep_container = {}
+            for k, v in self.history_departure.items():
+                dep_container[str(k)] = v
+            export["888"] = dep_container
                 
         return export
