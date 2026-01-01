@@ -282,3 +282,70 @@ def calc_forecast_mean_or_p90_placeholder(forecasts: list[dict], start_dt: datet
     Uses 'Balanced' (Mean) logic by default as spec requests.
     """
     return integrate_forecast(forecasts, start_dt, end_dt)
+
+def calculate_coast_duration_euler(
+    t_start: float,
+    t_floor: float,
+    forecasts: list[dict],
+    start_dt: datetime,
+    tau_hours: float,
+    max_minutes: float = 240.0,
+    inertia_min: float = 0.0
+) -> float:
+    """
+    Simulate cooling curve minute-by-minute (Euler Integration).
+    Handles dynamic outdoor temperature from forecasts.
+    
+    dV/dt = -1/tau * (V - V_out)
+    V_new = V_old - (V_old - V_out) * (dt / tau)
+    """
+    # 1. Edge Case Checks
+    if t_start <= t_floor: return 0.0
+    
+    tau_min = tau_hours * 60.0
+    if tau_min <= 0: return 0.0 # Physics break
+    
+    current_temp = t_start
+    minute_step = 1.0
+    elapsed = 0.0
+    
+    # Pre-calculate forecast map or interpolate on fly
+    # Interpolating every minute is expensive? 
+    # Max 240 iterations -> Cheap.
+    
+    current_dt = start_dt
+    
+    while elapsed < max_minutes:
+        # Get T_out at this minute
+        t_out = _interpolate(forecasts, current_dt)
+        
+        # Check Stopping Condition
+        # If we hit floor, we found the duration required to cool to floor.
+        # Wait, the question is "How long BEFORE the end should we stop?"
+        # The cooling simulation mimics "If we stop NOW, how long until we hit floor?"
+        # Yes.
+        
+        if current_temp <= t_floor:
+            break
+            
+        # Euler Step
+        # dT = - (T - T_out) / tau * dt
+        # If T_out > T, we heat up? (Sun/Summer). 
+        # Coasting logic usually assumes T > T_out.
+        # Physics holds regardless.
+        
+        delta_change = - (current_temp - t_out) / tau_min * minute_step
+        current_temp += delta_change
+        
+        elapsed += minute_step
+        current_dt += timedelta(minutes=minute_step)
+        
+    # Apply Inertia Correction
+    # If the system has inertia, the effective coast duration is LONGER?
+    # No, 'inertia' usually means "heat continues to enter".
+    # Logic in standard model: duration += inertia.
+    # Same here.
+    if elapsed > 0:
+        elapsed += inertia_min
+        
+    return min(elapsed, max_minutes)

@@ -8,8 +8,17 @@ from typing import Any
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
-from .math_preheat import calculate_coast_duration, calc_forecast_mean_or_p90_placeholder
-from .const import CONF_MAX_COAST_HOURS, CONF_STOP_TOLERANCE
+from .math_preheat import (
+    calculate_coast_duration, 
+    calculate_coast_duration_euler,
+    calc_forecast_mean_or_p90_placeholder
+)
+from .const import (
+    CONF_MAX_COAST_HOURS, 
+    CONF_STOP_TOLERANCE, 
+    CONF_PHYSICS_MODE, 
+    PHYSICS_ADVANCED
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,6 +137,16 @@ class OptimalStopManager:
         self._last_target_temp = target_temp
         
         # B. Session End or Schedule OFF
+        
+        # v2.8 Midnight Wrapping Heuristic
+        # If the session ends exactly at 00:00:00, we assume it might wrap to the next day (contiguous).
+        # To avoid a "Coast-to-Stop" gap right before midnight (followed by a hard start at 00:00),
+        # we strictly DISABLE optimal stop for midnight boundaries.
+        if schedule_end:
+            if schedule_end.hour == 0 and schedule_end.minute == 0 and schedule_end.second == 0:
+                 _LOGGER.debug("Session ends at Midnight. Disabling Optimal Stop to ensure continuity.")
+                 schedule_end = None # Treat as "No Definitive End" -> Disable Logic
+
         if schedule_end is None:
             # Schedule is OFF or unavailable
             if self._active:
@@ -167,22 +186,40 @@ class OptimalStopManager:
 
         # 2. Solver Logic (If we have a valid session)
         if schedule_end:
-             # Calculate T_out_eff
-             # We need a window from NOW to SCHEDULE_END
-             # Calculate effective outdoor temperature for the coasting window
+             # Physics Mode Check
+             p_mode = config.get(CONF_PHYSICS_MODE)
+             forecasts = config.get("forecasts", [])
              
-             t_out = forecast_provider(now, schedule_end)
-             self.forecast_used = t_out
+             duration_min = 0.0
              
-             # Calculate Duration
-             duration_min = calculate_coast_duration(
-                 t_start=current_temp,
-                 t_floor=floor,
-                 t_out_eff=t_out,
-                 tau_hours=tau_hours,
-                 max_minutes=max_coast
-             )
-             
+             if p_mode == PHYSICS_ADVANCED and forecasts:
+                 # Euler Simulation
+                 # We need the full forecast list here
+                 duration_min = calculate_coast_duration_euler(
+                     t_start=current_temp,
+                     t_floor=floor,
+                     forecasts=forecasts,
+                     start_dt=now,
+                     tau_hours=tau_hours,
+                     max_minutes=max_coast
+                 )
+                 # Euler integration handles the forecast usage implicitly
+                 # We assume forecasts are valid
+                 pass
+             else:
+                 # Standard Algebraic Model
+                 # Calculate T_out_eff
+                 t_out = forecast_provider(now, schedule_end)
+                 self.forecast_used = t_out
+                 
+                 duration_min = calculate_coast_duration(
+                     t_start=current_temp,
+                     t_floor=floor,
+                     t_out_eff=t_out,
+                     tau_hours=tau_hours,
+                     max_minutes=max_coast
+                 )
+
              # Apply Inertia Bonus (Radiator Latent Heat)
              # The 'deadtime' proxy represents how long the system continues to emit heat after valve closure.
              # We add this to the coast duration because the room won't start cooling immediately.

@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.8.0-beta4"
+VERSION = "2.8.0-rc1"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -139,6 +139,9 @@ CONF_ENABLE_OPTIMAL_STOP: Final = "enable_optimal_stop"
 CONF_STOP_TOLERANCE: Final = "stop_tolerance"
 CONF_MAX_COAST_HOURS: Final = "max_coast_hours"
 CONF_SCHEDULE_ENTITY: Final = "schedule_entity"
+CONF_PHYSICS_MODE: Final = "physics_mode"
+PHYSICS_STANDARD: Final = "standard"
+PHYSICS_ADVANCED: Final = "advanced"
 
 # Defaults
 DEFAULT_EMA_ALPHA: Final = 0.3

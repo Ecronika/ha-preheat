@@ -51,6 +51,8 @@ from .const import (
     CONF_ARRIVAL_WINDOW_END,
     CONF_VALVE_POSITION,
     CONF_DEBOUNCE_MIN,
+    CONF_PHYSICS_MODE,
+    PHYSICS_STANDARD,
     CONF_COMFORT_MIN,
     CONF_COMFORT_FALLBACK,
     DEFAULT_COMFORT_MIN,
@@ -1154,7 +1156,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             opt_config = {
                 CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
                 CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
-                "system_inertia": context.get("physics_deadtime", 0.0)
+                "system_inertia": context.get("physics_deadtime", 0.0),
+                CONF_PHYSICS_MODE: self._get_conf(CONF_PHYSICS_MODE, PHYSICS_STANDARD),
+                "forecasts": forecasts
             }
             
             # Helper for forecast callback

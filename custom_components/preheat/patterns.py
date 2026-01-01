@@ -276,3 +276,60 @@ class PatternDetector:
             pattern_type="none",
             fallback_used=True
         )
+
+    def predict_departure(self, history: list[dict]) -> tuple[int, float] | None:
+        """
+        Predict departure time using Quantiles (v2.8).
+        History format: list of dicts with keys 'minutes', 'dst_flag'.
+        Returns: (predicted_minutes, confidence) or None.
+        """
+        # 1. Filter
+        # Exclude DST flagged entries (unreliable transitions)
+        valid_minutes = [
+            x["minutes"] 
+            for x in history 
+            if not x.get("dst_flag", False)
+        ]
+        
+        # 2. Gate
+        if len(valid_minutes) < 3:
+            return None # Insufficient Data
+            
+        # 3. Sort
+        valid_minutes.sort()
+        count = len(valid_minutes)
+        
+        # 4. Quantiles (Target P50 for prediction, P90 for Safety/Buffer?)
+        # For Departure, we want to be SAFE (don't stop too early). 
+        # So maybe P75 or P90?
+        # Plan says: "Quantiles (P50/P90)". 
+        # Let's return P50 (Expected) but calculate confidence based on spread.
+        
+        # Median (P50)
+        p50_idx = int(0.5 * (count - 1))
+        p50 = valid_minutes[p50_idx]
+        
+        # P90
+        p90_idx = int(0.9 * (count - 1))
+        p90 = valid_minutes[p90_idx]
+        
+        # 5. Confidence Logic
+        # Calculate IQR-like spread relative to 24h
+        # Tighter spread = Higher confidence
+        # Spread = P90 - P10
+        p10_idx = int(0.1 * (count - 1))
+        p10 = valid_minutes[p10_idx]
+        spread = p90 - p10
+        
+        # Metric: Map spread 0..120min to 1.0..0.0?
+        # If spread is 0 (identical), conf = 1.0
+        # If spread is 60min, conf = 0.5
+        # If spread > 120min, conf = 0.0
+        conf = max(0.0, 1.0 - (spread / 120.0))
+        
+        # Current Strategy: Return P90 as the safe "Planned Stop" to ensure comfort?
+        # Or P50? 
+        # If we stop at P50, 50% of time we are too early (cold).
+        # We should target P90 (Conservative/Comfort bias) for heating.
+        
+        return p90, conf

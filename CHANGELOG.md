@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.8.0-rc1 (The Integrator) - 2025-01-01
+**Final Release Candidate for The Brain Update!** 🧠✨
+
+This release combines all "Autonomous Brain" features into a complete package.
+
+### 🌟 New Features
+*   **The Observer (Departure Prediction)**:
+    *   The system now analyzes your departure history using Quantile Statistics (P90) to predict when you will leave.
+    *   Currently running in **Shadow Mode** (Observing only), visible in the decision trace.
+*   **Calendar Intelligence (Previously Beta 3/4)**:
+    *   Auto-Discovery of Workday Sensor.
+    *   Holiday Lookahead (skips preheating on holidays).
+*   **Advanced Physics Mode**:
+    *   New Expert Option: **Physics Mode** (Standard vs Advanced).
+    *   **Advanced (Euler)**: Uses minute-by-minute simulation with dynamic weather forecasts for ultra-precise "Optimal Stop" cooling prediction.
+*   **Midnight Wrapping**:
+    *   Smart handling of sessions ending at 00:00 (prevents premature coasting).
+
+---
+
 ## v2.8.0-beta4 (Calendar Intelligence) - 2025-01-01
 **Feature Update: The Brain gets a Calendar!** 🧠📅
 

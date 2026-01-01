@@ -67,6 +67,9 @@ from .const import (
     CONF_SCHEDULE_ENTITY,
     DEFAULT_STOP_TOLERANCE,
     DEFAULT_MAX_COAST_HOURS,
+    CONF_PHYSICS_MODE,
+    PHYSICS_STANDARD,
+    PHYSICS_ADVANCED,
 )
 
 class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -371,6 +374,17 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_EARLIEST_START): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=0, max=1440, step=15, unit_of_measurement="min", mode="box")
                 ),
+                
+                vol.Optional(CONF_PHYSICS_MODE, default=PHYSICS_STANDARD): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": PHYSICS_STANDARD, "label": "Standard (Robust)"},
+                            {"value": PHYSICS_ADVANCED, "label": "Advanced (Euler Simulation)"}
+                        ],
+                         mode=selector.SelectSelectorMode.DROPDOWN
+                    )
+                ),
+
                 vol.Optional(CONF_COMFORT_MIN): selector.NumberSelector(
                      selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="°C", mode="box")
                 ),
@@ -432,6 +446,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         if CONF_COMFORT_MIN not in data: data[CONF_COMFORT_MIN] = DEFAULT_COMFORT_MIN
         if CONF_COMFORT_MAX not in data: data[CONF_COMFORT_MAX] = DEFAULT_COMFORT_MAX
         if CONF_COMFORT_FALLBACK not in data: data[CONF_COMFORT_FALLBACK] = DEFAULT_COMFORT_FALLBACK
+        if CONF_PHYSICS_MODE not in data: data[CONF_PHYSICS_MODE] = PHYSICS_STANDARD
 
         data[CONF_EXPERT_MODE] = show_expert
         

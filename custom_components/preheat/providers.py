@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
@@ -223,8 +223,41 @@ class LearnedDepartureProvider(SessionEndProvider):
              gates_failed.append(GATE_FAIL_PATTERN)
              
         # If we had a prediction...
-        predicted_end = None # TODO: Implement clustering query
+        predicted_minutes = None
+        predicted_conf = 0.0
         
+        # Call Pattern Logic (v2.8)
+        # Note: planner.patterns is expected to exist
+        if hasattr(self.planner, "patterns"):
+            pred_result = self.planner.patterns.predict_departure(sessions)
+            if pred_result:
+                predicted_minutes, predicted_conf = pred_result
+        
+        predicted_end = None
+        if predicted_minutes is not None:
+             # Reconstruct Datetime from Minutes
+             now = context["now"]
+             # Assuming 'minutes' is minutes from midnight of the session start day?
+             # But we don't know the session start day easily here without session context.
+             # However, for departure prediction, we usually assume it's "Today" relative to the session.
+             # Let's align with the planner's timezone logic.
+             
+             local_now = dt_util.as_local(now)
+             today_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+             
+             # Create candidate
+             candidate = today_midnight + timedelta(minutes=predicted_minutes)
+             
+             # Handle Overnight / Wrapping Logic (Simple version)
+             # If candidate is significantly in the past (e.g. > 12h ago), assume it belongs to tomorrow?
+             # OR: If we are calling this while Preheating is ACTIVE, we expect departure in future.
+             # If we are calling this for Planning (Pre-Heat), we expect departure in future.
+             # If candidate < now, it likely means the predicted time (e.g. 02:00) is "tomorrow" relative to "now" (23:00).
+             if candidate < local_now:
+                 candidate += timedelta(days=1)
+                 
+             predicted_end = candidate
+
         # Validity Logic
         valid = (len(gates_failed) == 0) and (predicted_end is not None)
         
@@ -233,14 +266,14 @@ class LearnedDepartureProvider(SessionEndProvider):
             if gates_failed:
                 reason = REASON_BLOCKED_BY_GATES
             else:
-                reason = REASON_INSUFFICIENT_SESSIONS # or "no_prediction" if logic added
+                reason = REASON_INSUFFICIENT_SESSIONS
             
         return ProviderDecision(
-            should_stop=False, # Always False for now as we have no prediction
-            session_end=None,  # STRICTLY None if no prediction
+            should_stop=False, # Shadow Mode: Never stops. Only advises.
+            session_end=predicted_end,
             is_valid=valid,
             is_shadow=True,
-            confidence=pattern_conf,
+            confidence=predicted_conf,  # Use calculation from patterns
             predicted_savings=savings,
             gates_failed=gates_failed,
             gate_inputs=gate_inputs,
