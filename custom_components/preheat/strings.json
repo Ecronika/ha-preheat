@@ -51,11 +51,11 @@
         "description": "Default settings are usually sufficient. Enable expert mode for fine-tuning.",
         "data": {
           "preset_mode": "Operation Mode",
-          "expert_mode": "Show Expert Settings",
+          "expert_mode": "Show Advanced Settings (Expert)",
           "occupancy_sensor": "Occupancy Sensor",
           "temperature_sensor": "Room Temperature",
           "climate_entity": "Thermostat",
-          "setpoint_sensor": "Setpoint Sensor",
+          "setpoint_sensor": "Setpoint Sensor (e.g. Input Number)",
           "weather_entity": "Weather Service",
           "outdoor_temp_sensor": "Outdoor Temperature",
           "workday_sensor": "Workday Sensor",
@@ -179,7 +179,7 @@
     },
     "switch": {
       "preheat": {
-        "name": "Preheat"
+        "name": "Preheat Logic Active"
       },
       "preheat_hold": {
         "name": "Preheat Hold"

@@ -248,6 +248,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             update_interval=timedelta(minutes=1),
             config_entry=entry,
         )
+        
+        # Calendar Cache
+        self._calendar_cache: dict[str, Any] = {
+            "last_update": datetime.min.replace(tzinfo=dt_util.UTC),
+            "blocked_dates": set()
+        }
+
         self.entry = entry
         self.device_name = entry.title
         
@@ -720,16 +727,25 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if not cal_entity: return set()
         
         try:
+            # Cache Check
+            now = dt_util.utcnow()
+            last_upd = self._calendar_cache["last_update"]
+            
+            # If cache valid (< 15 min), return it
+            if (now - last_upd) < timedelta(minutes=15):
+                return self._calendar_cache["blocked_dates"]
+
             # Lookahead 8 days (cover +7 days fully)
-            end_date = start_date + timedelta(days=8)
+            start_local = start_date # Assuming start_date matches entity timezone logic
+            end_local = start_local + timedelta(days=8)
             
             # Service Call with Response
             response = await self.hass.services.async_call(
                 "calendar", "get_events",
                 {
                     "entity_id": cal_entity, 
-                    "start_date_time": start_date.isoformat(), 
-                    "end_date_time": end_date.isoformat()
+                    "start_date_time": start_local.isoformat(), 
+                    "end_date_time": end_local.isoformat()
                 },
                 blocking=True,
                 return_response=True
@@ -755,6 +771,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                              blocked.add(dt_start.date())
                         except ValueError: pass
                         
+            # Update Cache
+            self._calendar_cache["last_update"] = now
+            self._calendar_cache["blocked_dates"] = blocked
+            
             return blocked
             
         except Exception as e:

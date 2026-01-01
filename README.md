@@ -20,6 +20,18 @@ Detailed documentation is available in the `docs/` folder:
 
 ---
 
+## 🚀 Quick Start (Plug & Play)
+
+**Important:** This integration calculates the *optimal time*. You need an automation or Blueprint to actually control your thermostat!
+
+### 1. The Easy Way (Blueprint)
+Use the official **Smart Setpoint Controller** Blueprint. It connects this integration with your thermostats (TRVs) in seconds:
+
+[![Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint URL.](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgist.github.com%2FEcronika%2F6751f92f7d5717bbe14b43e5ee36ebe7)
+
+*   **View Discussion:** [Smart Setpoint Blueprint (Community)](https://community.home-assistant.io/t/en-16798-1-smart-setpoint-blueprint/956624)
+*   **What it does:** Automatically switches between Comfort/Eco based on the `preheat` and `optimal_stop` signals.
+
 ## ✨ Features
 
 *   🧠 **Self-Learning Physics (Advanced)**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime` (Totzeit). Supports **Euler Simulation** for complex scenarios.

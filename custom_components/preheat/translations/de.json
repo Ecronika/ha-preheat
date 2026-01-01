@@ -50,10 +50,10 @@
         "title": "Zonen-Einstellungen",
         "description": "Die Standard-Einstellungen reichen meist aus. Aktiviere den Experten-Modus für Feinjustierung.",
         "data": {
-          "preset_mode": "Betriebsstrategie",
+          "preset_mode": "Betriebsmodus",
           "heating_profile": "Heizsystem-Profil",
-          "expert_mode": "Experteneinstellungen anzeigen",
-          "occupancy_sensor": "Belegungssensor",
+          "expert_mode": "Erweiterte Einstellungen anzeigen (Experte)",
+          "occupancy_sensor": "Anwesenheitssensor",
           "temperature_sensor": "Raumtemperatur",
           "climate_entity": "Thermostat",
           "setpoint_sensor": "Zielwert-Sensor",
@@ -247,10 +247,10 @@
     },
     "switch": {
       "preheat": {
-        "name": "Vorheizen"
+        "name": "Vorheiz-Logik Aktiv"
       },
       "preheat_hold": {
-        "name": "Vorheizen blockieren (Hold)"
+        "name": "Vorheizen pausieren (Hold)"
       }
     },
     "button": {

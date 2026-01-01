@@ -130,3 +130,12 @@ The goal of v3.0 ("Autonomous Intelligence") is to reduce configuration to near 
     *   **Finding**: `MIN_CLUSTER_POINTS = 3` lacks statistical rigor.
     *   **Goal**: Implement **Silhouette Score** or Davies-Bouldin-Index to validate clusters before accepting them as patterns.
 
+    *   **Goal**: Implement **Silhouette Score** or Davies-Bouldin-Index to validate clusters before accepting them as patterns.
+
+### Low Priority (UX & Polish)
+*   [ ] **Direct Climate Control (Opt-in)**:
+    *   **Finding**: Users expect simple "Turn on Heat" logic without external automation.
+    *   **Goal**: Add option to directly control `climate.set_temperature` via the integration.
+*   [ ] **UX Overhaul**:
+    *   **Finding**: Expert options are confusing / risk-prone.
+    *   **Goal**: Clean up Config Flow, rename confusing attributes (e.g. `switch` -> `sensor`?), add Tooltips.
