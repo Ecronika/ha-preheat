@@ -88,7 +88,10 @@
       }
     },
     "error": {
-      "invalid_time_format": "Ungültiges Zeitformat (muss HH:MM:SS sein)"
+      "invalid_time_format": "Ungültiges Zeitformat (muss HH:MM:SS sein)",
+      "buffer_too_high": "Sicherheitspuffer über 60 Minuten - Wert zu hoch",
+      "max_duration_too_high": "Maximale Vorheizdauer über 5 Stunden ist ein Sicherheitsrisiko",
+      "required_for_optimal_stop": "Zeitplan-Helfer (Schedule) ist erforderlich, wenn Optimal Stop aktiviert ist."
     }
   },
   "selector": {
