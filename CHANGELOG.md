@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.8.0-beta4 (Calendar Intelligence) - 2025-01-01
+**Feature Update: The Brain gets a Calendar!** 🧠📅
+
+This release fulfills the "Calendar Intelligence" milestone. The system now knows about your holidays in advance.
+
+### 🌟 New Features
+*   **Auto-Discovery**: If no Workday Sensor is configured, the system naturally looks for `binary_sensor.workday_sensor`. Zero config required for standard setups.
+*   **Calendar Awareness**: You can now link a specific **Calendar Entity** (e.g., `calendar.holidays`) in the Expert Configuration.
+    *   *Intelligent Lookahead*: When predicting the "Next Arrival", the system scans the linked calendar for the next 7 days.
+    *   *Holiday Skipping*: If a date has an event in the linked calendar (and you use `Occupancy on Workdays only`), that day is automatically skipped—even if it's a weekday (e.g., Good Friday).
+
 ## v2.8.0-beta3 (Hotfix) - 2025-01-01
 **Happy New Year! - Workday Fix**
 

@@ -237,7 +237,7 @@ class PreheatPlanner:
         events.sort()
         return events
 
-    def get_next_scheduled_event(self, now: datetime, allowed_weekdays: list[int] | None = None) -> datetime | None:
+    def get_next_scheduled_event(self, now: datetime, allowed_weekdays: list[int] | None = None, blocked_dates: set[date] | None = None) -> datetime | None:
         """
         Get the very next event (Lookahead up to 7 days).
         Implements v3 Migration Logic.
@@ -249,6 +249,10 @@ class PreheatPlanner:
             check_date = today_date + timedelta(days=day_offset)
             weekday = check_date.weekday()
             
+            # 1. Blocked Dates (Holidays from Calendar)
+            if blocked_dates and check_date in blocked_dates:
+                 continue
+
             if allowed_weekdays is not None and weekday not in allowed_weekdays:
                 continue
 

@@ -711,6 +711,65 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._prev_temp = current_temp
         self._prev_temp_time = now
 
+    async def _get_blocked_dates_from_calendar(self, start_date: datetime) -> set[date]:
+        """Fetch future holidays from calendar."""
+        cal_entity = self._get_conf(CONF_CALENDAR_ENTITY)
+        if not cal_entity: return set()
+        
+        try:
+            # Lookahead 8 days (cover +7 days fully)
+            end_date = start_date + timedelta(days=8)
+            
+            # Service Call with Response
+            response = await self.hass.services.async_call(
+                "calendar", "get_events",
+                {
+                    "entity_id": cal_entity, 
+                    "start_date_time": start_date.isoformat(), 
+                    "end_date_time": end_date.isoformat()
+                },
+                blocking=True,
+                return_response=True
+            )
+            
+            blocked = set()
+            if response and cal_entity in response:
+                events = response[cal_entity].get("events", [])
+                for event in events:
+                    # Assume ANY event in this specific calendar denotes a blocking condition (Holiday/Off)
+                    start = event.get("start", {})
+                    
+                    # 1. All Day Event (Simple Date)
+                    if "date" in start:
+                        try:
+                            d = datetime.strptime(start["date"], "%Y-%m-%d").date()
+                            blocked.add(d)
+                        except ValueError: pass
+                    # 2. DateTime Event (Check overlap? For now simpler is better)
+                    elif "dateTime" in start:
+                        try:
+                             dt_start = datetime.fromisoformat(start["dateTime"])
+                             blocked.add(dt_start.date())
+                        except ValueError: pass
+                        
+            return blocked
+            
+        except Exception as e:
+            _LOGGER.debug("Calendar query failed: %s", e)
+            return set()
+
+    def _get_effective_workday_sensor(self) -> str | None:
+        """Get configured sensor or auto-discover default."""
+        configured = self._get_conf(CONF_WORKDAY)
+        if configured:
+            return configured
+        
+        # Auto-Discovery
+        default_entity = "binary_sensor.workday_sensor"
+        if self.hass.states.get(default_entity):
+            return default_entity
+        return None
+
     async def _async_update_data(self) -> PreheatData:
         """Main Loop."""
         try:
@@ -736,9 +795,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  ))
 
             # 1. Get Next Arrival
+            blocked_dates = await self._get_blocked_dates_from_calendar(now)
+
             allowed_weekdays = None
             if self._get_conf(CONF_ONLY_ON_WORKDAYS, False):
-                 workday_sensor = self._get_conf(CONF_WORKDAY)
+                 workday_sensor = self._get_effective_workday_sensor()
                  if workday_sensor:
                      state = self.hass.states.get(workday_sensor)
                      # Check if sensor provides 'workdays' attribute (list of allowed days)
@@ -769,14 +830,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             search_start_date = now
             if allowed_weekdays is not None:
                  # Re-fetch state (safe, cached)
-                 ws_conf = self._get_conf(CONF_WORKDAY)
+                 ws_conf = self._get_effective_workday_sensor()
                  if ws_conf:
                      ws_state = self.hass.states.get(ws_conf)
                      if ws_state and ws_state.state == "off":
                          _LOGGER.debug("Workday Sensor is OFF (Holiday). Skipping today for Next Arrival search.")
                          search_start_date = now + timedelta(days=1)
 
-            next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays)
+            next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays, blocked_dates=blocked_dates)
             
             # v2.6 Pattern Meta Extraction
             p_res = self.planner.last_pattern_result

@@ -17,6 +17,7 @@ from .const import (
     CONF_CLIMATE,
     CONF_WEATHER_ENTITY,
     CONF_WORKDAY,
+    CONF_CALENDAR_ENTITY,
     CONF_ONLY_ON_WORKDAYS,
     CONF_LOCK,
     CONF_PRESET_MODE,
@@ -328,6 +329,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional(CONF_LOCK): selector.EntitySelector(selector.EntitySelectorConfig(domain="input_boolean")),
                 vol.Optional(CONF_WORKDAY): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
+                vol.Optional(CONF_CALENDAR_ENTITY): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
                 vol.Optional(CONF_ONLY_ON_WORKDAYS): selector.BooleanSelector(),
                 
                 # Forecast Integration
@@ -410,6 +412,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         if CONF_VALVE_POSITION not in data: data[CONF_VALVE_POSITION] = None
         if CONF_LOCK not in data: data[CONF_LOCK] = None
         if CONF_WORKDAY not in data: data[CONF_WORKDAY] = None
+        if CONF_CALENDAR_ENTITY not in data: data[CONF_CALENDAR_ENTITY] = None
         if CONF_ONLY_ON_WORKDAYS not in data: data[CONF_ONLY_ON_WORKDAYS] = False
         
         if CONF_USE_FORECAST not in data: data[CONF_USE_FORECAST] = DEFAULT_USE_FORECAST

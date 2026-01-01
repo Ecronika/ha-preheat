@@ -38,9 +38,9 @@ The goal of v3.0 ("Autonomous Intelligence") is to reduce configuration to near 
 **Status:** 🚧 Planned
 *Goal: Give the system the Context (Calendar) and the Intelligence (Clustering) to predict heating needs autonomously.*
 
-*   [ ] **Feature: Calendar Intelligence** (Knowing *When*)
-    *   **Workday Lookahead**: Query `calendar.get_events` (7-day) to identify valid workdays/holidays precisely.
-    *   **Auto-Discovery**: Automatically find `calendar.workday_sensor` if present.
+*   [x] **Feature: Calendar Intelligence** (Knowing *When*) (v2.8-beta3/4)
+    *   [x] **Workday Lookahead**: Query `calendar.get_events` (7-day) to identify valid workdays/holidays precisely.
+    *   [x] **Auto-Discovery**: Automatically find `binary_sensor.workday_sensor` if present.
 *   [ ] **Feature: Autonomous Brain** (Knowing *How Long*)
     *   [x] **Foundation**: Session State Machine & Departure Recorder (v2.8-beta1).
     *   [ ] **V3 Clustering Engine**: Full implementation of DBSCAN for *Departure Time* Prediction.

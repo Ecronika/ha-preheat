@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.8.0-beta3"
+VERSION = "2.8.0-beta4"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -72,6 +72,7 @@ CONF_SETPOINT: Final = "setpoint_sensor"
 CONF_OUTDOOR_TEMP: Final = "outdoor_temp_sensor"
 CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_WORKDAY: Final = "workday_sensor"
+CONF_CALENDAR_ENTITY: Final = "holiday_calendar_entity"
 CONF_LOCK: Final = "preheat_lock"
 
 # Mode keys
