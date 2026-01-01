@@ -39,7 +39,12 @@ if "homeassistant" not in sys.modules:
     sys.modules["homeassistant.helpers.service"] = ha.helpers.service
     sys.modules["homeassistant.helpers.entity"] = ha.helpers.entity
     sys.modules["homeassistant.helpers.entity_platform"] = ha.helpers.entity_platform
+    sys.modules["homeassistant.helpers.entity_platform"] = ha.helpers.entity_platform
     sys.modules["homeassistant.helpers.typing"] = ha.helpers.typing
+    
+    # Issue Registry (v2.8)
+    ha.helpers.issue_registry = MagicMock()
+    sys.modules["homeassistant.helpers.issue_registry"] = ha.helpers.issue_registry
     
     # Utils
     ha.util = MagicMock()

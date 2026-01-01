@@ -153,6 +153,14 @@ class TestCoordinatorArbitration(unittest.TestCase):
         # Mock Planner Summary
         self.coord.planner.get_schedule_summary = MagicMock(return_value={})
 
+        # Mock Optimal Stop Manager (v2.8 Requirement)
+        self.coord.optimal_stop_manager = MagicMock()
+        self.coord.optimal_stop_manager.is_active = False
+        self.coord.optimal_stop_manager.stop_time = None
+        self.coord.optimal_stop_manager.debug_info = {"reason": "mock"}
+        self.coord.optimal_stop_manager._savings_total = 0.0
+        self.coord.optimal_stop_manager._savings_remaining = 0.0
+
     def run_async(self, coro):
         return asyncio.run(coro)
 

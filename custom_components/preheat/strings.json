@@ -82,7 +82,8 @@
           "only_on_workdays": "Only preheat on workdays",
           "occupancy_debounce_minutes": "Occupancy Debounce Time (Minutes)",
           "use_forecast": "Use Weather Forecast",
-          "risk_mode": "Forecast Risk Strategy"
+          "risk_mode": "Forecast Risk Strategy",
+          "physics_mode": "Physics Engine Mode"
         }
       }
     },
@@ -115,6 +116,12 @@
         "balanced": "Balanced (Integral / Default)",
         "pessimistic": "Pessimistic (Comfort / P10)",
         "optimistic": "Optimistic (Savings / P90)"
+      }
+    },
+    "physics_mode": {
+      "options": {
+        "standard": "Standard (Reliable)",
+        "advanced": "Advanced (Euler Simulation)"
       }
     }
   },

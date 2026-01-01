@@ -1,35 +1,44 @@
 # Changelog
 
-## v2.8.0-rc1 (The Integrator) - 2025-01-01
-**Final Release Candidate for The Brain Update!** 🧠✨
+## v2.8.0 (2025-01-01) - The Autonomous Brain 🧠
+**Major Release: Self-Learning Departure & Calendar Intelligence**
 
-This release combines all "Autonomous Brain" features into a complete package.
+This milestone transforms the integration from a reactive pre-heating system into a proactive, intelligent climate manager. It now verifies your presence patterns and predicts future departures.
 
 ### 🌟 New Features
 *   **The Observer (Departure Prediction)**:
-    *   The system now analyzes your departure history using Quantile Statistics (P90) to predict when you will leave.
-    *   Currently running in **Shadow Mode** (Observing only), visible in the decision trace.
-*   **Calendar Intelligence (Previously Beta 3/4)**:
-    *   Auto-Discovery of Workday Sensor.
-    *   Holiday Lookahead (skips preheating on holidays).
+    *   The system learns your departure habits (Quantile Statistics P90) to predict when you will likely leave.
+    *   **Data Collection**: Currently runs in "Shadow Mode" (Observing only), visible in the `decision_trace` attribute.
+*   **Calendar Intelligence**:
+    *   **Auto-Discovery**: Automatically finds your `binary_sensor.workday_sensor`.
+    *   **Holiday Lookahead**: Can skip preheating on specific holidays defined in a Calendar entity (e.g. `calendar.holidays`).
 *   **Advanced Physics Mode**:
-    *   New Expert Option: **Physics Mode** (Standard vs Advanced).
-    *   **Advanced (Euler)**: Uses minute-by-minute simulation with dynamic weather forecasts for ultra-precise "Optimal Stop" cooling prediction.
-*   **Midnight Wrapping**:
-    *   Smart handling of sessions ending at 00:00 (prevents premature coasting).
+    *   New **Expert Option**: Choose between 'Standard' (Reliable) and 'Advanced' (Euler Simulation) physics engines.
+    *   **Advanced Mode** uses dynamic weather forecasts for ultra-precise cooling prediction (Optimal Stop).
+
+### 🛡️ Resilience & Safety
+*   **Occupancy Debouncer**: Filters short absences (e.g. taking out trash) to ensure only true departures are recorded.
+*   **Smart Rollover**: Intelligent handling of overnight sessions and late-night predictions (stops "Next Departure" from skipping to tomorrow prematurely).
+*   **Save Throttling**: Protects SD cards by coalescing database writes (10s delay).
+*   **Robustness**: Extensive guards against invalid detector states and timezone edge cases.
+
+### 🐛 Fixes
+*   **Target Temperature Logic**: Fixed issue where "Eco Mode" settings were sometimes accepted as valid heating targets. The system now strictly enforces `Target > Min Comfort`.
+*   **Workday Override**: Fixed display bug where "Next Arrival" showed today's time even on holidays.
+*   **Timezone Logic**: Fixed bucket selection bug where midnight in UTC caused wrong weekday stats.
 
 ---
 
-## v2.8.0-beta4 (Calendar Intelligence) - 2025-01-01
-**Feature Update: The Brain gets a Calendar!** 🧠📅
+### Beta History (v2.8.0-rc1 / beta1-4)
+*   **rc2**: Final polish on Rollover Logic, DST Filtering, and Strings.
+*   **rc1**: Initial Release Candidate for The Brain.
+*   **beta4**: Calendar Intelligence integration.
+*   **beta3**: Workday Hotfix.
+*   **beta2**: Preheating Start Hotfix.
+*   **beta1**: The Recorder (Session History Database).
 
-This release fulfills the "Calendar Intelligence" milestone. The system now knows about your holidays in advance.
+---
 
-### 🌟 New Features
-*   **Auto-Discovery**: If no Workday Sensor is configured, the system naturally looks for `binary_sensor.workday_sensor`. Zero config required for standard setups.
-*   **Calendar Awareness**: You can now link a specific **Calendar Entity** (e.g., `calendar.holidays`) in the Expert Configuration.
-    *   *Intelligent Lookahead*: When predicting the "Next Arrival", the system scans the linked calendar for the next 7 days.
-    *   *Holiday Skipping*: If a date has an event in the linked calendar (and you use `Occupancy on Workdays only`), that day is automatically skipped—even if it's a weekday (e.g., Good Friday).
 
 ## v2.8.0-beta3 (Hotfix) - 2025-01-01
 **Happy New Year! - Workday Fix**

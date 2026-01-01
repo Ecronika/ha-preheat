@@ -33,6 +33,7 @@ from .const import (
     CONF_OUTDOOR_TEMP,
     CONF_WEATHER_ENTITY,
     CONF_WORKDAY,
+    CONF_CALENDAR_ENTITY,
     CONF_ONLY_ON_WORKDAYS,
     CONF_LOCK,
     CONF_PRESET_MODE,
@@ -493,7 +494,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         data_planner = self.planner.to_dict()
         
         return {
-            "version": 1,
+            "schema_version": 1,
             "physics_version": self.extra_store_data.get("physics_version", 2),
             ATTR_ARRIVAL_HISTORY: data_planner,
             ATTR_MODEL_MASS: data_physics["mass_factor"],
@@ -1104,8 +1105,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             sched_decision = self.schedule_provider.get_decision(context)
             scheduled_end = sched_decision.session_end
             
+            
             # Forward Schedule Data to Shadow (Proxy for v2.7)
-            context["potential_savings"] = sched_decision.predicted_savings if sched_decision.predicted_savings else 0.0
+            # Pass None if 0.0 to allow LearnedProvider to skip 'savings gate'
+            s_savings = sched_decision.predicted_savings
+            context["potential_savings"] = s_savings if s_savings and s_savings > 0 else None
+            context["scheduled_end"] = sched_decision.session_end
             learned_decision = self.learned_provider.get_decision(context)
             
             # 4. Arbitration & Effective Departure

@@ -28,7 +28,7 @@ from .const import (
     REASON_PARSE_ERROR,
     REASON_LOW_CONFIDENCE,
     REASON_BLOCKED_BY_GATES,
-    REASON_INSUFFICIENT_SESSIONS,
+    REASON_INSUFFICIENT_DATA,
     
     GATE_FAIL_SAVINGS,
     GATE_FAIL_TAU,
@@ -201,10 +201,35 @@ class LearnedDepartureProvider(SessionEndProvider):
         pattern_conf = context.get("pattern_confidence", 0.0)
         
         # Get Session Count (Arrivals as proxy for maturity)
-        weekday = context["now"].weekday()
-        # History is {weekday: [(date, min), ...]}
-        sessions = self.planner.history.get(weekday, [])
-        session_count = len(sessions)
+        # Get Session Count (Arrivals as proxy for maturity)
+        local_now = dt_util.as_local(context["now"])
+        
+        # Determine "Session Weekday" (Bucket)
+        # If we have a Schedule (Ground Truth), use its end date to determine the session day.
+        # This handles overnight sessions correctly (e.g. Schedule ends Tue 02:00 -> Weekday = Tue bucket?)
+        # Wait: If session ends Tue 02:00, usually we consider it a Mon-Tue session.
+        # But our recorder uses 'departure time' weekday. So Tue 02:00 is recorded as Tue (1).
+        # So we should look up Tue (1) history.
+        
+        scheduled_end = context.get("scheduled_end")
+        if scheduled_end:
+            # Use Schedule as Anchor
+            sched_local = dt_util.as_local(scheduled_end)
+            weekday = sched_local.weekday()
+            # print(f"DEBUG: Anchored Weekday: {weekday}")
+            
+            # Anchor Date for reconstruction
+            anchor_date = sched_local.date()
+        else:
+            # Autonomous / Fallback
+            weekday = local_now.weekday()
+            anchor_date = local_now.date()
+            
+        # History is {weekday: [{"date": iso, "minutes": int, "dst_flag": bool}]}
+        sessions = self.planner.history_departure.get(weekday, [])
+        # Count only valid (non-DST) sessions for maturity check
+        valid_sessions = [s for s in sessions if not s.get("dst_flag", False)]
+        session_count = len(valid_sessions)
         
         gate_inputs = {
             "savings": savings,
@@ -213,8 +238,11 @@ class LearnedDepartureProvider(SessionEndProvider):
             "session_count": session_count
         }
         
-        if savings < GATE_MIN_SAVINGS_MIN:
-            gates_failed.append(GATE_FAIL_SAVINGS)
+        # Only check savings gate if savings data serves as a strict requirement (future).
+        # For now, allow Pure AI if savings is 0.0 or None (disable gate).
+        if savings is not None and savings > 0.0:
+            if savings < GATE_MIN_SAVINGS_MIN:
+                gates_failed.append(GATE_FAIL_SAVINGS)
             
         if tau_conf < GATE_MIN_TAU_CONF:
             gates_failed.append(GATE_FAIL_TAU)
@@ -227,34 +255,43 @@ class LearnedDepartureProvider(SessionEndProvider):
         predicted_conf = 0.0
         
         # Call Pattern Logic (v2.8)
-        # Note: planner.patterns is expected to exist
-        if hasattr(self.planner, "patterns"):
-            pred_result = self.planner.patterns.predict_departure(sessions)
-            if pred_result:
+        # Call Pattern Logic (v2.8) - Robust Guard
+        detector = getattr(self.planner, "detector", None)
+        predict_method = getattr(detector, "predict_departure", None)
+        
+        if callable(predict_method):
+            pred_result = predict_method(sessions)
+            # Ensure result is valid tuple (minutes, conf)
+            if isinstance(pred_result, (tuple, list)) and len(pred_result) == 2:
                 predicted_minutes, predicted_conf = pred_result
         
         predicted_end = None
         if predicted_minutes is not None:
              # Reconstruct Datetime from Minutes
-             now = context["now"]
-             # Assuming 'minutes' is minutes from midnight of the session start day?
-             # But we don't know the session start day easily here without session context.
-             # However, for departure prediction, we usually assume it's "Today" relative to the session.
-             # Let's align with the planner's timezone logic.
+             # Use determined Anchor Date (Schedule Day or Today)
+             # Construct candidate using the timezone from the base source (local_now or sched_local)
+             if scheduled_end:
+                  # Use sched_local's TZ
+                  base_dt = sched_local.replace(hour=0, minute=0, second=0, microsecond=0)
+             else:
+                  base_dt = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
              
-             local_now = dt_util.as_local(now)
-             today_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+             candidate = base_dt + timedelta(minutes=predicted_minutes)
              
-             # Create candidate
-             candidate = today_midnight + timedelta(minutes=predicted_minutes)
+             # Smart Rollover Logic
+             if not scheduled_end:
+                 # Only if NOT anchored to specific schedule event do we guess the day.
+                 # Heuristic: If candidate is > 12h in the past, it implies "Tomorrow" 
+                 # relative to the base date we picked (Today).
+                 # Example: Now 23:00. Pred 02:00. Base=Today. Cand=Today 02:00. Diff 21h. -> +1 Day.
+                 # Example: Now 17:30. Pred 17:00. Base=Today. Cand=Today 17:00. Diff 0.5h. -> No Change.
+                 
+                 diff_sec = (local_now - candidate).total_seconds()
+                 if diff_sec > 12 * 3600:
+                     candidate += timedelta(days=1)
              
-             # Handle Overnight / Wrapping Logic (Simple version)
-             # If candidate is significantly in the past (e.g. > 12h ago), assume it belongs to tomorrow?
-             # OR: If we are calling this while Preheating is ACTIVE, we expect departure in future.
-             # If we are calling this for Planning (Pre-Heat), we expect departure in future.
-             # If candidate < now, it likely means the predicted time (e.g. 02:00) is "tomorrow" relative to "now" (23:00).
-             if candidate < local_now:
-                 candidate += timedelta(days=1)
+             # If anchored to Schedule, we trust the Anchor Date derived from explicit Schedule End.
+             # (e.g. Schedule ends Tue 02:00. Anchor=Tue. Pred=02:00. Result=Tue 02:00. Correct).
                  
              predicted_end = candidate
 
@@ -263,10 +300,12 @@ class LearnedDepartureProvider(SessionEndProvider):
         
         reason = None
         if not valid:
-            if gates_failed:
+            # Prioritize 'insufficient_data' if no prediction exists.
+            # Even if gates failed, the lack of data is the primary blocker.
+            if predicted_end is None:
+                reason = REASON_INSUFFICIENT_DATA
+            elif gates_failed:
                 reason = REASON_BLOCKED_BY_GATES
-            else:
-                reason = REASON_INSUFFICIENT_SESSIONS
             
         return ProviderDecision(
             should_stop=False, # Shadow Mode: Never stops. Only advises.

@@ -76,6 +76,7 @@
           "occupancy_debounce_minutes": "Anwesenheit-Debounce Zeit (Minuten)",
           "use_forecast": "Wetter-Vorhersage nutzen (Prognose)",
           "risk_mode": "Forecast Risiko-Strategie",
+          "physics_mode": "Physik-Engine Modus",
           "air_to_oper_bias_k": "Korrektur für gefühlte Temp. (Bias)",
           "valve_position_sensor": "Ventil-Position (Optional)",
           "max_preheat_hours": "Max. Vorheizdauer (Stunden)",
@@ -112,6 +113,12 @@
         "balanced": "Ausgewogen (Integral / Standard)",
         "pessimistic": "Pessimistisch (Komfort / P10)",
         "optimistic": "Optimistisch (Sparen / P90)"
+      }
+    },
+    "physics_mode": {
+      "options": {
+        "standard": "Standard (Zuverlässig)",
+        "advanced": "Erweitert (Euler Simulation)"
       }
     }
   },

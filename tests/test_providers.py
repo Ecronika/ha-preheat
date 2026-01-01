@@ -98,8 +98,11 @@ class TestScheduleProvider(unittest.TestCase):
             self.assertFalse(decision.is_valid)
             self.assertEqual(decision.invalid_reason, REASON_NO_NEXT_EVENT)
 
-    def test_optimal_stop_active(self):
-        """Test Optimal Stop triggers should_stop."""
+    def test_schedule_valid_active(self):
+        """Test Schedule ON -> Valid Decision (should_stop=False)."""
+        # Note: In v2.8, ScheduleProvider NO LONGER invokes OptimalStop logic.
+        # It purely reflects the schedule state. Logic is centralized in Coordinator.
+        
         self.hass.states.get.return_value = MagicMock(state="on")
         self.entry.options[CONF_ENABLE_OPTIMAL_STOP] = True
         
@@ -108,22 +111,15 @@ class TestScheduleProvider(unittest.TestCase):
         with patch("custom_components.preheat.providers.SessionResolver") as MockResolver:
             MockResolver.return_value.get_current_session_end.return_value = session_end
             
-            # Mock Manager Logic
-            self.manager.is_active = True
-            self.manager._savings_remaining = 20.0
-            
+            # Context
             decision = self.provider.get_decision(self.context)
             
             self.assertTrue(decision.is_valid)
-            self.assertTrue(decision.should_stop)
+            self.assertFalse(decision.should_stop) # Schedule says ON
             self.assertEqual(decision.session_end, session_end)
-            self.assertEqual(decision.predicted_savings, 20.0)
             
-            # Verify Manager Updated with correct args
-            self.manager.update.assert_called_once()
-            call_args = self.manager.update.call_args[1]
-            self.assertEqual(call_args["schedule_end"], session_end)
-            self.assertEqual(call_args["current_temp"], 20.0)
+            # Ensure NO interactions with manager
+            self.manager.update.assert_not_called()
 
 class TestLearnedProvider(unittest.TestCase):
     def setUp(self):
@@ -138,6 +134,9 @@ class TestLearnedProvider(unittest.TestCase):
     
     def test_gates_blocking(self):
         """Test gates block the decision."""
+        # Fix: Mock predict_departure to return None (no prediction) so unpacking is skipped
+        self.planner.patterns.predict_departure.return_value = None
+        
         # Context has 10 min savings (Limit 15) and 0.5 Tau (Limit 0.6)
         # Assuming constants in providers.py are: MIN_SAVINGS=15, MIN_TAU=0.6
         
@@ -150,6 +149,8 @@ class TestLearnedProvider(unittest.TestCase):
         
     def test_gates_passing(self):
         """Test gates pass."""
+        self.planner.patterns.predict_departure.return_value = None
+        
         self.context["potential_savings"] = 30.0
         self.context["tau_confidence"] = 0.9
         self.context["pattern_confidence"] = 0.9

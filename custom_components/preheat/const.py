@@ -215,7 +215,7 @@ REASON_PARSE_ERROR: Final = "parse_error"
 REASON_END_TOO_SOON: Final = "end_too_soon"
 REASON_LOW_CONFIDENCE: Final = "low_confidence"
 REASON_BLOCKED_BY_GATES: Final = "blocked_by_gates"
-REASON_INSUFFICIENT_SESSIONS: Final = "insufficient_sessions"
+REASON_INSUFFICIENT_DATA: Final = "insufficient_data"
 
 # Gate Failure Keys
 GATE_FAIL_SAVINGS: Final = "low_savings"

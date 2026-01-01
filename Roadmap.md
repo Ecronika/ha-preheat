@@ -34,21 +34,18 @@ The goal of v3.0 ("Autonomous Intelligence") is to reduce configuration to near 
     *   **Physics Hotfix**: Resolved scaling issues in v2.7.1.
     *   **Dev Tools**: Debug logging for Override logic (v2.7.4).
 
-### 📦 Release v2.8: "The Brain Update" (Next Up)
-**Status:** 🚧 Planned
+### 📦 Release v2.8: "The Brain Update" (Completed)
+**Status:** ✅ Released (v2.8.0)
 *Goal: Give the system the Context (Calendar) and the Intelligence (Clustering) to predict heating needs autonomously.*
 
 *   [x] **Feature: Calendar Intelligence** (Knowing *When*) (v2.8-beta3/4)
     *   [x] **Workday Lookahead**: Query `calendar.get_events` (7-day) to identify valid workdays/holidays precisely.
     *   [x] **Auto-Discovery**: Automatically find `binary_sensor.workday_sensor` if present.
-*   [ ] **Feature: Autonomous Brain** (Knowing *How Long*)
-    *   [x] **Foundation**: Session State Machine & Departure Recorder (v2.8-beta1).
-    *   [ ] **V3 Clustering Engine**: Full implementation of DBSCAN for *Departure Time* Prediction.
-    *   **Prediction Metrics**: Calculate `Departure Error` (Actual vs Predicted) per session.
-    *   **Promotion Signal**: Internal counter ("Ready for Control") based on accuracy score.
-*   [ ] **Physics v2.8**:
-    *   Euler Integration for Cooling Prediction (Higher Accuracy).
-    *   Deadtime Filter (Savitzky-Golay) to reject noise spikes.
+*   [x] **Feature: Autonomous Brain** (Knowing *How Long*)
+    *   [x] ** foundation**: Session State Machine & Departure Recorder (v2.8-beta1).
+    *   [x] **Prediction Logic**: Quantile Regression (P50/P90) for robust estimates.
+*   [x] **Physics v2.8**:
+    *   [x] **Euler Integration**: For Cooling Prediction (Higher Accuracy) via `CONF_PHYSICS_MODE`.
 
 ### 📦 Release v3.0: Autonomous Intelligence (Control Mode)
 **Status:** Vision (Zero Config)
@@ -56,8 +53,12 @@ The goal of v3.0 ("Autonomous Intelligence") is to reduce configuration to near 
 *   [ ] **Smart Departure Control**
     *   Opt-in: Allow the Learned Provider to take control (overriding Schedule).
     *   **Safety Net**: Auto-fallback to Schedule if AI confidence drops.
+    *   **V3 Clustering Engine**: Full implementation of DBSCAN for complex patterns.
+    *   **Prediction Metrics**: Calculate `Departure Error` and `Promotion Signal`.
 *   [ ] **Zero-Config Onboarding**:
     *   "Just install and wait 5 days" experience.
+*   [ ] **Advanced DSP**:
+    *   Deadtime Filter (Savitzky-Golay) to reject noise spikes.
 
 ### 🏗️ Architecture & Technical Debt (Planned for v3.0+)
 *   [ ] **Session ID Concept**: Remove "1 Departure per Day" limitation.

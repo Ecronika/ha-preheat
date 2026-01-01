@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.6.0)
+# Intelligent Preheating for Home Assistant (v2.8.0)
 
 **Turn your heating into a Predictive Smart System.**
 
@@ -23,6 +23,8 @@ Detailed documentation is available in the `docs/` folder:
 ## ✨ Features
 
 *   🧠 **Self-Learning Physics**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime` (Totzeit) for each room.
+*   👁️ **The Observer**: Learns your habits to predict *when* you leave (Shadow Mode), providing "Next Departure" insights.
+*   📅 **Calendar Intelligence**: Auto-detects holidays and shifts via Calendar integration to skip preheating intelligently.
 *   📉 **Optimal Stop (Coast-to-Vacancy)**: Turns off the heating early if the room stays warm enough until the schedule ends.
 *   🔌 **Stand-Alone**: Works with any thermostat entity. No external "Scheduler Component" or "Virtual Thermostat" required.
 *   ⛈️ **Weather Forecast Integration**: Looks ahead at the weather forecast to adjust heating power for incoming cold fronts.
