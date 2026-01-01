@@ -104,3 +104,29 @@ The goal of v3.0 ("Autonomous Intelligence") is to reduce configuration to near 
 ## ⛔ Non-Goals (v3.0)
 *   **No Tariff Optimization**: Scheduled for v4.
 *   **No Live Hot-Swap**: Config Reload/Restart is acceptable.
+
+---
+
+## 🔬 Technical Review Findings (Physics & Math)
+**Source:** Expert Code Review (Jan 2026).
+**Action Plan:** Address in v2.9 / v3.0 logic updates.
+
+### High Priority (Stability & Accuracy)
+*   [ ] **Euler Integration Stability**:
+    *   **Finding**: Explicit Euler is unstable for small time constants (τ < 20min).
+    *   **Goal**: Replace with **Crank-Nicolson** or exact analytical solution ($T(t) = T_{\infty} - ... e^{-t/\tau}$) for cooling prediction.
+*   [ ] **Solar Gain Integration (ISO 52016)**:
+    *   **Finding**: Current heat loss calculation ignores solar gains, leading to over-heating on sunny days.
+    *   **Goal**: Integrate `sun.sun` azimuth and elevation (or pyranometer sensors) into the energy balance equation: $Q_{loss} = U \cdot A \cdot \Delta T - Q_{solar}$.
+
+### Medium Priority (Model Quality)
+*   [ ] **Deadtime Curve Fit**:
+    *   **Finding**: Linear extrapolation for deadtime determination is mathematically incorrect for exponential heating curves.
+    *   **Goal**: Implement non-linear curve fitting (Newton-Raphson) to find inflection points accurately without `scipy`.
+*   [ ] **Thermodynamic Cutoff**:
+    *   **Finding**: Hard 0.5K cutoff in `calculate_coast_duration` is arbitrary.
+    *   **Goal**: Implement `min_delta` proportional to sensor resolution/noise floor dynamically.
+*   [ ] **Cluster Validation**:
+    *   **Finding**: `MIN_CLUSTER_POINTS = 3` lacks statistical rigor.
+    *   **Goal**: Implement **Silhouette Score** or Davies-Bouldin-Index to validate clusters before accepting them as patterns.
+
