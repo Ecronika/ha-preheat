@@ -54,6 +54,19 @@ After installation, click **Configure** on the integration entry to access advan
 
 ---
 
+### 📅 Holidays & Intelligence
+
+*   **Holiday Calendar**: Select a Home Assistant `calendar` entity.
+    *   **Logic**: If *any* event is active on a day (e.g., "Holiday", "Vacation"), that day is treated as a **blocked day** (no preheating).
+    *   **Check**: The system checks 8 days into the future.
+*   **Workday Sensor**: Select a `binary_sensor` (usually `binary_sensor.workday_sensor`) to distinguish weekends/holidays.
+    *   **Fallback**: If not configured, Mon-Fri are considered workdays.
+*   **Occupancy Debounce**: Avoid false alarms when you leave for just 5 minutes.
+    *   **Setting**: `Occupancy Debounce Time (Minutes)`.
+    *   **Logic**: The system waits this many minutes after occupancy is lost before officially declaring "Departure" and fitting the heating curve. Default: `15 minutes`.
+
+---
+
 ## Entity Explanations
 
 ### `switch.preheat`
