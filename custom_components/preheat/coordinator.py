@@ -765,7 +765,18 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                      # Helper enabled but no sensor configured?! Fallback Mon-Fri
                      allowed_weekdays = [0, 1, 2, 3, 4]
 
-            next_event = self.planner.get_next_scheduled_event(now, allowed_weekdays=allowed_weekdays)
+            # Holiday Detection: If today is a holiday (Sensor OFF), start searching from TOMORROW
+            search_start_date = now
+            if allowed_weekdays is not None:
+                 # Re-fetch state (safe, cached)
+                 ws_conf = self._get_conf(CONF_WORKDAY)
+                 if ws_conf:
+                     ws_state = self.hass.states.get(ws_conf)
+                     if ws_state and ws_state.state == "off":
+                         _LOGGER.debug("Workday Sensor is OFF (Holiday). Skipping today for Next Arrival search.")
+                         search_start_date = now + timedelta(days=1)
+
+            next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays)
             
             # v2.6 Pattern Meta Extraction
             p_res = self.planner.last_pattern_result

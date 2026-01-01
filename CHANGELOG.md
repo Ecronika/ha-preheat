@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.8.0-beta3 (Hotfix) - 2025-01-01
+**Happy New Year! - Workday Fix**
+
+This release resolves a display issue where holidays were not correctly skipped in the "Next Arrival" prediction.
+
+### 🐛 Fixes
+*   **Holiday Lookahead**: If `only_on_workdays` is enabled and the Workday Sensor reports `off` (meaning Today is a holiday), the system now correctly starts searching for the next scheduled arrival from **tomorrow**.
+    *   *Symptom*: Previously, the sensor might show today's schedule (e.g., 05:11) even on a holiday.
+    *   *Fix*: Today is now explicitly skipped if it's not a workday.
+
 ## v2.8.0-beta2 (Hotfix) - 2025-12-31
 **Bug Fix: Preheating Not Starting**
 
