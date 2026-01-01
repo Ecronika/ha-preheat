@@ -1498,3 +1498,51 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     def preheat_active(self) -> bool:
         """Return True if preheat is active."""
         return self._preheat_active
+
+    async def analyze_history(self) -> None:
+        """Analyze history and report Data Maturity."""
+        _LOGGER.debug("Analyzing History (Manual Request)")
+        
+        # 1. Gather Stats from Departure History (Recorder)
+        # {weekday: [sessions]}
+        weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        report_lines = []
+        
+        total_sessions = 0
+        
+        for i, name in enumerate(weekdays):
+            sessions = self.planner.history_departure.get(i, [])
+            count = len(sessions)
+            total_sessions += count
+            
+            # Detailed breakdown if data exists
+            if count > 0:
+                # Show last time
+                last = sessions[-1]
+                mins = last.get("minutes", 0)
+                h = mins // 60
+                m = mins % 60
+                report_lines.append(f"{name}: {count} sessions (Last: {h:02d}:{m:02d})")
+            else:
+                report_lines.append(f"{name}: 0 sessions")
+                
+        # 2. Add v2/Legacy Stats if relevant
+        v2_count = sum(len(v) for v in self.planner.history_v2.values())
+        
+        msg = (
+            f"Total Recorder Sessions: {total_sessions}\n"
+            f"Legacy (v2) Data Points: {v2_count}\n\n"
+            "Breakdown by Weekday:\n" + 
+            "\n".join(report_lines)
+        )
+        
+        # 3. Create Persistent Notification
+        await self.hass.services.async_call(
+            "persistent_notification",
+            "create",
+            {
+                "title": "Preheat Data Report",
+                "message": msg,
+                "notification_id": f"preheat_report_{self.entry.entry_id}"
+            }
+        )
