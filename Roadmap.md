@@ -137,5 +137,10 @@ The goal of v3.0 ("Autonomous Intelligence") is to reduce configuration to near 
     *   **Finding**: Users expect simple "Turn on Heat" logic without external automation.
     *   **Goal**: Add option to directly control `climate.set_temperature` via the integration.
 *   [ ] **UX Overhaul**:
-    *   **Finding**: Expert options are confusing / risk-prone.
     *   **Goal**: Clean up Config Flow, rename confusing attributes (e.g. `switch` -> `sensor`?), add Tooltips.
+*   [ ] **Official Blueprints**:
+    *   **Finding**: Users need Plug & Play.
+    *   **Goal**: Move blueprints into the repo (`blueprints/`) to ensure version compatibility.
+*   [ ] **First-Class Sensors**:
+    *   **Finding**: Attributes in `sensor.status` are hard to graph.
+    *   **Goal**: Expose `next_start_time`, `predicted_duration`, `next_departure` as separate sensors (default disabled?).
