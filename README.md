@@ -22,7 +22,7 @@ Detailed documentation is available in the `docs/` folder:
 
 ## ✨ Features
 
-*   🧠 **Self-Learning Physics**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime` (Totzeit) for each room.
+*   🧠 **Self-Learning Physics (Advanced)**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime` (Totzeit). Supports **Euler Simulation** for complex scenarios.
 *   👁️ **The Observer**: Learns your habits to predict *when* you leave (Shadow Mode), providing "Next Departure" insights.
 *   📅 **Calendar Intelligence**: Auto-detects holidays and shifts via Calendar integration to skip preheating intelligently.
 *   📉 **Optimal Stop (Coast-to-Vacancy)**: Turns off the heating early if the room stays warm enough until the schedule ends.

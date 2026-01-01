@@ -25,7 +25,11 @@ After installation, click **Configure** on the integration entry to access advan
     *   *Radiator (Standard)*: Typical water-based radiators.
     *   *Floor (Concrete)*: Slow reacting implementation. High deadtime defaults.
     *   *Air Conditioning*: Fast reacting systems.
+*   **Physics Mode**: Choose the simulation engine.
+    *   *Standard (Default)*: Robust, noise-tolerant model. Best for most users.
+    *   *Advanced (Euler)*: Precise forward-simulation using 30-minute steps. Improved accuracy for complex variable-temperature schedules but more sensitive to sensor noise.
 *   **Initial Gain**: Manually override the "Minutes per Degree" factor if the automatic learning starts too slow/fast. Lower = Faster heating.
+
 
 ### ⚠️ Risk & Buffers
 

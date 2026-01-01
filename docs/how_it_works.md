@@ -45,8 +45,9 @@ Every minute, the system runs a simulation:
 ## History & Occupancy
 
 The system does NOT use a fixed schedule input from you for the **Start** time. It learns from your behavior.
-*   It looks at your `occupancy_sensor` history (up to 90 days).
-*   It finds patterns (e.g., "Usually occupied at 06:45 on Mondays").
-*   It predicts the next event.
+*   It looks at your `occupancy_sensor` history (rolling window of 60 days).
+*   It continuously records when you leave ("Departure") to build a probability model.
+*   It predicts the next event based on weekday-specific patterns (e.g., "Usually occupied at 06:45 on Mondays").
+*   **Shadow Mode**: Even if you use a fixed schedule, the AI runs in the background to show you when it *would* have switched.
 
 *Note: For the **Stop** time (Optimal Stop), it DOES need a fixed schedule input, because predicting when you leave is riskier.*

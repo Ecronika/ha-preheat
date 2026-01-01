@@ -42,3 +42,9 @@ logger:
   logs:
     custom_components.preheat: debug
 ```
+
+### Why does "Analyze History" show 0 sessions?
+*   The "Recorder" feature (v2.8.0) starts fresh. It does not import old data from Home Assistant's general history to avoid corruption.
+*   It takes **7 days** to have at least one data point for every weekday.
+*   Wait a few days, and the numbers will grow automatically.
+
