@@ -23,7 +23,7 @@ Don't worry about the math. Here is what it means for you:
 ### 2. Thermal Loss (`loss_factor`)
 *   **What is it?**: How quickly does the room lose heat to the outside?
 *   **Impact**: On cold days, the system knows it needs *more* power (time) just to fight the cold walls.
-*   **Learning**: Currently fixed based on "Heating Profile", but fine-tuned by the algorithm.
+*   **Learning**: Initialized based on "Heating Profile", then continuously fine-tuned by the algorithm (especially on cold days).
 
 ### 3. Deadtime (`deadtime`)
 *   **What is it?**: The delay between "Valve Open" and "Temperature starts rising".
