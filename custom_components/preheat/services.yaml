@@ -1,0 +1,12 @@
+recompute:
+  name: Recompute Decisions
+  description: Forces the integration to re-evaluate potential preheat or coasting start times immediately.
+  target:
+    entity:
+      integration: preheat
+reset_model:
+  name: Reset Thermal Model
+  description: Wipes learned thermal parameters (Mass/Loss) and resets to profile defaults. Use this if the room characteristics changed significantly.
+  target:
+    entity:
+      integration: preheat

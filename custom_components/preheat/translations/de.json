@@ -238,6 +238,15 @@
             "name": "Stop Aktiv"
           }
         }
+      },
+      "next_start": {
+        "name": "Nächster Vorheiz-Start"
+      },
+      "predicted_duration": {
+        "name": "Prognostizierte Dauer"
+      },
+      "target_temperature": {
+        "name": "Ziel-Temperatur"
       }
     },
     "binary_sensor": {

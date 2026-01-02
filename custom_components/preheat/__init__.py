@@ -22,7 +22,51 @@ PreheatConfigEntry = ConfigEntry # [PreheatingCoordinator] Lazy typing
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Preheat component globally."""
+    await async_setup_services(hass)
     return True
+
+async def async_setup_services(hass: HomeAssistant):
+    """Register services."""
+    
+    async def handle_recompute(call):
+        """Force recompute."""
+        for entry_id in await _get_target_entries(hass, call):
+            if entry := hass.config_entries.async_get_entry(entry_id):
+                 if hasattr(entry, "runtime_data"):
+                     await entry.runtime_data.async_refresh()
+
+    async def handle_reset_model(call):
+        """Reset thermal model."""
+        for entry_id in await _get_target_entries(hass, call):
+             if entry := hass.config_entries.async_get_entry(entry_id):
+                 if hasattr(entry, "runtime_data"):
+                     entry.runtime_data.reset_model()
+
+    hass.services.async_register(DOMAIN, "recompute", handle_recompute)
+    hass.services.async_register(DOMAIN, "reset_model", handle_reset_model)
+
+async def _get_target_entries(hass, call):
+    """Helper to resolve targets."""
+    # Simplified target resolution (Target Selector support requires services.yaml)
+    # For now, it iterates all active preheat entries if no target specified
+    # Or strict targetting if 'entity_id' is passed.
+    # TODO: Full TargetSelector support
+    entries = []
+    if "config_entry_id" in call.data:
+        entries.append(call.data["config_entry_id"])
+    elif "entity_id" in call.data:
+         # Resolve entity to config entry
+         reg = hass.helpers.entity_registry.async_get(hass)
+         for eid in call.data["entity_id"]:
+             if ent := reg.async_get(eid):
+                 entries.append(ent.config_entry_id)
+    else:
+        # Fallback: All Loaded Entries
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            entries.append(entry.entry_id)
+    
+    return entries
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> bool:
     """Set up Preheat from a config entry."""

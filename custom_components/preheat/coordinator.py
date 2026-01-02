@@ -300,6 +300,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._start_temp: float | None = None
         self._occupancy_on_since: datetime | None = None
         self._preheat_active: bool = False
+        self._last_opt_active: bool = False # Track edge for events
         self._last_learned_date: date | None = None
         self._last_comfort_setpoint: float | None = None
         
@@ -1330,6 +1331,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             decision_trace["metrics"] = self._shadow_metrics
             
             # Update output
+            # Fire Optimal Stop Start Event (Edge Trigger)
+            if opt_active and not self._last_opt_active:
+                 self.hass.bus.async_fire(f"{DOMAIN}_optimal_stop_start", {
+                    "zone": self.device_name,
+                    "reason": opt_reason,
+                    "savings_min": round(savings_total, 1),
+                    "session_end": effective_departure.isoformat() if effective_departure else None
+                })
+            self._last_opt_active = opt_active
+            
             return PreheatData(
                 preheat_active=self._preheat_active,
                 next_start_time=start_time,

@@ -33,6 +33,12 @@ async def async_setup_entry(
         PhysicsSensor(coordinator, entry, "loss_factor", "loss_factor", "min/K"),
         PreheatConfidenceSensor(coordinator, entry),
         PreheatOptimalStopTimeSensor(coordinator, entry),
+        PreheatConfidenceSensor(coordinator, entry),
+        PreheatOptimalStopTimeSensor(coordinator, entry),
+        # v3.0 Spec Entities (Non-Breaking Additions)
+        PreheatNextStartSensor(coordinator, entry),
+        PreheatDurationSensor(coordinator, entry),
+        PreheatTargetTempSensor(coordinator, entry),
     ]
     
     async_add_entities(sensors)
@@ -205,4 +211,54 @@ class PreheatOptimalStopTimeSensor(PreheatBaseSensor):
             "coast_tau_hours": round(data.coast_tau, 1),
             "tau_confidence": round(data.tau_confidence * 100, 1),
             "is_active": data.optimal_stop_active
+            "is_active": data.optimal_stop_active
         }
+
+# --- v3.0 Spec Implementations ---
+
+class PreheatNextStartSensor(PreheatBaseSensor):
+    """Calculated start time for preheating."""
+    _attr_has_entity_name = True
+    _attr_translation_key = "next_start" # Will map to 'Next Preheat Start'
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-start"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_next_start_time"
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self.coordinator.data.next_start_time
+
+class PreheatDurationSensor(PreheatBaseSensor):
+    """Predicted duration in minutes."""
+    _attr_has_entity_name = True
+    _attr_translation_key = "predicted_duration"
+    _attr_native_unit_of_measurement = "min"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:timer-sand"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_predicted_duration"
+
+    @property
+    def native_value(self) -> float:
+        return round(self.coordinator.data.predicted_duration, 1)
+
+class PreheatTargetTempSensor(PreheatBaseSensor):
+    """Target temperature the system aimed for."""
+    _attr_has_entity_name = True
+    _attr_translation_key = "target_temperature"
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    # Unit follows HA default for device class, strictly speaking we should mirror source
+    # but practically °C is fine for 99%.
+    
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_target_temperature"
+
+    @property
+    def native_value(self) -> float:
+        return self.coordinator.data.target_setpoint
