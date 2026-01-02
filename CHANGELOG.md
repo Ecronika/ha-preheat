@@ -36,7 +36,7 @@ This milestone transforms the integration from a reactive pre-heating system int
 *   **Save Throttling**: Protects SD cards by coalescing database writes (10s delay).
 *   **Robustness**: Extensive guards against invalid detector states and timezone edge cases.
 *   **UX Cleanliness**: Less clutter by default. Advanced entities (Manual Override, Buttons, Physics Internal) are now hidden by default.
-*   **Dynamic UX**: `binary_sensor.optimal_stop_active` is now **automatically enabled** if the feature is enabled in configuration, and hidden otherwise. No more manual enabling required.
+*   **Dynamic UX**: `binary_sensor.optimal_stop_active` is now **automatically enabled** (even retroactively) if the feature is enabled in configuration.
 *   **Cleaner IDs**: Simplified button names ("Recompute Decisions" -> "Recompute") to produce cleaner Entity IDs (`button.*_recompute`).
 
 ### 🐛 Fixes

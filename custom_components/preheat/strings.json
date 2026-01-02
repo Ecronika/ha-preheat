@@ -214,7 +214,7 @@
         "name": "Recompute"
       },
       "reset_model": {
-        "name": "Reset Model"
+        "name": "Reset Thermal Model"
       }
     },
     "binary_sensor": {

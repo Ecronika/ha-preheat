@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, VERSION, CONF_ENABLE_OPTIMAL_STOP
 from .coordinator import PreheatingCoordinator
@@ -28,8 +29,23 @@ async def async_setup_entry(
         PreheatActiveBinarySensor(coordinator, entry),
         PreheatNeededBinarySensor(coordinator, entry),
         PreheatBlockedBinarySensor(coordinator, entry),
-    ]
     
+    # Auto-Enable Logic for Existing Installs
+    # If the user enables Optimal Stop in Options, we ensure the entity is enabled in the registry.
+    # We check if it was disabled by 'integration' (default) and unhide it.
+    enabled_in_config = entry.options.get(CONF_ENABLE_OPTIMAL_STOP) or entry.data.get(CONF_ENABLE_OPTIMAL_STOP, False)
+    if enabled_in_config:
+        ent_reg = er.async_get(hass)
+        opt_stop_id = f"{entry.entry_id}_optimal_stop_active"
+        # We need the full entity_id. Since we don't have it easily without 'async_add_entities' returning it or guessing,
+        # we can iterate or construct it. But sensors use 'binary_sensor.<name>_optimal_stop_active' usually.
+        # Safer: Let the entity init handle default, but if platform setup runs, we can look up by unique_id.
+        entity_id = ent_reg.async_get_entity_id("binary_sensor", DOMAIN, opt_stop_id)
+        if entity_id:
+            entity_entry = ent_reg.async_get(entity_id)
+            if entity_entry and entity_entry.disabled_by == er.RegistryEntryDisabler.INTEGRATION:
+                ent_reg.async_update_entity(entity_id, disabled_by=None)
+
     async_add_entities(sensors)
 
 class PreheatBaseBinarySensor(CoordinatorEntity[PreheatingCoordinator], BinarySensorEntity):
