@@ -29,6 +29,7 @@ async def async_setup_entry(
         PreheatActiveBinarySensor(coordinator, entry),
         PreheatNeededBinarySensor(coordinator, entry),
         PreheatBlockedBinarySensor(coordinator, entry),
+    ]
     
     # Auto-Enable Logic for Existing Installs
     # If the user enables Optimal Stop in Options, we ensure the entity is enabled in the registry.
