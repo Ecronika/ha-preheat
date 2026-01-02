@@ -135,7 +135,7 @@
         }
       },
       "next_event": {
-        "name": "Next Event"
+        "name": "Next Event (Legacy)"
       },
       "model_status": {
         "name": "Model Status",
@@ -194,7 +194,7 @@
     },
     "switch": {
       "preheat": {
-        "name": "Preheat Logic Active"
+        "name": "Manual Preheat Override"
       },
       "preheat_hold": {
         "name": "Preheat Hold"

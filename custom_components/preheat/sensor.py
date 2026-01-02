@@ -102,6 +102,8 @@ class NextEventSensor(PreheatBaseSensor):
     """Next Planned Event."""
     _attr_translation_key = "next_event"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_registry_enabled_default = False # Deprecated in v2.9
+    _attr_has_entity_name = True
 
     @property
     def unique_id(self) -> str:

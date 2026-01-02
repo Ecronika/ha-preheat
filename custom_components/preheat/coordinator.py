@@ -1044,7 +1044,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 
             # Lock (Hold)
             lock = self._get_conf(CONF_LOCK)
-            if lock and self.hass.states.is_state(lock, STATE_ON): 
+            if self.hold_active or (lock and self.hass.states.is_state(lock, STATE_ON)): 
                  blocked_reasons.append("hold")
                  should_start = False
                  

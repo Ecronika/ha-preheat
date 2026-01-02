@@ -167,7 +167,7 @@
         }
       },
       "next_event": {
-        "name": "Nächstes Event",
+        "name": "Nächstes Event (Veraltet)",
         "state_attributes": {
           "planned_start": {
             "name": "Geplanter Start"
@@ -271,7 +271,7 @@
     },
     "switch": {
       "preheat": {
-        "name": "Vorheiz-Logik Aktiv"
+        "name": "Manueller Vorheiz-Override"
       },
       "preheat_hold": {
         "name": "Vorheizen pausieren (Hold)"
