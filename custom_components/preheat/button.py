@@ -99,8 +99,8 @@ class PreheatButton(CoordinatorEntity[PreheatingCoordinator], ButtonEntity):
 
     async def async_press(self) -> None:
         """Handle the button press."""
+        if self.entity_description.press_action == "reset_schedule":
             await self.coordinator.reset_arrivals()
-        elif self.entity_description.press_action == "analyze_history":
             await self.coordinator.analyze_history()
         elif self.entity_description.press_action == "reset_model":
             await self.coordinator.reset_model()
