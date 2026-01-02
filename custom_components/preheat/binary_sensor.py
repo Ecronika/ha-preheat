@@ -51,6 +51,7 @@ class PreheatBaseBinarySensor(CoordinatorEntity[PreheatingCoordinator], BinarySe
 class PreheatOptimalStopBinarySensor(PreheatBaseBinarySensor):
     """Binary sensor indicating if Optimal Stop (Coasting) is active."""
     _attr_translation_key = "optimal_stop_active"
+    _attr_entity_registry_enabled_default = False
     _attr_icon = "mdi:leaf"
 
     @property

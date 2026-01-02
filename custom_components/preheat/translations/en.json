@@ -197,16 +197,13 @@
         "name": "Manual Preheat Override"
       },
       "preheat_hold": {
-        "name": "Preheat Hold"
+        "name": "Temporary Hold (Logic)"
       },
       "enabled": {
         "name": "Integration Enabled"
       }
     },
     "button": {
-      "reset_gain": {
-        "name": "Reset Thermal Model"
-      },
       "reset_schedule": {
         "name": "Reset Schedule"
       },

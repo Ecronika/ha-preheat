@@ -274,16 +274,13 @@
         "name": "Manueller Vorheiz-Override"
       },
       "preheat_hold": {
-        "name": "Vorheizen pausieren (Hold)"
+        "name": "Vorheizen temporär blockieren (Logic)"
       },
       "enabled": {
         "name": "Integration Aktiviert"
       }
     },
     "button": {
-      "reset_gain": {
-        "name": "Thermisches Modell zur\u00fccksetzen"
-      },
       "reset_schedule": {
         "name": "Zeitplan zur\u00fccksetzen"
       },

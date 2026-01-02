@@ -28,12 +28,6 @@ class PreheatButtonDescription(ButtonEntityDescription):
 
 BUTTONS: tuple[PreheatButtonDescription, ...] = (
     PreheatButtonDescription(
-        key="reset_gain",
-        translation_key="reset_gain",
-        icon="mdi:thermometer-alert",
-        press_action="reset_gain",
-    ),
-    PreheatButtonDescription(
         key="reset_schedule",
         translation_key="reset_schedule",
         icon="mdi:calendar-refresh",
@@ -105,9 +99,6 @@ class PreheatButton(CoordinatorEntity[PreheatingCoordinator], ButtonEntity):
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        if self.entity_description.press_action == "reset_gain":
-            await self.coordinator.reset_gain()
-        elif self.entity_description.press_action == "reset_schedule":
             await self.coordinator.reset_arrivals()
         elif self.entity_description.press_action == "analyze_history":
             await self.coordinator.analyze_history()

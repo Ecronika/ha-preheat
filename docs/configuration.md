@@ -71,13 +71,14 @@ After installation, click **Configure** on the integration entry to access advan
 
 ### 🎛️ Controls
 *   **`switch.enabled`**: **Master Enable**. Turns the integration on/off. If OFF, no calculations or checks run.
-*   **`switch.preheat`** (Manual Override): Reflects the *current* heating state. Toggling it manually **Forces** preheat ON or OFF ("Manual Start").
-*   **`switch.preheat_hold`**: **Hold / Vacation**. Temporarily blocks preheating (e.g. for window sensors).
+*   **`switch.preheat`** (Hidden by default): **Manual Override**. Reflects the *current* heating state. Toggling it manually **Forces** preheat ON or OFF.
+*   **`switch.preheat_hold`**: **Temporary Hold (Logic)**. Temporarily blocks preheating (e.g., for automation-based inhibits).
+    *   **Note**: This state is **logic-based** and resets to OFF upon a Home Assistant restart. It is not suitable for long-term "Vacation Mode". Use the Integration's `Enable` switch for long absences.
 
 ### 🚥 Automation Triggers
 *   **`binary_sensor.preheat_needed`**:
     *   **Logic**: Returns `ON` when `Now >= Next Start Time`.
-    *   **Note**: It ignores blockers (e.g. if you are already home). Use this for debugging timing.
+    *   **Note**: This entity is **Hidden by default** (Expert debug tool).
     *   **Recommendation**: For automation triggers, prefer **`binary_sensor.preheat_active`**.
 *   **`binary_sensor.preheat_active`** (Primary Trigger):
     *   **Logic**: `ON` when the room **should be heating right now** (Needed AND Not Blocked AND Not Occupied).
@@ -99,4 +100,5 @@ After installation, click **Configure** on the integration entry to access advan
 
 ### 📉 Optimal Stop
 *   **`binary_sensor.optimal_stop_active`**:
+    *   **Note**: This entity is **Hidden by default** if the feature is unused.
     *   **ON** when the system determines you can turn **OFF** the heating early, because the residual heat will carry you to the end of the schedule.
