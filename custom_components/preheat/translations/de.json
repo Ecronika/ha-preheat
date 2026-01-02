@@ -288,10 +288,10 @@
         "name": "Historie analysieren"
       },
       "recompute": {
-        "name": "Entscheidungen neu berechnen"
+        "name": "Neu berechnen"
       },
       "reset_model": {
-        "name": "Thermisches Modell zur\u00fccksetzen"
+        "name": "Modell zur\u00fccksetzen"
       }
     }
   },

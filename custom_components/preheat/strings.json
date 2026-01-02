@@ -211,10 +211,10 @@
         "name": "Analyze History"
       },
       "recompute": {
-        "name": "Recompute Decisions"
+        "name": "Recompute"
       },
       "reset_model": {
-        "name": "Reset Thermal Model"
+        "name": "Reset Model"
       }
     },
     "binary_sensor": {

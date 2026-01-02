@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, VERSION
+from .const import DOMAIN, VERSION, CONF_ENABLE_OPTIMAL_STOP
 from .coordinator import PreheatingCoordinator
 
 async def async_setup_entry(
@@ -57,6 +57,12 @@ class PreheatOptimalStopBinarySensor(PreheatBaseBinarySensor):
     @property
     def unique_id(self) -> str:
         return f"{self._entry.entry_id}_optimal_stop_active"
+
+    def __init__(self, coordinator: PreheatingCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        # Dynamic Visibility: Default to ON if feature is enabled in config
+        enabled = entry.options.get(CONF_ENABLE_OPTIMAL_STOP) or entry.data.get(CONF_ENABLE_OPTIMAL_STOP, False)
+        self._attr_entity_registry_enabled_default = enabled
 
     @property
     def is_on(self) -> bool:

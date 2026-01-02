@@ -94,11 +94,11 @@ After installation, click **Configure** on the integration entry to access advan
 *   **`sensor.*_next_session_end`**: When the current session ends (for Optimal Stop).
 
 ### 🛠️ Maintenance (Buttons)
-*   **`button.*_recompute_decisions`**: Force immediate re-evaluation of all logic.
-*   **`button.*_reset_thermal_model`**: Reset physics learning to defaults.
+*   **`button.*_recompute`**: Force immediate re-evaluation of all logic.
+*   **`button.*_reset_model`**: Reset physics learning to defaults.
 *   **`button.*_analyze_history`**: Rebuild patterns from recorder history.
 
 ### 📉 Optimal Stop
 *   **`binary_sensor.optimal_stop_active`**:
-    *   **Note**: This entity is **Hidden by default** if the feature is unused.
+    *   **Note**: This entity is automatically **Hidden by default** if the feature is unused (disabled in config). If enabled, it is visible.
     *   **ON** when the system determines you can turn **OFF** the heating early, because the residual heat will carry you to the end of the schedule.

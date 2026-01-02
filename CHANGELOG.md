@@ -36,7 +36,8 @@ This milestone transforms the integration from a reactive pre-heating system int
 *   **Save Throttling**: Protects SD cards by coalescing database writes (10s delay).
 *   **Robustness**: Extensive guards against invalid detector states and timezone edge cases.
 *   **UX Cleanliness**: Less clutter by default. Advanced entities (Manual Override, Buttons, Physics Internal) are now hidden by default.
-*   **Clarification**: Renamed "Hold" to "Temporary Hold (Logic)" to prevent confusion with persistent Vacation modes. Removed redundant "Reset Gain" button (use "Reset Thermal Model").
+*   **Dynamic UX**: `binary_sensor.optimal_stop_active` is now **automatically enabled** if the feature is enabled in configuration, and hidden otherwise. No more manual enabling required.
+*   **Cleaner IDs**: Simplified button names ("Recompute Decisions" -> "Recompute") to produce cleaner Entity IDs (`button.*_recompute`).
 
 ### 🐛 Fixes
 *   **Naming 2.0 Compliance**: Full compliance with Home Assistant's Entity Naming standards. Entity IDs are generated from the System Language, while Display Names adapt to the User Language.
