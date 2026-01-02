@@ -35,6 +35,7 @@ This milestone transforms the integration from a reactive pre-heating system int
 *   **Smart Rollover**: Intelligent handling of overnight sessions and late-night predictions (stops "Next Departure" from skipping to tomorrow prematurely).
 *   **Save Throttling**: Protects SD cards by coalescing database writes (10s delay).
 *   **Robustness**: Extensive guards against invalid detector states and timezone edge cases.
+*   **UX Cleanliness**: Less clutter by default. Advanced entities (Manual Override, Buttons, Physics Internal) are now hidden by default and can be enabled via "Show disabled entities".
 
 ### 🐛 Fixes
 *   **Naming 2.0 Compliance**: Full compliance with Home Assistant's Entity Naming standards. Entity IDs are generated from the System Language, while Display Names adapt to the User Language.

@@ -102,6 +102,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
 class NextEventSensor(PreheatBaseSensor):
     """Next Planned Event."""
     _attr_translation_key = "next_event"
+    _attr_entity_registry_enabled_default = False
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_registry_enabled_default = False # Deprecated in v2.9
     _attr_has_entity_name = True
@@ -137,6 +138,7 @@ class NextEventSensor(PreheatBaseSensor):
 class ThermalModelSensor(PreheatBaseSensor):
     """Combined Model Status."""
     _attr_translation_key = "model_status"
+    _attr_entity_registry_enabled_default = False
     _attr_icon = "mdi:chart-line"
 
     @property
@@ -160,6 +162,7 @@ class ThermalModelSensor(PreheatBaseSensor):
 class PhysicsSensor(PreheatBaseSensor):
     """Raw Physics Values."""
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_registry_enabled_default = False
     _attr_icon = "mdi:function"
 
     def __init__(self, coordinator, entry, key, translation_key, unit):
@@ -179,6 +182,7 @@ class PhysicsSensor(PreheatBaseSensor):
 class PreheatConfidenceSensor(PreheatBaseSensor):
     """Confidence in the learned model."""
     _attr_translation_key = "confidence"
+    _attr_entity_registry_enabled_default = False
     _attr_native_unit_of_measurement = "%"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:shield-check"
@@ -194,6 +198,7 @@ class PreheatConfidenceSensor(PreheatBaseSensor):
 class PreheatOptimalStopTimeSensor(PreheatBaseSensor):
     """Optimal Stop trigger time."""
     _attr_translation_key = "optimal_stop_time"
+    _attr_entity_registry_enabled_default = False
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-end"
 
@@ -284,6 +289,7 @@ class PreheatNextSessionEndSensor(PreheatBaseSensor):
     """Next scheduled session end time (e.g. for Optimal Stop)."""
     _attr_has_entity_name = True
     _attr_translation_key = "next_session_end"
+    _attr_entity_registry_enabled_default = False
     _attr_device_class = SensorDeviceClass.TIMESTAMP
 
     @property

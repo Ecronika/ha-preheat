@@ -37,6 +37,7 @@ class PreheatingSwitch(CoordinatorEntity["PreheatingCoordinator"], SwitchEntity)
     _attr_icon = "mdi:radiator"
     _attr_has_entity_name = True
     _attr_translation_key = "preheat"
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: PreheatingCoordinator, entry: PreheatConfigEntry) -> None:
         """Initialize the switch."""

@@ -95,6 +95,7 @@ class PreheatNeededBinarySensor(PreheatBaseBinarySensor):
     This serves as the "TriggeR" signal for automations.
     """
     _attr_translation_key = "preheat_needed"
+    _attr_entity_registry_enabled_default = False
     _attr_icon = "mdi:clock-alert"
 
     @property
