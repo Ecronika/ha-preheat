@@ -328,20 +328,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._startup_time = dt_util.utcnow()
         self._setup_listeners()
         
-    async def set_hold(self, active: bool) -> None:
-        """Set manual hold."""
-        self.hold_active = active
-        _LOGGER.info("Manual Hold Override changed to %s", active)
-        await self.async_request_refresh()
-        
-    async def set_enabled(self, active: bool) -> None:
-        """Set master enabled state."""
-        self.enable_active = active
-        # If disabled, we might want to shut down active preheat? 
-        # For now, just setting the flag, next update loop will handle logic.
-        if not active and self._preheat_active:
-             await self._stop_preheat(0.0, 0.0, 0.0, aborted=True) # Use dummy values, it's an emergency stop
-        await self.async_request_refresh()
+
 
     @property
     def window_open_detected(self) -> bool:
@@ -1027,7 +1014,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             is_occupied = False
             if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
                 is_occupied = True
-                blocked_reasons.append("occupied")
                 should_start = False
             
             # Window Open
@@ -1335,7 +1321,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 "blocked": len(blocked_reasons) > 0,
                 "reason": blocked_reasons[0] if blocked_reasons else "none",
                 "blocked_reasons": blocked_reasons,
-                "is_active": self._preheat_active
+                "blocked_reasons": blocked_reasons,
+                "is_active": self._preheat_active,
+                "is_occupied": is_occupied
             }
             
             # 7. Shadow Logging & Metrics
@@ -1649,12 +1637,24 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self.enable_active = enabled
         _LOGGER.debug("Master Enabled Changed to: %s", enabled)
         await self._async_save_data() # Persist immediately
+        
+        # Stop preheating immediately if disabled
+        if not enabled and self._preheat_active:
+             _LOGGER.info("Integration disabled while active. Stopping preheat immediately.")
+             await self.stop_preheat_manual()
+
         await self.async_refresh()
 
     async def set_hold(self, hold: bool) -> None:
         """Enable/Disable Hold mode."""
         self.hold_active = hold
         _LOGGER.debug("Hold Active Changed to: %s", hold)
+        
+        # Stop preheating immediately if Hold enabled
+        if hold and self._preheat_active:
+             _LOGGER.info("Hold activated while active. Stopping preheat immediately.")
+             await self.stop_preheat_manual()
+
         # Hold state is NOT persisted by design (Vacation mode prevents accidental lock-out on restart)
         # But we trigger an update.
         await self.async_refresh()
