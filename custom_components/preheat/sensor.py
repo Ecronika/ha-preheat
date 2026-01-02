@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from homeassistant.const import UnitOfTemperature
 from .const import DOMAIN, VERSION
 from .coordinator import PreheatingCoordinator, PreheatData
 
@@ -251,8 +252,7 @@ class PreheatTargetTempSensor(PreheatBaseSensor):
     _attr_has_entity_name = True
     _attr_translation_key = "target_temperature"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
-    # Unit follows HA default for device class, strictly speaking we should mirror source
-    # but practically °C is fine for 99%.
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     
     @property
     def unique_id(self) -> str:
