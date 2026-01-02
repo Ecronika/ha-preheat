@@ -76,7 +76,6 @@ class PreheatButton(CoordinatorEntity[PreheatingCoordinator], ButtonEntity):
     """Representation of a Preheat button."""
 
     _attr_has_entity_name = True
-    _attr_name = None
     entity_description: PreheatButtonDescription
 
     def __init__(

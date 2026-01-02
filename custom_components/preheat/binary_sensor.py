@@ -35,7 +35,6 @@ async def async_setup_entry(
 class PreheatBaseBinarySensor(CoordinatorEntity[PreheatingCoordinator], BinarySensorEntity):
     """Base binary sensor."""
     _attr_has_entity_name = True
-    _attr_name = None
 
 
     def __init__(self, coordinator: PreheatingCoordinator, entry: ConfigEntry) -> None:

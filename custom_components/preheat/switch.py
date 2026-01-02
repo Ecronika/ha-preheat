@@ -36,7 +36,6 @@ class PreheatingSwitch(CoordinatorEntity["PreheatingCoordinator"], SwitchEntity)
 
     _attr_icon = "mdi:radiator"
     _attr_has_entity_name = True
-    _attr_name = None
     _attr_translation_key = "preheat"
 
     def __init__(self, coordinator: PreheatingCoordinator, entry: PreheatConfigEntry) -> None:
@@ -82,7 +81,6 @@ class PreheatHoldSwitch(CoordinatorEntity["PreheatingCoordinator"], SwitchEntity
 
     _attr_icon = "mdi:hand-back-left"
     _attr_has_entity_name = True
-    _attr_name = None
     _attr_translation_key = "preheat_hold"
 
     def __init__(self, coordinator: PreheatingCoordinator, entry: PreheatConfigEntry) -> None:
@@ -120,7 +118,6 @@ class PreheatEnabledSwitch(CoordinatorEntity["PreheatingCoordinator"], SwitchEnt
 
     _attr_icon = "mdi:power"
     _attr_has_entity_name = True
-    _attr_name = None
     _attr_translation_key = "enabled"
 
     def __init__(self, coordinator: PreheatingCoordinator, entry: PreheatConfigEntry) -> None:
