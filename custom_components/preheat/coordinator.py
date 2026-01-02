@@ -301,14 +301,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._occupancy_on_since: datetime | None = None
         self._preheat_active: bool = False
         self._last_opt_active: bool = False # Track edge for events
-        self._last_learned_date: date | None = None
+        self.enable_active: bool = True # Master Switch
         self._last_comfort_setpoint: float | None = None
         
         # Window Detection State
         self._prev_temp: float | None = None
         self._prev_temp_time: datetime | None = None
-        self._window_open_detected: bool = False
-        self._window_cooldown_counter: int = 0
         
         # Caching
         self._cached_outdoor_temp: float = 10.0
@@ -329,11 +327,19 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._setup_listeners()
         
     async def set_hold(self, active: bool) -> None:
-        """Set manual hold switch."""
-        if self.hold_active != active:
-            self.hold_active = active
-            _LOGGER.info("Manual Hold Override changed to %s", active)
-            await self.async_request_refresh()
+        """Set manual hold."""
+        self.hold_active = active
+        _LOGGER.info("Manual Hold Override changed to %s", active)
+        await self.async_request_refresh()
+        
+    async def set_enabled(self, active: bool) -> None:
+        """Set master enabled state."""
+        self.enable_active = active
+        # If disabled, we might want to shut down active preheat? 
+        # For now, just setting the flag, next update loop will handle logic.
+        if not active and self._preheat_active:
+             await self._stop_preheat(0.0, 0.0, 0.0, aborted=True) # Use dummy values, it's an emergency stop
+        await self.async_request_refresh()
 
     @property
     def window_open_detected(self) -> bool:
@@ -1199,7 +1205,22 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # 2. Manual Hold is NOT active (Kill Switch)
             # Otherwise None force-resets logic.
             target_departure_for_manager = effective_departure
-            
+            # 0. Master Enable Check
+            if not self.enable_active:
+                 return PreheatData(
+                    preheat_active=False,
+                    next_start_time=None,
+                    operative_temp=operative_temp,
+                    target_setpoint=target_setpoint,
+                    next_arrival=None,
+                    predicted_duration=0,
+                    mass_factor=self.physics.mass_factor,
+                    loss_factor=self.physics.loss_factor,
+                    learning_active=False,
+                    decision_trace={"blocked": True, "reason": "disabled"}
+                 )
+
+            # 0.1 Check for Hold
             if self.hold_active or not self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
                 target_departure_for_manager = None
             
@@ -1489,14 +1510,24 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self.async_update_listeners()
 
     async def reset_gain(self) -> None:
-        """Reset thermal physics model."""
-        self.physics = ThermalPhysics() # Resets to defaults
+        """Reset thermal model (Legacy Name)."""
+        await self.reset_model()
+
+    async def reset_model(self) -> None:
+        """Reset thermal model parameters to profile defaults."""
+        self.physics.reset()
         await self._async_save_data()
-        _LOGGER.info("Thermal Model RESET to defaults.")
-        self.async_update_listeners()
+        _LOGGER.info("Physics Model RESET to defaults.")
+        # Trigger update to reflect changes
+        self.async_set_updated_data(self.data) 
+
+    async def recompute(self) -> None:
+        """Force immediate recomputation."""
+        _LOGGER.debug("Forced Recompute requested.")
+        await self.async_refresh()
 
     async def reset_arrivals(self) -> None:
-        """Reset arrival history."""
+        """Reset learned schedule history."""
         self.planner = PreheatPlanner() # Empty history
         await self._async_save_data()
         _LOGGER.info("Arrival History RESET.")

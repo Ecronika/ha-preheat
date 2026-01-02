@@ -183,17 +183,32 @@
       },
       "preheat_hold": {
         "name": "Preheat Hold"
+      },
+      "enabled": {
+        "name": "Integration Enabled"
       }
     },
     "button": {
       "reset_gain": {
         "name": "Reset Thermal Model"
       },
+      "target_temperature": {
+        "name": "Target Temperature"
+      },
+      "next_arrival_time": {
+        "name": "Next Arrival Time"
+      },
       "reset_schedule": {
         "name": "Reset Schedule"
       },
       "analyze_history": {
         "name": "Analyze History"
+      },
+      "recompute": {
+        "name": "Recompute Decisions"
+      },
+      "reset_model": {
+        "name": "Reset Thermal Model"
       }
     },
     "binary_sensor": {
@@ -201,7 +216,7 @@
         "name": "Optimal Stop Active"
       },
       "preheat_active": {
-        "name": "Preheat Active (Legacy)"
+        "name": "Preheat Active"
       }
     }
   },

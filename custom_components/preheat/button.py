@@ -45,6 +45,19 @@ BUTTONS: tuple[PreheatButtonDescription, ...] = (
         icon="mdi:history",
         press_action="analyze_history",
     ),
+    # v3.0 Spec Buttons
+    PreheatButtonDescription(
+        key="reset_model",
+        translation_key="reset_model",
+        icon="mdi:restart",
+        press_action="reset_model",
+    ),
+    PreheatButtonDescription(
+        key="recompute",
+        translation_key="recompute",
+        icon="mdi:calculator",
+        press_action="recompute",
+    ),
 )
 
 async def async_setup_entry(
@@ -97,3 +110,7 @@ class PreheatButton(CoordinatorEntity[PreheatingCoordinator], ButtonEntity):
             await self.coordinator.reset_arrivals()
         elif self.entity_description.press_action == "analyze_history":
             await self.coordinator.analyze_history()
+        elif self.entity_description.press_action == "reset_model":
+            await self.coordinator.reset_model()
+        elif self.entity_description.press_action == "recompute":
+            await self.coordinator.recompute()

@@ -39,8 +39,9 @@ async def async_setup_entry(
         PreheatNextStartSensor(coordinator, entry),
         PreheatDurationSensor(coordinator, entry),
         PreheatTargetTempSensor(coordinator, entry),
+        PreheatNextArrivalSensor(coordinator, entry),
     ]
-    
+
     async_add_entities(sensors)
 
 class PreheatBaseSensor(CoordinatorEntity[PreheatingCoordinator], SensorEntity):
@@ -262,3 +263,18 @@ class PreheatTargetTempSensor(PreheatBaseSensor):
     @property
     def native_value(self) -> float:
         return self.coordinator.data.target_setpoint
+
+class PreheatNextArrivalSensor(PreheatBaseSensor):
+    """Next expected arrival time (Alias)."""
+    _attr_has_entity_name = True
+    _attr_translation_key = "next_arrival_time"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    # No icon needed, device class provides it
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_next_arrival_time"
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self.coordinator.data.next_arrival

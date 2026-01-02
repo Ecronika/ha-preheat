@@ -247,6 +247,9 @@
       },
       "target_temperature": {
         "name": "Ziel-Temperatur"
+      },
+      "next_arrival_time": {
+        "name": "Nächste Ankunft (Prognose)"
       }
     },
     "binary_sensor": {
@@ -254,7 +257,7 @@
         "name": "Optimal Stop Aktiv"
       },
       "preheat_active": {
-        "name": "Vorheizen Aktiv (Legacy)"
+        "name": "Vorheizen Aktiv"
       }
     },
     "switch": {
@@ -263,6 +266,9 @@
       },
       "preheat_hold": {
         "name": "Vorheizen pausieren (Hold)"
+      },
+      "enabled": {
+        "name": "Integration Aktiviert"
       }
     },
     "button": {
@@ -274,6 +280,12 @@
       },
       "analyze_history": {
         "name": "Historie analysieren"
+      },
+      "recompute": {
+        "name": "Entscheidungen neu berechnen"
+      },
+      "reset_model": {
+        "name": "Thermisches Modell zurücksetzen"
       }
     }
   },

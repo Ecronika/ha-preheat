@@ -141,6 +141,7 @@ The goal of v3.0 ("Autonomous Intelligence") is to reduce configuration to near 
 *   [ ] **Official Blueprints**:
     *   **Finding**: Users need Plug & Play.
     *   **Goal**: Move blueprints into the repo (`blueprints/`) to ensure version compatibility.
-*   [ ] **First-Class Sensors**:
+*   [x] **First-Class Sensors** (v2.8):
     *   **Finding**: Attributes in `sensor.status` are hard to graph.
     *   **Goal**: Expose `next_start_time`, `predicted_duration`, `next_departure` as separate sensors (default disabled?).
+    *   **Status**: Implemented in v2.8.0.

@@ -26,7 +26,8 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     async_add_entities([
         PreheatingSwitch(coordinator, entry),
-        PreheatHoldSwitch(coordinator, entry)
+        PreheatHoldSwitch(coordinator, entry),
+        PreheatEnabledSwitch(coordinator, entry)
     ])
 
 
@@ -111,3 +112,41 @@ class PreheatHoldSwitch(CoordinatorEntity["PreheatingCoordinator"], SwitchEntity
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off hold."""
         await self.coordinator.set_hold(False)
+
+class PreheatEnabledSwitch(CoordinatorEntity["PreheatingCoordinator"], SwitchEntity):
+    """Master switch to enable/disable the preheat logic."""
+
+    _attr_icon = "mdi:power"
+    _attr_has_entity_name = True
+    _attr_translation_key = "enabled"
+
+    def __init__(self, coordinator: PreheatingCoordinator, entry: PreheatConfigEntry) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator)
+        self.entry_id = entry.entry_id
+        # Use existing 'enabled' convention if possible? No, we use custom unique_id
+        self._attr_unique_id = f"{entry.entry_id}_enabled"
+
+    @cached_property
+    def device_info(self) -> DeviceInfo:
+        """Return device information."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.entry_id)},
+            name=self.coordinator.device_name,
+            manufacturer="Ecronika",
+            model="Intelligent Preheating",
+            sw_version=VERSION,
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if enabled."""
+        return self.coordinator.enable_active
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Enable."""
+        await self.coordinator.set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Disable."""
+        await self.coordinator.set_enabled(False)
