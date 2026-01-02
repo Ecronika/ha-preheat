@@ -267,5 +267,47 @@ class TestV28Features(unittest.TestCase):
         # or require registry mocking. We check the internal attribute.
         self.assertEqual(active._attr_device_class, BinarySensorDeviceClass.RUNNING)
 
+    def test_v28_persistence(self):
+        """
+        Verify v2.8+ persistence logic (Enable Switch).
+        """
+        hass = MagicMock()
+        entry = MagicMock()
+        coord = PreheatingCoordinator(hass, entry)
+        
+        # 1. Test Save
+        # Set non-default
+        coord.enable_active = False
+        coord.cooling_analyzer = MagicMock()
+        coord.physics = MagicMock()
+        coord.planner = MagicMock()
+        # Mock methods to return dicts
+        coord.physics.to_dict.return_value = {"mass_factor": 10, "loss_factor": 5, "sample_count": 1}
+        coord.planner.to_dict.return_value = {}
+        
+        data_to_save = coord._get_data_for_storage()
+        self.assertIn("enable_active", data_to_save)
+        self.assertEqual(data_to_save["enable_active"], False)
+        
+        # 2. Test Load
+        # Mock store.async_load
+        coord._store = MagicMock()
+        
+        # Case A: Legacy (No key) -> Default True
+        async def mock_load_legacy():
+             return {"some_other_key": 1}
+        coord._store.async_load.side_effect = mock_load_legacy
+        
+        self.run_async(coord.async_load_data())
+        self.assertTrue(coord.enable_active)
+        
+        # Case B: Saved False
+        async def mock_load_saved():
+             return {"enable_active": False, "physics_version": 2}
+        coord._store.async_load.side_effect = mock_load_saved
+        
+        self.run_async(coord.async_load_data())
+        self.assertFalse(coord.enable_active)
+
 if __name__ == "__main__":
     unittest.main()

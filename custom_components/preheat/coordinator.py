@@ -497,8 +497,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 else:
                     self.extra_store_data["physics_version"] = physics_version
             else:
-                _LOGGER.info("No data found. Analyzing history...")
                 await self.analyze_history()
+            
+            # Load Enable State (Default True)
+            self.enable_active = data.get("enable_active", True)
                 
         except Exception:
             _LOGGER.exception("Failed loading data")
@@ -521,6 +523,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # V2.5
             "model_cooling_tau": self.cooling_analyzer.learned_tau,
             "cooling_confidence": self.cooling_analyzer.confidence,
+            "enable_active": self.enable_active,
         }
 
     async def _async_save_data(self) -> None:
@@ -1009,26 +1012,45 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 if start_time <= now < next_event:
                      should_start = True
             
-            # 4. Overrides
+            # 4. Overrides & Blockers (Accumulate Reasons)
+            blocked_reasons = [] # For decision_trace
             
-            # Window Open
-            if self._window_open_detected:
+            # Master Switch
+            if not self.enable_active:
+                blocked_reasons.append("disabled")
                 should_start = False
-
-            # Don't start if warm
-            if self._get_conf(CONF_DONT_START_IF_WARM, True):
-                if delta_in < 0.2: should_start = False
-                
-            # Lock
-            lock = self._get_conf(CONF_LOCK)
-            if lock and self.hass.states.is_state(lock, STATE_ON): should_start = False
             
-            # Occupied?
+            # Occupancy (User is Home)
+            # If occupied, we abort preheat (or don't start). 
+            # Note: This is an "Override", but maybe not a "Block" in the sense of "Prevented despite request"?
+            # User wants "occupied" to be clearer.
             occ_sensor = self._get_conf(CONF_OCCUPANCY)
             is_occupied = False
             if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
                 is_occupied = True
-                should_start = False # User is home, no Pre-heat (Normal heat takes over)
+                should_start = False
+            
+            # Window Open
+            if self._window_open_detected:
+                blocked_reasons.append("window_open")
+                should_start = False
+
+            # Don't start if warm (Comfort reached)
+            # This is "Control Logic", not "Blocking". 
+            if self._get_conf(CONF_DONT_START_IF_WARM, True):
+                if delta_in < 0.2: should_start = False
+                
+            # Lock (Hold)
+            lock = self._get_conf(CONF_LOCK)
+            if lock and self.hass.states.is_state(lock, STATE_ON): 
+                 blocked_reasons.append("hold")
+                 should_start = False
+                 
+            # Calendar / Holiday (Already checked in Step 1?)
+            # blocked_dates was fetched earlier.
+            if now.date() in blocked_dates:
+                 blocked_reasons.append("holiday")
+                 should_start = False
 
             # Workday Sensor Override (Fix for Issue: Starting on Holidays)
             if self._get_conf(CONF_ONLY_ON_WORKDAYS, False):
@@ -1037,9 +1059,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                       wd_state = self.hass.states.get(wd_ent)
                       # If Workday Sensor is explicitly 'off', it is a holiday/weekend -> BLOCK.
                       if wd_state and wd_state.state == "off":
-                           if should_start:
+                           if should_start: # Log only if it WOULD have started
                                 _LOGGER.debug("Preheat BLOCKED by Workday Sensor (State: Off)")
+                           blocked_reasons.append("workday_sensor")
                            should_start = False
+
+            # Missing Schedule (Logic Gap)
+            if next_event is None and not blocked_reasons and should_start is None:
+                # If we don't know when to start, and nothing else blocked us.
+                # Technically not "blocked", just "idle".
+                pass
 
 
 
@@ -1302,7 +1331,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                          "should_stop": learned_decision.should_stop,
                          "is_shadow": learned_decision.is_shadow
                     }
-                }
+                },
+                "blocked": len(blocked_reasons) > 0,
+                "reason": blocked_reasons[0] if blocked_reasons else "none",
+                "blocked_reasons": blocked_reasons,
+                "is_active": self._preheat_active
             }
             
             # 7. Shadow Logging & Metrics
