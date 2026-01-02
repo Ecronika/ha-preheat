@@ -250,6 +250,9 @@
       },
       "next_arrival_time": {
         "name": "Nächste Ankunft (Prognose)"
+      },
+      "next_session_end": {
+        "name": "Nächstes Session-Ende"
       }
     },
     "binary_sensor": {
@@ -258,6 +261,12 @@
       },
       "preheat_active": {
         "name": "Vorheizen Aktiv"
+      },
+      "preheat_needed": {
+        "name": "Vorheizen Notwendig (Trigger)"
+      },
+      "preheat_blocked": {
+        "name": "Vorheizen Blockiert"
       }
     },
     "switch": {

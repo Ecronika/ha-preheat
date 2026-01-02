@@ -33,13 +33,12 @@ async def async_setup_entry(
         PhysicsSensor(coordinator, entry, "loss_factor", "loss_factor", "min/K"),
         PreheatConfidenceSensor(coordinator, entry),
         PreheatOptimalStopTimeSensor(coordinator, entry),
-        PreheatConfidenceSensor(coordinator, entry),
-        PreheatOptimalStopTimeSensor(coordinator, entry),
         # v3.0 Spec Entities (Non-Breaking Additions)
         PreheatNextStartSensor(coordinator, entry),
         PreheatDurationSensor(coordinator, entry),
         PreheatTargetTempSensor(coordinator, entry),
         PreheatNextArrivalSensor(coordinator, entry),
+        PreheatNextSessionEndSensor(coordinator, entry),
     ]
 
     async_add_entities(sensors)
@@ -277,3 +276,18 @@ class PreheatNextArrivalSensor(PreheatBaseSensor):
     @property
     def native_value(self) -> datetime | None:
         return self.coordinator.data.next_arrival
+
+class PreheatNextSessionEndSensor(PreheatBaseSensor):
+    """Next scheduled session end time (e.g. for Optimal Stop)."""
+    _attr_has_entity_name = True
+    _attr_translation_key = "next_session_end"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_next_session_end"
+
+    @property
+    def native_value(self) -> datetime | None:
+        # We need to expose next_departure from data
+        return self.coordinator.data.next_departure

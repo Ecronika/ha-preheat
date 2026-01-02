@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
+import sys
 
 from custom_components.preheat.coordinator import OccupancyDebouncer, PreheatingCoordinator
 from custom_components.preheat.const import (
@@ -190,6 +191,81 @@ class TestV28Features(unittest.TestCase):
                 manager.update(21.0, 21.0, future, lambda s,e: 0, 10, config_std)
                 mock_std.assert_called()
                 mock_euler.assert_not_called()
+
+    def test_v28_new_entities(self):
+        """
+        Verify new v2.8 entities can be instantiated and provide correct values.
+        """
+        from custom_components.preheat.sensor import PreheatNextSessionEndSensor
+        from custom_components.preheat.binary_sensor import (
+            PreheatNeededBinarySensor,
+            PreheatBlockedBinarySensor,
+            PreheatActiveBinarySensor
+        )
+        
+        # Setup Mocks
+        coord = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test_123"
+        entry.title = "Test Zone"
+        
+        # 1. NextSessionEnd
+        # Data: next_departure = 12:00
+        sensor = PreheatNextSessionEndSensor(coord, entry)
+        t_val = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        coord.data.next_departure = t_val
+        self.assertEqual(sensor.native_value, t_val)
+        
+        # 2. PreheatNeeded
+        # Logic: now >= next_start
+        needed = PreheatNeededBinarySensor(coord, entry)
+        
+        # Case A: No schedule -> False
+        coord.data.next_start_time = None
+        self.assertFalse(needed.is_on)
+        
+        # Case B: Future Start -> False
+        t_start = datetime(2025, 1, 1, 15, 0, 0, tzinfo=timezone.utc)
+        coord.data.next_start_time = t_start
+        
+        # Mock dt_util.utcnow() < t_start
+        # Mock global dt_util since it is imported inside the function
+        # We need to patch the one in sys.modules or use a global patch context
+        mock_dt = sys.modules["homeassistant.util"].dt
+        
+        # BEFORE
+        mock_dt.utcnow.return_value = t_start - timedelta(minutes=1)
+        self.assertFalse(needed.is_on)
+        
+        # AFTER
+        mock_dt.utcnow.return_value = t_start + timedelta(seconds=1)
+        self.assertTrue(needed.is_on)
+             
+        # 3. PreheatBlocked
+        blocked = PreheatBlockedBinarySensor(coord, entry)
+        
+        # Case A: Not blocked
+        coord.data.decision_trace = {"blocked": False}
+        self.assertFalse(blocked.is_on)
+        self.assertEqual(blocked.extra_state_attributes, {})
+        
+        # Case B: Blocked
+        coord.data.decision_trace = {"blocked": True, "reason": "window_open"}
+        self.assertTrue(blocked.is_on)
+        self.assertEqual(blocked.extra_state_attributes["blocked_reason"], "window_open")
+        
+        # 4. Active (Rehabilitated)
+        active = PreheatActiveBinarySensor(coord, entry)
+        self.assertTrue(hasattr(active, "_attr_device_class")) 
+        self.assertFalse(hasattr(active, "_attr_entity_registry_enabled_default")) # Should NOT generally be False anymore (unless logic change)
+        # Actually line 62 in binary_sensor check:
+        # _attr_entity_registry_enabled_default = False WAS removed.
+        # So hasattr should be False (if not defined) or we check default behavior.
+        # Let's just check device class.
+        from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+        # Note: In unit tests without full Entity platform, property accessors might behave differently 
+        # or require registry mocking. We check the internal attribute.
+        self.assertEqual(active._attr_device_class, BinarySensorDeviceClass.RUNNING)
 
 if __name__ == "__main__":
     unittest.main()

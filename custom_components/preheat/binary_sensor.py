@@ -25,7 +25,9 @@ async def async_setup_entry(
     
     sensors = [
         PreheatOptimalStopBinarySensor(coordinator, entry),
-        PreheatActiveLegacyBinarySensor(coordinator, entry),
+        PreheatActiveBinarySensor(coordinator, entry),
+        PreheatNeededBinarySensor(coordinator, entry),
+        PreheatBlockedBinarySensor(coordinator, entry),
     ]
     
     async_add_entities(sensors)
@@ -68,14 +70,14 @@ class PreheatOptimalStopBinarySensor(PreheatBaseBinarySensor):
             "tau_confidence": round(data.tau_confidence * 100, 1)
         }
 
-class PreheatActiveLegacyBinarySensor(PreheatBaseBinarySensor):
+class PreheatActiveBinarySensor(PreheatBaseBinarySensor):
     """
-    Legacy binary sensor for backward compatibility.
-    Duplicates the state of 'switch.preheat' as a read-only sensor.
+    Binary sensor indicating if preheat logic is actively heating.
+    Rehabilitated as core entity in v2.9.
     """
     _attr_translation_key = "preheat_active"
     _attr_icon = "mdi:radiator"
-    _attr_entity_registry_enabled_default = False # Deprecated
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
 
     @property
     def unique_id(self) -> str:
@@ -84,3 +86,55 @@ class PreheatActiveLegacyBinarySensor(PreheatBaseBinarySensor):
     @property
     def is_on(self) -> bool:
         return self.coordinator.data.preheat_active
+
+class PreheatNeededBinarySensor(PreheatBaseBinarySensor):
+    """
+    Indicates if preheating IS REQUIRED (Time reached), even if blocked.
+    Logic: Now >= Next Start Time (and Start Time exists).
+    This serves as the "TriggeR" signal for automations.
+    """
+    _attr_translation_key = "preheat_needed"
+    _attr_icon = "mdi:clock-alert"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_preheat_needed"
+
+    @property
+    def is_on(self) -> bool:
+        data = self.coordinator.data
+        if not data.next_start_time:
+            return False
+        
+        # We need 'now'. Coordinator updates every minute. 
+        # Ideally we compare vs utcnow()
+        from homeassistant.util import dt as dt_util
+        return dt_util.utcnow() >= data.next_start_time
+
+class PreheatBlockedBinarySensor(PreheatBaseBinarySensor):
+    """
+    Indicates if preheating is BLOCKED (e.g. Hold, Window, Holiday).
+    """
+    _attr_translation_key = "preheat_blocked"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_icon = "mdi:block-helper"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_preheat_blocked"
+
+    @property
+    def is_on(self) -> bool:
+        trace = self.coordinator.data.decision_trace
+        if trace and trace.get("blocked"):
+            return True
+        return False
+    
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        trace = self.coordinator.data.decision_trace
+        attrs = {}
+        if trace and trace.get("blocked"):
+            attrs["reasons"] = [trace.get("reason", "unknown")]
+            attrs["blocked_reason"] = trace.get("reason", "unknown")
+        return attrs

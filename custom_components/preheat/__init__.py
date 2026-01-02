@@ -45,27 +45,35 @@ async def async_setup_services(hass: HomeAssistant):
     hass.services.async_register(DOMAIN, "recompute", handle_recompute)
     hass.services.async_register(DOMAIN, "reset_model", handle_reset_model)
 
-async def _get_target_entries(hass, call):
     """Helper to resolve targets."""
-    # Simplified target resolution (Target Selector support requires services.yaml)
-    # For now, it iterates all active preheat entries if no target specified
-    # Or strict targetting if 'entity_id' is passed.
-    # TODO: Full TargetSelector support
-    entries = []
-    if "config_entry_id" in call.data:
-        entries.append(call.data["config_entry_id"])
-    elif "entity_id" in call.data:
-         # Resolve entity to config entry
-         reg = hass.helpers.entity_registry.async_get(hass)
-         for eid in call.data["entity_id"]:
-             if ent := reg.async_get(eid):
-                 entries.append(ent.config_entry_id)
-    else:
-        # Fallback: All Loaded Entries
-        for entry in hass.config_entries.async_entries(DOMAIN):
-            entries.append(entry.entry_id)
+    from homeassistant.helpers import service, entity_registry
     
-    return entries
+    entries = set()
+    
+    # 1. Check for explicit config_entry_id
+    if "config_entry_id" in call.data:
+        ce_ids = call.data["config_entry_id"]
+        if isinstance(ce_ids, str):
+            entries.add(ce_ids)
+        elif isinstance(ce_ids, list):
+            entries.update(ce_ids)
+            
+    # 2. Check for entities
+    referenced = await service.async_extract_referenced_entity_ids(hass, call)
+    if referenced.referenced:
+        ent_reg = entity_registry.async_get(hass)
+        for eid in referenced.referenced:
+            if ent := ent_reg.async_get(eid):
+                if ent.platform == DOMAIN and ent.config_entry_id:
+                     entries.add(ent.config_entry_id)
+                     
+    # 3. Fallback: If NO target specified at all (no area, no device, no entity, no ID)
+    #    Then target ALL entries.
+    if not entries and not referenced.referenced and not referenced.devices and not referenced.areas and "config_entry_id" not in call.data:
+         for entry in hass.config_entries.async_entries(DOMAIN):
+            entries.add(entry.entry_id)
+
+    return list(entries)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> bool:

@@ -175,6 +175,21 @@
             "name": "Stop Active"
           }
         }
+      },
+      "predicted_duration": {
+        "name": "Predicted Duration"
+      },
+      "next_start": {
+        "name": "Next Preheat Start"
+      },
+      "target_temperature": {
+        "name": "Target Temperature"
+      },
+      "next_arrival_time": {
+        "name": "Next Arrival Time"
+      },
+      "next_session_end": {
+        "name": "Next Session End"
       }
     },
     "switch": {
@@ -191,12 +206,6 @@
     "button": {
       "reset_gain": {
         "name": "Reset Thermal Model"
-      },
-      "target_temperature": {
-        "name": "Target Temperature"
-      },
-      "next_arrival_time": {
-        "name": "Next Arrival Time"
       },
       "reset_schedule": {
         "name": "Reset Schedule"
@@ -217,6 +226,12 @@
       },
       "preheat_active": {
         "name": "Preheat Active"
+      },
+      "preheat_needed": {
+        "name": "Preheat Needed (Trigger)"
+      },
+      "preheat_blocked": {
+        "name": "Preheat Blocked"
       }
     }
   },
