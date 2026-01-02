@@ -3,14 +3,14 @@
     "step": {
       "user": {
         "title": "Intelligentes Vorheizen",
-        "description": "Erstelle eine neue Heizzone. Das System lernt automatisch, wie lange der Raum zum Aufheizen benÃ¶tigt.",
+        "description": "Erstelle eine neue Heizzone. Das System lernt automatisch, wie lange der Raum zum Aufheizen ben\u00f6tigt.",
         "data": {
           "name": "Zonen-Name",
           "occupancy_sensor": "Belegungssensor (Pflicht)",
           "temperature_sensor": "Temperatursensor (Optional)",
           "climate_entity": "Thermostat (Pflicht)",
           "setpoint_sensor": "Zielwert-Sensor (Veraltet)",
-          "outdoor_temp_sensor": "AuÃŸentemperatur (Optional)",
+          "outdoor_temp_sensor": "Au\u00dfentemperatur (Optional)",
           "weather_entity": "Wetter-Vorhersage (Empfohlen)",
           "workday_sensor": "Arbeitstag-Sensor (Optional)",
           "preset_mode": "Betriebsstrategie",
@@ -23,20 +23,20 @@
       },
       "reconfigure": {
         "title": "Zone umkonfigurieren",
-        "description": "Basis-Sensoren und GerÃ¤te aktualisieren.",
+        "description": "Basis-Sensoren und Ger\u00e4te aktualisieren.",
         "data": {
           "occupancy_sensor": "Belegungssensor",
           "temperature_sensor": "Raumtemperatursensor",
-          "climate_entity": "Thermostat / KlimagerÃ¤t",
+          "climate_entity": "Thermostat / Klimager\u00e4t",
           "weather_entity": "Wetter-Dienst"
         }
       }
     },
     "error": {
-      "invalid_occupancy_sensor": "UngÃ¼ltiger Belegungssensor ausgewÃ¤hlt",
-      "invalid_temperature_sensor": "UngÃ¼ltiger Temperatursensor ausgewÃ¤hlt",
-      "buffer_too_high": "Sicherheitspuffer Ã¼ber 60 Minuten - Wert zu hoch",
-      "max_duration_too_high": "Maximale Vorheizdauer Ã¼ber 5 Stunden ist ein Sicherheitsrisiko",
+      "invalid_occupancy_sensor": "Ung\u00fcltiger Belegungssensor ausgew\u00e4hlt",
+      "invalid_temperature_sensor": "Ung\u00fcltiger Temperatursensor ausgew\u00e4hlt",
+      "buffer_too_high": "Sicherheitspuffer \u00fcber 60 Minuten - Wert zu hoch",
+      "max_duration_too_high": "Maximale Vorheizdauer \u00fcber 5 Stunden ist ein Sicherheitsrisiko",
       "required_for_optimal_stop": "Zeitplan-Helfer (Schedule) ist erforderlich, wenn Optimal Stop aktiviert ist."
     },
     "abort": {
@@ -48,7 +48,7 @@
     "step": {
       "init": {
         "title": "Zonen-Einstellungen",
-        "description": "Die Standard-Einstellungen reichen meist aus. Aktiviere den Experten-Modus fÃ¼r Feinjustierung.",
+        "description": "Die Standard-Einstellungen reichen meist aus. Aktiviere den Experten-Modus f\u00fcr Feinjustierung.",
         "data": {
           "preset_mode": "Betriebsmodus",
           "heating_profile": "Heizsystem-Profil",
@@ -58,14 +58,14 @@
           "climate_entity": "Thermostat",
           "setpoint_sensor": "Zielwert-Sensor",
           "weather_entity": "Wetter-Dienst",
-          "outdoor_temp_sensor": "AuÃŸentemperatur",
+          "outdoor_temp_sensor": "Au\u00dfentemperatur",
           "workday_sensor": "Arbeitstag-Sensor",
           "only_on_workdays": "Nur an Arbeitstagen vorheizen (Wochenende/Feiertage ignorieren)",
           "preheat_lock": "Sperr-Schalter (Lock)",
           "ema_alpha": "Lerngeschwindigkeit (Alpha)",
           "initial_gain": "Start-Aufheizfaktor (min/K)",
           "buffer_minutes": "Sicherheitspuffer (Minuten)",
-          "earliest_start_minutes": "FrÃ¼hester Start (Minuten ab Mitternacht)",
+          "earliest_start_minutes": "Fr\u00fchester Start (Minuten ab Mitternacht)",
           "comfort_min_temp": "Minimale Zieltemperatur",
           "comfort_max_temp": "Maximale Zieltemperatur",
           "comfort_fallback_temp": "Fallback Zieltemperatur",
@@ -77,7 +77,7 @@
           "use_forecast": "Wetter-Vorhersage nutzen (Prognose)",
           "risk_mode": "Forecast Risiko-Strategie",
           "physics_mode": "Physik-Engine Modus",
-          "air_to_oper_bias_k": "Korrektur fÃ¼r gefÃ¼hlte Temp. (Bias)",
+          "air_to_oper_bias_k": "Korrektur f\u00fcr gef\u00fchlte Temp. (Bias)",
           "valve_position_sensor": "Ventil-Position (Optional)",
           "max_preheat_hours": "Max. Vorheizdauer (Stunden)",
           "enable_optimal_stop": "Optimal Stop aktivieren (Coasting)",
@@ -88,27 +88,27 @@
       }
     },
     "error": {
-      "invalid_time_format": "UngÃ¼ltiges Zeitformat (muss HH:MM:SS sein)",
-      "buffer_too_high": "Sicherheitspuffer Ã¼ber 60 Minuten - Wert zu hoch",
-      "max_duration_too_high": "Maximale Vorheizdauer Ã¼ber 5 Stunden ist ein Sicherheitsrisiko",
+      "invalid_time_format": "Ung\u00fcltiges Zeitformat (muss HH:MM:SS sein)",
+      "buffer_too_high": "Sicherheitspuffer \u00fcber 60 Minuten - Wert zu hoch",
+      "max_duration_too_high": "Maximale Vorheizdauer \u00fcber 5 Stunden ist ein Sicherheitsrisiko",
       "required_for_optimal_stop": "Zeitplan-Helfer (Schedule) ist erforderlich, wenn Optimal Stop aktiviert ist."
     }
   },
   "selector": {
     "preset_mode": {
       "options": {
-        "aggressive": "Aggressiv (FrÃ¼h & Sicher)",
+        "aggressive": "Aggressiv (Fr\u00fch & Sicher)",
         "balanced": "Ausgewogen (Empfohlen)",
-        "conservative": "Sparsam (SpÃ¤t & Effizient)"
+        "conservative": "Sparsam (Sp\u00e4t & Effizient)"
       }
     },
     "heating_profile": {
       "options": {
         "infrared_air": "Infrarot / Luft (Schnell)",
-        "radiator_new": "HeizkÃ¶rper (Modern)",
-        "radiator_old": "HeizkÃ¶rper (Alt / Guss)",
-        "floor_dry": "FuÃŸbodenheizung (Trockenbau / Leicht)",
-        "floor_concrete": "FuÃŸbodenheizung (Estrich / Massiv)"
+        "radiator_new": "Heizk\u00f6rper (Modern)",
+        "radiator_old": "Heizk\u00f6rper (Alt / Guss)",
+        "floor_dry": "Fu\u00dfbodenheizung (Trockenbau / Leicht)",
+        "floor_concrete": "Fu\u00dfbodenheizung (Estrich / Massiv)"
       }
     },
     "risk_mode": {
@@ -120,7 +120,7 @@
     },
     "physics_mode": {
       "options": {
-        "standard": "Standard (ZuverlÃ¤ssig)",
+        "standard": "Standard (Zuverl\u00e4ssig)",
         "advanced": "Erweitert (Euler Simulation)"
       }
     }
@@ -150,7 +150,7 @@
             "name": "Durchschn. Fehler"
           },
           "sample_count": {
-            "name": "Lern-DatensÃ¤tze"
+            "name": "Lern-Datens\u00e4tze"
           },
           "window_open": {
             "name": "Fenster offen"
@@ -167,7 +167,7 @@
         }
       },
       "next_event": {
-        "name": "NÃ¤chstes Event (Veraltet)",
+        "name": "N\u00e4chstes Event (Veraltet)",
         "state_attributes": {
           "planned_start": {
             "name": "Geplanter Start"
@@ -182,7 +182,7 @@
             "name": "Muster-Konfidenz"
           },
           "pattern_stability": {
-            "name": "Muster-StabilitÃ¤t"
+            "name": "Muster-Stabilit\u00e4t"
           },
           "fallback_used": {
             "name": "Fallback genutzt"
@@ -229,7 +229,7 @@
             "name": "Abschalt-Grund"
           },
           "coast_tau_hours": {
-            "name": "AbkÃ¼hl-Konstante (Tau)"
+            "name": "Abk\u00fchl-Konstante (Tau)"
           },
           "tau_confidence": {
             "name": "Tau-Konfidenz"
@@ -240,7 +240,7 @@
         }
       },
       "next_start": {
-        "name": "NÃ¤chster Vorheiz-Start"
+        "name": "N\u00e4chster Vorheiz-Start"
       },
       "predicted_duration": {
         "name": "Prognostizierte Dauer"
@@ -249,10 +249,10 @@
         "name": "Ziel-Temperatur"
       },
       "next_arrival_time": {
-        "name": "NÃ¤chste Ankunft (Prognose)"
+        "name": "N\u00e4chste Ankunft (Prognose)"
       },
       "next_session_end": {
-        "name": "NÃ¤chstes Session-Ende"
+        "name": "N\u00e4chstes Session-Ende"
       }
     },
     "binary_sensor": {
@@ -282,10 +282,10 @@
     },
     "button": {
       "reset_gain": {
-        "name": "Thermisches Modell zurÃ¼cksetzen"
+        "name": "Thermisches Modell zur\u00fccksetzen"
       },
       "reset_schedule": {
-        "name": "Zeitplan zurÃ¼cksetzen"
+        "name": "Zeitplan zur\u00fccksetzen"
       },
       "analyze_history": {
         "name": "Historie analysieren"
@@ -294,34 +294,34 @@
         "name": "Entscheidungen neu berechnen"
       },
       "reset_model": {
-        "name": "Thermisches Modell zurÃ¼cksetzen"
+        "name": "Thermisches Modell zur\u00fccksetzen"
       }
     }
   },
   "issues": {
     "missing_entity": {
       "title": "Sensor fehlt in {name}",
-      "description": "Die EntitÃ¤t `{entity}`, die in der Zone {name} konfiguriert ist, ist nicht verfÃ¼gbar oder existiert nicht. Bitte Ã¼berprÃ¼fe die Konfiguration oder den Sensor."
+      "description": "Die Entit\u00e4t `{entity}`, die in der Zone {name} konfiguriert ist, ist nicht verf\u00fcgbar oder existiert nicht. Bitte \u00fcberpr\u00fcfe die Konfiguration oder den Sensor."
     },
     "data_migrated": {
-      "title": "Migration fÃ¼r {name} abgeschlossen",
+      "title": "Migration f\u00fcr {name} abgeschlossen",
       "description": "Historische Daten der v1 wurden konvertiert. Die Genauigkeit kann anfangs reduziert sein. Nutze 'Historie analysieren', um die Daten aus dem Recorder neu aufzubauen."
     },
     "weather_setup_failed": {
-      "title": "Wetter-EntitÃ¤t nicht verfÃ¼gbar",
-      "description": "Die konfigurierte Wetter-EntitÃ¤t `{weather_entity}` fÃ¼r die Zone `{zone_name}` antwortet nicht oder existiert nicht. Bitte Ã¼berprÃ¼fe deine Konfiguration."
+      "title": "Wetter-Entit\u00e4t nicht verf\u00fcgbar",
+      "description": "Die konfigurierte Wetter-Entit\u00e4t `{weather_entity}` f\u00fcr die Zone `{zone_name}` antwortet nicht oder existiert nicht. Bitte \u00fcberpr\u00fcfe deine Konfiguration."
     },
     "duration_limit_exceeded": {
-      "title": "Maximale Vorheizdauer in {name} Ã¼berschritten",
-      "description": "Die berechnete Vorheizdauer betrÃ¤gt **{predicted} Stunden**, dein konfiguriertes Limit liegt aber bei **{limit} Stunden**. Bitte erhÃ¶he die 'Max. Vorheizdauer' in den Einstellungen, damit die Zieltemperatur erreicht werden kann."
+      "title": "Maximale Vorheizdauer in {name} \u00fcberschritten",
+      "description": "Die berechnete Vorheizdauer betr\u00e4gt **{predicted} Stunden**, dein konfiguriertes Limit liegt aber bei **{limit} Stunden**. Bitte erh\u00f6he die 'Max. Vorheizdauer' in den Einstellungen, damit die Zieltemperatur erreicht werden kann."
     },
     "missing_schedule_entity": {
-      "title": "Zeitplan fehlt fÃ¼r Optimal Stop",
-      "description": "Optimal Stop ist fÃ¼r Zone {name} (ID: {entry_id}) aktiviert, aber es ist keine Zeitplan-EntitÃ¤t konfiguriert. Die Funktion wird nicht korrekt arbeiten. Bitte konfiguriere die Integration neu und wÃ¤hle einen gÃ¼ltigen Zeitplan oder Kalender, oder deaktiviere Optimal Stop."
+      "title": "Zeitplan fehlt f\u00fcr Optimal Stop",
+      "description": "Optimal Stop ist f\u00fcr Zone {name} (ID: {entry_id}) aktiviert, aber es ist keine Zeitplan-Entit\u00e4t konfiguriert. Die Funktion wird nicht korrekt arbeiten. Bitte konfiguriere die Integration neu und w\u00e4hle einen g\u00fcltigen Zeitplan oder Kalender, oder deaktiviere Optimal Stop."
     },
     "physics_partial_reset": {
       "title": "Thermisches Modell teilweise neu kalibriert (v2.7.1)",
-      "description": "Die Physik-Engine wurde in v2.7.1 aktualisiert. Ihre Heizhistorie ({samples} Sitzungen) wurde beibehalten, aber Isolationsdaten wurden auf Profil-Standardwerte zurÃ¼ckgesetzt. Das System lernt AuÃŸeneinflÃ¼sse Ã¼ber die nÃ¤chsten 5-10 Heizzyklen neu.\n\nKeine Handlung erforderlich. [Mehr erfahren]({learn_more_url})"
+      "description": "Die Physik-Engine wurde in v2.7.1 aktualisiert. Ihre Heizhistorie ({samples} Sitzungen) wurde beibehalten, aber Isolationsdaten wurden auf Profil-Standardwerte zur\u00fcckgesetzt. Das System lernt Au\u00dfeneinfl\u00fcsse \u00fcber die n\u00e4chsten 5-10 Heizzyklen neu.\n\nKeine Handlung erforderlich. [Mehr erfahren]({learn_more_url})"
     }
   }
 }
