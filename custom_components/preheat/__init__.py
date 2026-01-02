@@ -45,6 +45,7 @@ async def async_setup_services(hass: HomeAssistant):
     hass.services.async_register(DOMAIN, "recompute", handle_recompute)
     hass.services.async_register(DOMAIN, "reset_model", handle_reset_model)
 
+async def _get_target_entries(hass: HomeAssistant, call) -> list[str]:
     """Helper to resolve targets."""
     from homeassistant.helpers import service, entity_registry
     
@@ -67,8 +68,7 @@ async def async_setup_services(hass: HomeAssistant):
                 if ent.platform == DOMAIN and ent.config_entry_id:
                      entries.add(ent.config_entry_id)
                      
-    # 3. Fallback: If NO target specified at all (no area, no device, no entity, no ID)
-    #    Then target ALL entries.
+    # 3. Fallback: If NO target specified at all
     if not entries and not referenced.referenced and not referenced.devices and not referenced.areas and "config_entry_id" not in call.data:
          for entry in hass.config_entries.async_entries(DOMAIN):
             entries.add(entry.entry_id)
