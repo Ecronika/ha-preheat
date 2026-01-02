@@ -63,7 +63,10 @@ sys.modules['homeassistant.helpers.issue_registry'] = MagicMock()
 sys.modules['homeassistant.helpers.device_registry'] = MagicMock() # Added
 sys.modules['homeassistant.data_entry_flow'] = MagicMock() # Added
 sys.modules['homeassistant.util'] = MagicMock()
-sys.modules['homeassistant.util.dt'] = MagicMock()
+from datetime import timezone
+mock_dt = MagicMock()
+mock_dt.UTC = timezone.utc
+sys.modules["homeassistant.util.dt"] = mock_dt
 
 # Patch components
 components_mock = MagicMock()

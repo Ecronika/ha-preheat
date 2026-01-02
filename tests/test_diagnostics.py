@@ -21,7 +21,11 @@ sys.modules["homeassistant.components"] = MagicMock()
 sys.modules["homeassistant.components.diagnostics"] = MagicMock()
 sys.modules["homeassistant.components.diagnostics"].async_redact_data = lambda d, r: d
 sys.modules["homeassistant.util"] = MagicMock()
-sys.modules["homeassistant.util.dt"] = MagicMock()
+# sys.modules["homeassistant.util.dt"] = MagicMock()
+from datetime import timezone
+mock_dt = MagicMock()
+mock_dt.UTC = timezone.utc
+sys.modules["homeassistant.util.dt"] = mock_dt
 
 from custom_components.preheat.diagnostics import async_get_config_entry_diagnostics
 

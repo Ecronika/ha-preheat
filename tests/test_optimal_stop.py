@@ -11,7 +11,11 @@ sys.modules['homeassistant.core'] = MagicMock()
 sys.modules['homeassistant.helpers'] = MagicMock()
 sys.modules['homeassistant.util'] = MagicMock()
 # Explicitly mock dt_util since it is imported
-# sys.modules['homeassistant.util.dt'] = MagicMock() # Removed to allow clean patching
+# sys.modules["homeassistant.util.dt"] = MagicMock()
+from datetime import timezone
+mock_dt = MagicMock()
+mock_dt.UTC = timezone.utc
+sys.modules["homeassistant.util.dt"] = mock_dt
 
 # from homeassistant.util import dt as dt_util
 

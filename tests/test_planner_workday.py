@@ -22,7 +22,11 @@ sys.modules["homeassistant.const"] = MagicMock()
 sys.modules["homeassistant.helpers.config_validation"] = MagicMock()
 sys.modules["homeassistant.helpers.entity_platform"] = MagicMock()
 sys.modules["homeassistant.helpers.typing"] = MagicMock()
-sys.modules["homeassistant.util.dt"] = MagicMock()
+# sys.modules["homeassistant.util.dt"] = MagicMock()
+from datetime import timezone
+mock_dt = MagicMock()
+mock_dt.UTC = timezone.utc
+sys.modules["homeassistant.util.dt"] = mock_dt
 
 from datetime import datetime, timedelta
 from unittest.mock import patch

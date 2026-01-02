@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, date, time, timezone
 import logging
 from typing import Any, TYPE_CHECKING
 import math
@@ -251,7 +251,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # Calendar Cache
         self._calendar_cache: dict[str, Any] = {
-            "last_update": datetime.min.replace(tzinfo=dt_util.UTC),
+            "last_update": datetime.min.replace(tzinfo=timezone.utc),
             "blocked_dates": set()
         }
 
@@ -307,6 +307,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # Window Detection State
         self._prev_temp: float | None = None
         self._prev_temp_time: datetime | None = None
+        self._window_open_detected: bool = False
+        self._window_cooldown_counter: int = 0
         
         # Caching
         self._cached_outdoor_temp: float = 10.0

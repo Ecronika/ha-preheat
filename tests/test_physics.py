@@ -25,7 +25,11 @@ sys.modules["homeassistant.helpers.issue_registry"] = MagicMock()
 sys.modules["homeassistant.components"] = MagicMock()
 sys.modules["homeassistant.exceptions"] = MagicMock()
 sys.modules["homeassistant.util"] = MagicMock()
-sys.modules["homeassistant.util.dt"] = MagicMock()
+# sys.modules["homeassistant.util.dt"] = MagicMock()
+from datetime import timezone
+mock_dt = MagicMock()
+mock_dt.UTC = timezone.utc
+sys.modules["homeassistant.util.dt"] = mock_dt
 
 from custom_components.preheat.physics import ThermalPhysics, ThermalModelData
 from custom_components.preheat.const import (

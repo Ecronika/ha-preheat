@@ -49,6 +49,9 @@ if "homeassistant" not in sys.modules:
     # Utils
     ha.util = MagicMock()
     ha.util.dt = MagicMock()
+    # Correctly mock UTC for type checking
+    import datetime
+    ha.util.dt.UTC = datetime.timezone.utc
     sys.modules["homeassistant.util"] = ha.util
     sys.modules["homeassistant.util.dt"] = ha.util.dt
 
