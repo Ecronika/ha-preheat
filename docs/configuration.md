@@ -67,34 +67,34 @@ After installation, click **Configure** on the integration entry to access advan
 
 ---
 
-## Entity Explanations
+## Entity Explanations (Automation Interface)
 
-### `switch.preheat`
-Is **ON** when the system determines you should be heating *right now* to hit your target. You can also toggle this switch manually to force preheating or stop it.
-> **Legacy Note:** This entity was previously named `binary_sensor.preheat_active`. A deprecated alias still exists for backward compatibility but will be removed in v3.0.
+### 🎛️ Controls
+*   **`switch.preheat`** (Logic): When **ON**, the logic manages your heating. **OFF** disables all automation (Manual Override).
+*   **`switch.enabled`**: **Master Switch**. Disables the integration entirely (CPU saving / Off-Season).
+*   **`switch.preheat_hold`**: **Hold / Vacation**. Temporarily blocks preheating (e.g. for window sensors).
 
-### `switch.preheat_hold`
-Forcefully **blocks** preheating when ON. Use this for "Vacation Mode" or "Window Open" automations if you don't use the built-in occupancy blanking.
+### 🚥 Automation Triggers
+*   **`binary_sensor.preheat_needed`** (Primary Trigger):
+    *   **Logic**: Returns `ON` when the calculated start time is reached.
+    *   **Use Case**: This is your signal to turn the thermostat **ON** (Target Temp = Comfort). It fires even if the system is internally blocked, allowing you to debug *why* it didn't start.
+*   **`binary_sensor.preheat_active`**:
+    *   **Logic**: `ON` when the room is *actually* being actively preheated (Needed AND Not Blocked).
+*   **`binary_sensor.preheat_blocked`**:
+    *   **Logic**: `ON` if heating is prevented (Hold, Window, Holiday, Disabled). Check attributes for the specific reason.
 
-### `sensor.status`
-The heart of the system.
-*   **State:** `Idle` or `Preheating`.
-*   **Attributes:** Contains the "Brain" data:
-    *   `next_start_time`: The calculated time when heating will start.
-    *   `predicted_duration`: How many minutes the preheating will take.
-    *   `confidence`: How sure the physics engine is (0-100%).
+### 📊 Data Sensors
+*   **`sensor.next_start`**: Timestamp of next heating cycle start.
+*   **`sensor.predicted_duration`**: Estimated heat-up time (minutes).
+*   **`sensor.target_temperature`**: The effective target setpoint.
+*   **`sensor.next_arrival_time`**: Next expected occupancy event.
+*   **`sensor.next_session_end`**: When the current session ends (for Optimal Stop).
 
-### `sensor.next_event`
-Shows the *next* scheduled or predicted arrival time.
-*   **State:** Timestamp of the next "Need Heat" event.
-*   **Attributes:**
-    *   `planned_start`: When the heating will start to meet this event.
-    *   `pattern_type`: Whether this event comes from a `schedule` entity or `predicted` (The Observer).
+### 🛠️ Maintenance (Buttons)
+*   **`button.recompute_decisions`**: Force immediate re-evaluation of all logic.
+*   **`button.reset_thermal_model`**: Reset physics learning to defaults.
+*   **`button.analyze_history`**: Rebuild patterns from recorder history.
 
-### Buttons
-*   **Analyze History**: Triggers a manual scan of your recorder database to generate a report (Notifications) about your heating patterns and data quality.
-*   **Reset Thermal Model**: Wipes the learned physics parameters (Mass/Loss) and restarts learning from the Profile defaults.
-*   **Reset Schedule**: Clears the learned "Observer" patterns.
-
-### `binary_sensor.optimal_stop_active`
-Is **ON** when the system calculates that you can turn **OFF** the heating early, because the residual heat will carry you to the end of the schedule.
+### 📉 Optimal Stop
+*   **`binary_sensor.optimal_stop_active`**:
+    *   **ON** when the system determines you can turn **OFF** the heating early, because the residual heat will carry you to the end of the schedule.

@@ -15,6 +15,20 @@ This milestone transforms the integration from a reactive pre-heating system int
 *   **Advanced Physics Mode**:
     *   New **Expert Option**: Choose between 'Standard' (Reliable) and 'Advanced' (Euler Simulation) physics engines.
     *   **Advanced Mode** uses dynamic weather forecasts for ultra-precise cooling prediction (Optimal Stop).
+    
+### 🔌 Automation Interface (Entity Spec v2.9)
+*   **First-Class Sensors**: Key values are now exposed as dedicated sensors for easier automations (no more template parsing!).
+    *   `sensor.<zone>_next_start_time`: When heating will begin.
+    *   `sensor.<zone>_predicted_duration`: How long it will take.
+    *   `sensor.<zone>_target_temperature`: The effective setpoint.
+    *   `sensor.<zone>_next_session_end`: When the heating session ends.
+*   **Logic Triggers**:
+    *   `binary_sensor.<zone>_preheat_needed`: **Primary Trigger** -> Turns ON when `Now >= Next Start Time` (irrespective of blocks). Use this to start your boiler/thermostat.
+    *   `binary_sensor.<zone>_preheat_blocked`: Turns ON if heating is prevented by Hold, Window, or Holidays.
+    *   `binary_sensor.<zone>_preheat_active`: Rehabilitated as a core "Running" status entity.
+*   **Controls**:
+    *   `switch.<zone>_enabled`: Master switch to completely disable the integration's logic.
+    *   **Buttons & Services**: Dedicated `recompute` and `reset_model` buttons and services for easier management.
 
 ### 🛡️ Resilience & Safety
 *   **Occupancy Debouncer**: Filters short absences (e.g. taking out trash) to ensure only true departures are recorded.
