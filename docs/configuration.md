@@ -86,16 +86,16 @@ After installation, click **Configure** on the integration entry to access advan
     *   **Logic**: `ON` if heating is prevented (Hold, Window, Holiday, Disabled). Check attributes for the specific reason.
 
 ### 📊 Data Sensors
-*   **`sensor.next_start`**: Timestamp of next heating cycle start.
-*   **`sensor.predicted_duration`**: Estimated heat-up time (minutes).
-*   **`sensor.target_temperature`**: The effective target setpoint.
-*   **`sensor.next_arrival_time`**: Next expected occupancy event.
-*   **`sensor.next_session_end`**: When the current session ends (for Optimal Stop).
+*   **`sensor.*_next_preheat_start`**: Timestamp of next heating cycle start (`next_start`).
+*   **`sensor.*_predicted_duration`**: Estimated heat-up time (minutes).
+*   **`sensor.*_target_temperature`**: The effective target setpoint.
+*   **`sensor.*_next_arrival_time`**: Next expected occupancy event.
+*   **`sensor.*_next_session_end`**: When the current session ends (for Optimal Stop).
 
 ### 🛠️ Maintenance (Buttons)
-*   **`button.recompute_decisions`**: Force immediate re-evaluation of all logic.
-*   **`button.reset_thermal_model`**: Reset physics learning to defaults.
-*   **`button.analyze_history`**: Rebuild patterns from recorder history.
+*   **`button.*_recompute_decisions`**: Force immediate re-evaluation of all logic.
+*   **`button.*_reset_thermal_model`**: Reset physics learning to defaults.
+*   **`button.*_analyze_history`**: Rebuild patterns from recorder history.
 
 ### 📉 Optimal Stop
 *   **`binary_sensor.optimal_stop_active`**:

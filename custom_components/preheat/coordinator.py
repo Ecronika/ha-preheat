@@ -1023,13 +1023,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 should_start = False
             
             # Occupancy (User is Home)
-            # If occupied, we abort preheat (or don't start). 
-            # Note: This is an "Override", but maybe not a "Block" in the sense of "Prevented despite request"?
-            # User wants "occupied" to be clearer.
             occ_sensor = self._get_conf(CONF_OCCUPANCY)
             is_occupied = False
             if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
                 is_occupied = True
+                blocked_reasons.append("occupied")
                 should_start = False
             
             # Window Open
