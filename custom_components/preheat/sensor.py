@@ -212,7 +212,6 @@ class PreheatOptimalStopTimeSensor(PreheatBaseSensor):
             "coast_tau_hours": round(data.coast_tau, 1),
             "tau_confidence": round(data.tau_confidence * 100, 1),
             "is_active": data.optimal_stop_active
-            "is_active": data.optimal_stop_active
         }
 
 # --- v3.0 Spec Implementations ---
