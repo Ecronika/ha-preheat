@@ -70,16 +70,18 @@ After installation, click **Configure** on the integration entry to access advan
 ## Entity Explanations (Automation Interface)
 
 ### 🎛️ Controls
-*   **`switch.preheat`** (Logic): When **ON**, the logic manages your heating. **OFF** disables all automation (Manual Override).
-*   **`switch.enabled`**: **Master Switch**. Disables the integration entirely (CPU saving / Off-Season).
+*   **`switch.enabled`**: **Master Enable**. Turns the integration on/off. If OFF, no calculations or checks run.
+*   **`switch.preheat`** (Manual Override): Reflects the *current* heating state. Toggling it manually **Forces** preheat ON or OFF ("Manual Start").
 *   **`switch.preheat_hold`**: **Hold / Vacation**. Temporarily blocks preheating (e.g. for window sensors).
 
 ### 🚥 Automation Triggers
-*   **`binary_sensor.preheat_needed`** (Primary Trigger):
-    *   **Logic**: Returns `ON` when the calculated start time is reached.
-    *   **Use Case**: This is your signal to turn the thermostat **ON** (Target Temp = Comfort). It fires even if the system is internally blocked, allowing you to debug *why* it didn't start.
-*   **`binary_sensor.preheat_active`**:
-    *   **Logic**: `ON` when the room is *actually* being actively preheated (Needed AND Not Blocked).
+*   **`binary_sensor.preheat_needed`**:
+    *   **Logic**: Returns `ON` when `Now >= Next Start Time`.
+    *   **Note**: It ignores blockers (e.g. if you are already home). Use this for debugging timing.
+    *   **Recommendation**: For automation triggers, prefer **`binary_sensor.preheat_active`**.
+*   **`binary_sensor.preheat_active`** (Primary Trigger):
+    *   **Logic**: `ON` when the room **should be heating right now** (Needed AND Not Blocked AND Not Occupied).
+    *   **Use Case**: Use this entity to start your boiler/thermostat.
 *   **`binary_sensor.preheat_blocked`**:
     *   **Logic**: `ON` if heating is prevented (Hold, Window, Holiday, Disabled). Check attributes for the specific reason.
 

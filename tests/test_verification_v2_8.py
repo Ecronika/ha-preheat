@@ -252,7 +252,7 @@ class TestV28Features(unittest.TestCase):
         # Case B: Blocked
         coord.data.decision_trace = {"blocked": True, "reason": "window_open"}
         self.assertTrue(blocked.is_on)
-        self.assertEqual(blocked.extra_state_attributes["blocked_reason"], "window_open")
+        self.assertEqual(blocked.extra_state_attributes["reason"], "window_open")
         
         # 4. Active (Rehabilitated)
         active = PreheatActiveBinarySensor(coord, entry)

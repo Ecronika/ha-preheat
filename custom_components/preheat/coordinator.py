@@ -373,6 +373,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         """Load learned data from storage."""
         try:
             data = await self._store.async_load()
+            if not data: data = {}
+            
             if data:
                 # Load History
                 history = data.get(ATTR_ARRIVAL_HISTORY, {})
@@ -1643,3 +1645,18 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 "notification_id": f"preheat_report_{self.entry.entry_id}"
             }
         )
+
+    async def set_enabled(self, enabled: bool) -> None:
+        """Enable/Disable the integration logic."""
+        self.enable_active = enabled
+        _LOGGER.debug("Master Enabled Changed to: %s", enabled)
+        await self._async_save_data() # Persist immediately
+        await self.async_refresh()
+
+    async def set_hold(self, hold: bool) -> None:
+        """Enable/Disable Hold mode."""
+        self.hold_active = hold
+        _LOGGER.debug("Hold Active Changed to: %s", hold)
+        # Hold state is NOT persisted by design (Vacation mode prevents accidental lock-out on restart)
+        # But we trigger an update.
+        await self.async_refresh()

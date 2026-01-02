@@ -135,6 +135,6 @@ class PreheatBlockedBinarySensor(PreheatBaseBinarySensor):
         trace = self.coordinator.data.decision_trace
         attrs = {}
         if trace and trace.get("blocked"):
-            attrs["reasons"] = [trace.get("reason", "unknown")]
-            attrs["blocked_reason"] = trace.get("reason", "unknown")
+            attrs["blocked_reasons"] = trace.get("blocked_reasons", [trace.get("reason", "unknown")])
+            attrs["reason"] = trace.get("reason", "unknown")
         return attrs
