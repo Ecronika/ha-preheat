@@ -1321,7 +1321,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 "blocked": len(blocked_reasons) > 0,
                 "reason": blocked_reasons[0] if blocked_reasons else "none",
                 "blocked_reasons": blocked_reasons,
-                "blocked_reasons": blocked_reasons,
                 "is_active": self._preheat_active,
                 "is_occupied": is_occupied
             }
@@ -1640,8 +1639,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # Stop preheating immediately if disabled
         if not enabled and self._preheat_active:
-             _LOGGER.info("Integration disabled while active. Stopping preheat immediately.")
-             await self.stop_preheat_manual()
+            _LOGGER.info("Integration disabled while active. Stopping preheat immediately.")
+            await self.stop_preheat_manual()
 
         await self.async_refresh()
 
@@ -1652,8 +1651,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # Stop preheating immediately if Hold enabled
         if hold and self._preheat_active:
-             _LOGGER.info("Hold activated while active. Stopping preheat immediately.")
-             await self.stop_preheat_manual()
+            _LOGGER.info("Hold activated while active. Stopping preheat immediately.")
+            await self.stop_preheat_manual()
 
         # Hold state is NOT persisted by design (Vacation mode prevents accidental lock-out on restart)
         # But we trigger an update.
