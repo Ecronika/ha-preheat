@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.8.0 (2025-01-01) - The Autonomous Brain 🧠
+## v2.8.0 (2025-01-02) - The Autonomous Brain 🧠
 **Major Release: Self-Learning Departure & Calendar Intelligence**
 
 This milestone transforms the integration from a reactive pre-heating system into a proactive, intelligent climate manager. It now verifies your presence patterns and predicts future departures.
@@ -37,7 +37,9 @@ This milestone transforms the integration from a reactive pre-heating system int
 *   **Robustness**: Extensive guards against invalid detector states and timezone edge cases.
 
 ### 🐛 Fixes
-*   **Target Temperature Logic**: Fixed issue where "Eco Mode" settings were sometimes accepted as valid heating targets. The system now strictly enforces `Target > Min Comfort`.
+*   **Naming 2.0 Compliance**: Full compliance with Home Assistant's Entity Naming standards. Entity IDs are generated from the System Language, while Display Names adapt to the User Language.
+*   **Localization**: Fixed critical encoding issues ("Mojibake") where German umlauts were displayed incorrectly. Rebuilt translation files as ASCII-escaped JSON for universal compatibility.
+*   **Startup Logic**: Fixed a bug where the "Scan History" logic was overridden by a notification reporter, preventing data collection on startup.
 *   **Workday Override**: Fixed display bug where "Next Arrival" showed today's time even on holidays.
 *   **Timezone Logic**: Fixed bucket selection bug where midnight in UTC caused wrong weekday stats.
 
