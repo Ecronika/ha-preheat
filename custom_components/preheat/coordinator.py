@@ -486,7 +486,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 else:
                     self.extra_store_data["physics_version"] = physics_version
             else:
-                await self.analyze_history()
+                await self.scan_history_from_recorder()
             
             # Load Enable State (Default True)
             self.enable_active = data.get("enable_active", True)
@@ -531,8 +531,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             t = datetime.strptime(default_str, "%H:%M:%S").time()
             return t.hour * 60 + t.minute
 
-    async def analyze_history(self) -> None:
-        """Analyze past 28 days of occupancy."""
+    async def scan_history_from_recorder(self) -> None:
+        """Analyze past 28 days of occupancy (Silent)."""
         occupancy_entity = self._get_conf(CONF_OCCUPANCY)
         if not occupancy_entity: return
 
@@ -1584,8 +1584,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         return self._preheat_active
 
     async def analyze_history(self) -> None:
-        """Analyze history and report Data Maturity."""
-        _LOGGER.debug("Analyzing History (Manual Request)")
+        """Analyze history and report Data Maturity (Button Action)."""
+        _LOGGER.debug("Manual History Analysis Requested")
+        await self.scan_history_from_recorder()
+        await self._generate_history_report()
+
+    async def _generate_history_report(self) -> None:
+        """Generate persistent notification with data stats."""
         
         # 1. Gather Stats from Departure History (Recorder)
         # {weekday: [sessions]}
