@@ -1,0 +1,264 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Intelligent Preheating",
+        "description": "Create a new zone. The system automatically learns how long the room takes to heat up.",
+        "data": {
+          "name": "Zone Name",
+          "occupancy_sensor": "Occupancy Sensor (Required)",
+          "temperature_sensor": "Room Temperature Sensor (Optional)",
+          "climate_entity": "Thermostat / Climate Control (Required)",
+          "setpoint_sensor": "Setpoint Sensor (Optional)",
+          "outdoor_temp_sensor": "Outdoor Temperature (Optional)",
+          "weather_entity": "Weather Forecast (Optional)",
+          "workday_sensor": "Workday Sensor (Optional)",
+          "preset_mode": "Operation Mode",
+          "valve_position_sensor": "Valve Position (Optional)",
+          "heating_profile": "Heating System Profile (Required)",
+          "arrival_window_start": "Arrival Window Start",
+          "arrival_window_end": "Arrival Window End",
+          "enable_optimal_stop": "Enable Optimal Stop (Coast)",
+          "schedule_entity": "Schedule Helper (required when Optimal Stop is enabled)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Zone",
+        "description": "Update core sensors and devices.",
+        "data": {
+          "occupancy_sensor": "Occupancy Sensor",
+          "temperature_sensor": "Room Temperature Sensor",
+          "climate_entity": "Thermostat / Climate Control",
+          "weather_entity": "Weather Forecast"
+        }
+      }
+    },
+    "error": {
+      "invalid_occupancy_sensor": "Invalid occupancy sensor selected",
+      "invalid_temperature_sensor": "Invalid temperature sensor selected",
+      "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
+      "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk",
+      "required_for_optimal_stop": "Schedule entity is required when Optimal Stop is enabled."
+    },
+    "abort": {
+      "already_configured": "This zone is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zone Settings",
+        "description": "Default settings are usually sufficient. Enable expert mode for fine-tuning.",
+        "data": {
+          "preset_mode": "Operation Mode",
+          "expert_mode": "Show Advanced Settings (Expert)",
+          "occupancy_sensor": "Occupancy Sensor",
+          "temperature_sensor": "Room Temperature",
+          "climate_entity": "Thermostat",
+          "setpoint_sensor": "Setpoint Sensor (e.g. Input Number)",
+          "weather_entity": "Weather Service",
+          "outdoor_temp_sensor": "Outdoor Temperature",
+          "workday_sensor": "Workday Sensor",
+          "preheat_lock": "Lock Switch",
+          "ema_alpha": "Learning Rate (Alpha)",
+          "initial_gain": "Initial Gain (min/K)",
+          "buffer_minutes": "Safety Buffer (Minutes)",
+          "earliest_start_minutes": "Earliest Start (Minutes from midnight)",
+          "comfort_min_temp": "Minimum Comfort Temp",
+          "comfort_max_temp": "Maximum Comfort Temp",
+          "comfort_fallback_temp": "Fallback Comfort Temp",
+          "dont_start_if_warm": "Don't start if already warm",
+          "off_only_when_warm": "Heat until target reached (even if occupied)",
+          "arrival_window_start": "Arrival Window Start",
+          "arrival_window_end": "Arrival Window End",
+          "air_to_oper_bias_k": "Air-to-Operative Bias (K)",
+          "valve_position_sensor": "Valve Position (Optional)",
+          "max_preheat_hours": "Max Preheat Duration (Hours)",
+          "enable_optimal_stop": "Enable Optimal Stop (Coast)",
+          "schedule_entity": "Schedule Helper (used for Optimal Stop)",
+          "stop_tolerance": "Stop Tolerance (K)",
+          "max_coast_hours": "Max Coast Duration (Hours)",
+          "heating_profile": "Heating System Profile",
+          "only_on_workdays": "Only preheat on workdays",
+          "occupancy_debounce_minutes": "Occupancy Debounce Time (Minutes)",
+          "use_forecast": "Use Weather Forecast",
+          "risk_mode": "Forecast Risk Strategy",
+          "physics_mode": "Physics Engine Mode"
+        }
+      }
+    },
+    "error": {
+      "invalid_time_format": "Invalid time format (must be HH:MM:SS)",
+      "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
+      "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk",
+      "required_for_optimal_stop": "Schedule entity is required when Optimal Stop is enabled."
+    }
+  },
+  "selector": {
+    "preset_mode": {
+      "options": {
+        "aggressive": "Aggressive (Early & Safe)",
+        "balanced": "Balanced (Recommended)",
+        "conservative": "Eco (Late & Efficient)"
+      }
+    },
+    "heating_profile": {
+      "options": {
+        "infrared_air": "Infrared / Air (Fast)",
+        "radiator_new": "Radiator (Modern)",
+        "radiator_old": "Radiator (Old / Cast Iron)",
+        "floor_dry": "Floor Heating (Dry / Light)",
+        "floor_concrete": "Floor Heating (Concrete / Massive)"
+      }
+    },
+    "risk_mode": {
+      "options": {
+        "balanced": "Balanced (Integral / Default)",
+        "pessimistic": "Pessimistic (Comfort / P10)",
+        "optimistic": "Optimistic (Savings / P90)"
+      }
+    },
+    "physics_mode": {
+      "options": {
+        "standard": "Standard (Reliable)",
+        "advanced": "Advanced (Euler Simulation)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Idle",
+          "preheating": "Preheating"
+        }
+      },
+      "next_event": {
+        "name": "Next Event (Legacy)"
+      },
+      "model_status": {
+        "name": "Model Status",
+        "state": {
+          "ready": "Ready",
+          "learning": "Learning Active"
+        }
+      },
+      "mass_factor": {
+        "name": "Thermal Mass"
+      },
+      "loss_factor": {
+        "name": "Thermal Loss"
+      },
+      "confidence": {
+        "name": "Learning Confidence"
+      },
+      "optimal_stop_time": {
+        "name": "Optimal Stop Time",
+        "state_attributes": {
+          "savings_total_min": {
+            "name": "Total Savings (min)"
+          },
+          "savings_remaining_min": {
+            "name": "Remaining Savings"
+          },
+          "reason": {
+            "name": "Stop Reason"
+          },
+          "coast_tau_hours": {
+            "name": "Cooling Constant (Tau)"
+          },
+          "tau_confidence": {
+            "name": "Tau Confidence"
+          },
+          "is_active": {
+            "name": "Stop Active"
+          }
+        }
+      },
+      "predicted_duration": {
+        "name": "Predicted Duration"
+      },
+      "next_start": {
+        "name": "Next Preheat Start"
+      },
+      "target_temperature": {
+        "name": "Target Temperature"
+      },
+      "next_arrival_time": {
+        "name": "Next Arrival Time"
+      },
+      "next_session_end": {
+        "name": "Next Session End"
+      }
+    },
+    "switch": {
+      "preheat": {
+        "name": "Manual Preheat Override"
+      },
+      "preheat_hold": {
+        "name": "Preheat Hold"
+      },
+      "enabled": {
+        "name": "Integration Enabled"
+      }
+    },
+    "button": {
+      "reset_gain": {
+        "name": "Reset Thermal Model"
+      },
+      "reset_schedule": {
+        "name": "Reset Schedule"
+      },
+      "analyze_history": {
+        "name": "Analyze History"
+      },
+      "recompute": {
+        "name": "Recompute Decisions"
+      },
+      "reset_model": {
+        "name": "Reset Thermal Model"
+      }
+    },
+    "binary_sensor": {
+      "optimal_stop_active": {
+        "name": "Optimal Stop Active"
+      },
+      "preheat_active": {
+        "name": "Preheat Active"
+      },
+      "preheat_needed": {
+        "name": "Preheat Needed (Trigger)"
+      },
+      "preheat_blocked": {
+        "name": "Preheat Blocked"
+      }
+    }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "Missing entity in {name}",
+      "description": "The entity `{entity}` configured in zone {name} is unavailable or missing. Please check configuration or the sensor."
+    },
+    "data_migrated": {
+      "title": "Migration completed for {name}",
+      "description": "Historical data from v1 was converted. Precision may be reduced initially. Use 'Analyze History' button to rebuild from recorder data for better accuracy."
+    },
+    "weather_setup_failed": {
+      "title": "Weather Entity Unavailable",
+      "description": "The configured weather entity `{weather_entity}` for zone `{zone_name}` is not responding or does not exist. Please check your configuration."
+    },
+    "duration_limit_exceeded": {
+      "title": "Max Heating Duration Exceeded in {name}",
+      "description": "The calculated required preheat duration is **{predicted} hours**, which exceeds your configured limit of **{limit} hours**. Please increase the 'Max Preheat Duration' in the integration options to ensure the target temperature is reached."
+    },
+    "missing_schedule_entity": {
+      "title": "Missing Schedule for Optimal Stop",
+      "description": "Optimal Stop is enabled for zone {name} (ID: {entry_id}), but no Schedule Entity is configured. The feature will not work correctly. Please reconfigure the integration and select a valid Schedule entity, or disable Optimal Stop."
+    },
+    "physics_partial_reset": {
+      "title": "Thermal Model Partially Recalibrated (v2.7.1)",
+      "description": "The physics engine was updated in v2.7.1 for improved stability. Your heating history ({samples} sessions) was preserved, but insulation data was reset to profile defaults. The system will re-learn outdoor influences over the next 5-10 heating cycles.\n\nNo action required. [Learn more]({learn_more_url})"
+    }
+  }
+}
