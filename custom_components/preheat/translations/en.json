@@ -228,6 +228,9 @@
       "preheat_active": {
         "name": "Preheat Active"
       },
+      "heat_demand": {
+        "name": "Heat Demand (Boiler Control)"
+      },
       "preheat_needed": {
         "name": "Preheat Needed (Trigger)"
       },

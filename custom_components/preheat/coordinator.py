@@ -223,6 +223,7 @@ class PreheatData:
     outdoor_temp: float | None = None
     last_comfort_setpoint: float | None = None
     deadtime: float = 0.0 # V3
+    is_occupied: bool = False # V2.9
     
     # Scheduled Stop
     next_departure: datetime | None = None
@@ -1418,6 +1419,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 outdoor_temp=outdoor_temp,
                 last_comfort_setpoint=self._last_comfort_setpoint,
                 deadtime=self.physics.deadtime,
+                is_occupied=is_occupied, # V2.9
                 # V2.5
                 optimal_stop_active=opt_active,
                 optimal_stop_time=opt_time,

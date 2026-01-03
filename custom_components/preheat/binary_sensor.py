@@ -29,6 +29,7 @@ async def async_setup_entry(
         PreheatActiveBinarySensor(coordinator, entry),
         PreheatNeededBinarySensor(coordinator, entry),
         PreheatBlockedBinarySensor(coordinator, entry),
+        PreheatHeatDemandBinarySensor(coordinator, entry),
     ]
     
     # Auto-Enable Logic for Existing Installs
@@ -164,3 +165,42 @@ class PreheatBlockedBinarySensor(PreheatBaseBinarySensor):
             attrs["blocked_reasons"] = trace.get("blocked_reasons", [trace.get("reason", "unknown")])
             attrs["reason"] = trace.get("reason", "unknown")
         return attrs
+
+class PreheatHeatDemandBinarySensor(PreheatBaseBinarySensor):
+    """
+    Indicates valid Heat Demand (Preheat OR Occupancy) adjusted by Optimal Stop / Blocking.
+    Logic: (PreheatActive OR Occupied) AND NOT OptimalStop AND NOT Blocked
+    Useful for triggering boiler/pump global demand.
+    """
+    _attr_translation_key = "heat_demand"
+    _attr_entity_registry_enabled_default = False # User must enable if needed
+    _attr_icon = "mdi:fire"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_heat_demand"
+
+    @property
+    def is_on(self) -> bool:
+        data = self.coordinator.data
+        trace = data.decision_trace or {}
+        
+        # 1. Base Demand
+        is_active = data.preheat_active
+        is_occupied = data.is_occupied
+        
+        if not (is_active or is_occupied):
+             return False
+             
+        # 2. Suppressors
+        
+        # A. Optimal Stop (Coasting) -> Kill Demand
+        if data.optimal_stop_active:
+             return False
+             
+        # B. Blocked (e.g. Window Open / Holiday / Hold) -> Kill Demand
+        # This prevents heating if window is open even if occupied (usually desired)
+        if trace.get("blocked", False):
+             return False
+             
+        return True

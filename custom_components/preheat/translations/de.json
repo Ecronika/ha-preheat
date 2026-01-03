@@ -262,6 +262,9 @@
       "preheat_active": {
         "name": "Vorheizen Aktiv"
       },
+      "heat_demand": {
+        "name": "W\u00e4rmebedarf (Kesselsteuerung)"
+      },
       "preheat_needed": {
         "name": "Vorheizen Notwendig (Trigger)"
       },
