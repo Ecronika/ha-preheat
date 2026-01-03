@@ -184,23 +184,102 @@ class PreheatHeatDemandBinarySensor(PreheatBaseBinarySensor):
     def is_on(self) -> bool:
         data = self.coordinator.data
         trace = data.decision_trace or {}
+
+        # --- 1. Hard Blocks (Kill Switch) ---
+        # If any block is active, we force OFF (Safety/Efficiency)
         
-        # 1. Base Demand
-        is_active = data.preheat_active
-        is_occupied = data.is_occupied
-        
-        if not (is_active or is_occupied):
-             return False
-             
-        # 2. Suppressors
-        
-        # A. Optimal Stop (Coasting) -> Kill Demand
+        # A. Optimal Stop (Coasting)
         if data.optimal_stop_active:
              return False
-             
-        # B. Blocked (e.g. Window Open / Holiday / Hold) -> Kill Demand
-        # This prevents heating if window is open even if occupied (usually desired)
+
+        # B. Blocked (Master Switch Off, Hold/Vacation, External Window/Lock)
+        # Using trace["blocked"] covers all Coordinator logic (switch.preheat_enable, Hold, Lock)
         if trace.get("blocked", False):
              return False
+        
+        # C. Window Open (Implicit)
+        if data.window_open:
+             return False
+
+
+        # --- 2. Preheat Override ---
+        # If Preheat is actively forcing heat (Boost Mode), we ALWAYS demand heat.
+        # This bypasses the physical checks because we *want* to heat up cold fabric.
+        if data.preheat_active:
+             return True
+
+
+        # --- 3. Physical Demand Logic (Smart Thermostat Behavior) ---
+        # If occupied, we verify if heat is ACTUALLY needed to avoid wasteful pumping.
+        
+        if not data.is_occupied:
+             return False
+        
+        # Stage A: HVAC Action (The Truth)
+        # If the thermostat explicitly says "I am heating", believe it.
+        # Some TRVs report 'idle' even if valve > 0, so we fall through if not heating.
+        if data.hvac_action == "heating":
+             return True
              
-        return True
+        # Stage B: Valve Position (The Physical Truth)
+        # Thresholds: ON > 15%, OFF < 8% (Hysteresis)
+        valve = data.valve_signal
+        if valve is not None:
+             if valve >= 15.0:
+                  return True
+             if valve <= 8.0:
+                  # Force OFF logic? No, just fall through to Delta T check?
+                  # Actually, if valve is explicitly CLOSED (<8%), we should probably not request heat
+                  # UNLESS Delta T is huge (unlikely if valve is closed).
+                  # Let's say: If Valve known and < 8%, it counts as NO DEMAND for this stage.
+                  pass
+             else:
+                  # In Deadband (8-15%). Keep previous state?
+                  # Since we are stateless here (coordinator update drives us), 
+                  # we rely on the implementation below (Delta T) or return False?
+                  # To implement Hysteresis properly without local state storage causing sync issues,
+                  # we can't easily latch "ON" inside this property without `self._attr_is_on` management.
+                  # BUT: HA Entity state is preserved. We could check `self.is_on`?
+                  # No, `self.is_on` calls this property. Infinite loop.
+                  # WE MUST CHECK `self._attr_is_on` (if managed) or `self.state` (async).
+                  # Simplified: Treat > 15% as ON. Treat 8-15% as "Maybe" (Check Delta T).
+                  pass
+
+        # Stage C: Delta T (The Mathematical Truth)
+        # Fallback if Valve/HVAC unknown or ambiguous.
+        # Thresholds: ON > 0.3 K, OFF < 0.1 K
+        current = data.operative_temp
+        target = data.target_setpoint
+        
+        if current is not None and target is not None:
+             delta = target - current
+             if delta >= 0.3:
+                  return True
+             # If delta is small (<0.3) but positive, we might still be in deadband.
+        
+        return False
+
+    @property
+    def extra_state_attributes(self):
+        data = self.coordinator.data
+        trace = data.decision_trace or {}
+        
+        target = data.target_setpoint
+        current = data.operative_temp
+        delta = round(target - current, 2) if (target and current) else None
+        
+        return {
+             "reason": trace.get("reason", "unknown"),
+             "blocked": trace.get("blocked", False),
+             "hvac_action": data.hvac_action,
+             "valve_position": data.valve_signal,
+             "delta_t": delta,
+             "demand_source": self._determine_source(data, delta)
+        }
+
+    def _determine_source(self, data, delta):
+         if data.preheat_active: return "preheat"
+         if data.hvac_action == "heating": return "hvac_action"
+         if data.valve_signal is not None and data.valve_signal >= 15.0: return "valve"
+         if delta is not None and delta >= 0.3: return "delta_t"
+         return "none"

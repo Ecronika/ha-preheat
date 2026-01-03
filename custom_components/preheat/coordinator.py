@@ -246,6 +246,10 @@ class PreheatData:
     
     # v3.0 Trace
     decision_trace: dict[str, Any] | None = None
+    
+    # v2.9 Logic
+    hvac_action: str | None = None
+    hvac_mode: str | None = None
 
 class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     """Coordinator to manage preheating logic."""
@@ -1403,6 +1407,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 })
             self._last_opt_active = opt_active
             
+            # V2.9: Fetch HVAC State for Heat Demand Sensor
+            hvac_action = None
+            hvac_mode = None
+            climate_key = self._get_conf(CONF_CLIMATE)
+            if climate_key:
+                 state = self.hass.states.get(climate_key)
+                 if state:
+                      hvac_mode = state.state
+                      hvac_action = state.attributes.get("hvac_action")
+
             return PreheatData(
                 preheat_active=self._preheat_active,
                 next_start_time=start_time,
@@ -1437,7 +1451,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 fallback_used=fallback_used,
                 # v3.0
                 decision_trace=decision_trace,
-                next_departure=effective_departure
+                next_departure=effective_departure,
+                # V2.9
+                hvac_action=hvac_action,
+                hvac_mode=hvac_mode
             )
 
         except Exception as err:
