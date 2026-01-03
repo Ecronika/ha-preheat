@@ -59,7 +59,7 @@
           "weather_entity": "Weather Service",
           "outdoor_temp_sensor": "Outdoor Temperature",
           "workday_sensor": "Workday Sensor",
-          "preheat_lock": "Lock Switch",
+          "preheat_lock": "External Inhibit / Window Sensor",
           "ema_alpha": "Learning Rate (Alpha)",
           "initial_gain": "Initial Gain (min/K)",
           "buffer_minutes": "Safety Buffer (Minutes)",
@@ -84,6 +84,9 @@
           "use_forecast": "Use Weather Forecast",
           "risk_mode": "Forecast Risk Strategy",
           "physics_mode": "Physics Engine Mode"
+        },
+        "data_description": {
+          "preheat_lock": "If this entity is ON, preheating is prevented (e.g. Window Contact or Maintenance Switch)."
         }
       }
     },
@@ -220,10 +223,6 @@
     "binary_sensor": {
       "optimal_stop_active": {
         "name": "Optimal Stop Active"
-      },
-      "preheat_lock": {
-        "name": "External Inhibit / Window Sensor",
-        "description": "If this entity is ON, preheating is prevented (e.g. Window Contact or Maintenance Switch)."
       },
       "preheat_active": {
         "name": "Preheat Active"

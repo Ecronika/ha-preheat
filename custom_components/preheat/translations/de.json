@@ -84,6 +84,9 @@
           "schedule_entity": "Zeitplan-Helfer (Schedule Entity)",
           "stop_tolerance": "Abschalt-Toleranz (K)",
           "max_coast_hours": "Max. Coasting-Dauer (Stunden)"
+        },
+        "data_description": {
+          "preheat_lock": "Wenn diese Entit\u00e4t AN/ON ist, wird das Vorheizen blockiert (z.B. Fenster offen oder Wartungsschalter)."
         }
       }
     },
