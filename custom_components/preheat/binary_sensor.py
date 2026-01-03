@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from typing import Any
+from datetime import datetime, timedelta
+from homeassistant.util import dt as dt_util
 
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
@@ -170,94 +172,117 @@ class PreheatHeatDemandBinarySensor(PreheatBaseBinarySensor):
     """
     Indicates valid Heat Demand (Preheat OR Occupancy) adjusted by Optimal Stop / Blocking.
     Logic: (PreheatActive OR Occupied) AND NOT OptimalStop AND NOT Blocked
-    Useful for triggering boiler/pump global demand.
+    Includes Hysteresis and Timers (Min ON 5m, Min OFF 3m).
     """
     _attr_translation_key = "heat_demand"
     _attr_entity_registry_enabled_default = False # User must enable if needed
     _attr_icon = "mdi:fire"
 
+    def __init__(self, coordinator: PreheatingCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_is_on = False # Initial state
+        self._last_switch_time: datetime | None = None
+        
+        # Determine internal demand state separately from output state (for timers)
+        # Actually, we can just track output state change time.
+        pass
+
     @property
     def unique_id(self) -> str:
         return f"{self._entry.entry_id}_heat_demand"
 
-    @property
-    def is_on(self) -> bool:
+    def _handle_coordinator_update(self) -> None:
+        """Calculate state with hysteresis and timers."""
         data = self.coordinator.data
         trace = data.decision_trace or {}
+        now = dt_util.utcnow()
+        current_state = self._attr_is_on
 
-        # --- 1. Hard Blocks (Kill Switch) ---
-        # If any block is active, we force OFF (Safety/Efficiency)
+        # --- Step 1: Calculate Raw Demand (Instantaneous) ---
+        raw_demand = False
+        forced_off_safety = False
         
-        # A. Optimal Stop (Coasting)
-        if data.optimal_stop_active:
-             return False
+        # A. Safety Blocks (Instant OFF)
+        if (data.optimal_stop_active or 
+            trace.get("blocked", False) or 
+            data.window_open or 
+            (not data.is_occupied and not data.preheat_active and not data.hvac_action == "heating")): 
+             # Note: logic regarding occupancy is simplified here: 
+             # If NOT occupied AND NOT preheat AND NOT hvac_heating -> OFF (unless we want to allow valve > 15% when unoccupied? No, usually not).
+             # Wait, user spec says: "Wenn eine der Bedingungen zutrifft (Blocks), ist heat_demand = OFF".
+             # Occupancy is part of "Demand Logic".
+             pass
 
-        # B. Blocked (Master Switch Off, Hold/Vacation, External Window/Lock)
-        # Using trace["blocked"] covers all Coordinator logic (switch.preheat_enable, Hold, Lock)
-        if trace.get("blocked", False):
-             return False
-        
-        # C. Window Open (Implicit)
-        if data.window_open:
-             return False
-
-
-        # --- 2. Preheat Override ---
-        # If Preheat is actively forcing heat (Boost Mode), we ALWAYS demand heat.
-        # This bypasses the physical checks because we *want* to heat up cold fabric.
-        if data.preheat_active:
-             return True
-
-
-        # --- 3. Physical Demand Logic (Smart Thermostat Behavior) ---
-        # If occupied, we verify if heat is ACTUALLY needed to avoid wasteful pumping.
-        
-        if not data.is_occupied:
-             return False
-        
-        # Stage A: HVAC Action (The Truth)
-        # If the thermostat explicitly says "I am heating", believe it.
-        # Some TRVs report 'idle' even if valve > 0, so we fall through if not heating.
-        if data.hvac_action == "heating":
-             return True
+        if data.optimal_stop_active or trace.get("blocked", False) or data.window_open:
+             forced_off_safety = True
+             raw_demand = False
+        elif data.preheat_active:
+             # Boost Mode overrides physical checks
+             raw_demand = True
+        elif not data.is_occupied:
+             # Unoccupied -> OFF (Normal)
+             raw_demand = False
+        else:
+             # B. Physical Checks (Occupied)
+             raw_demand = False # Default unless proven otherwise
              
-        # Stage B: Valve Position (The Physical Truth)
-        # Thresholds: ON > 15%, OFF < 8% (Hysteresis)
-        valve = data.valve_signal
-        if valve is not None:
-             if valve >= 15.0:
-                  return True
-             if valve <= 8.0:
-                  # Force OFF logic? No, just fall through to Delta T check?
-                  # Actually, if valve is explicitly CLOSED (<8%), we should probably not request heat
-                  # UNLESS Delta T is huge (unlikely if valve is closed).
-                  # Let's say: If Valve known and < 8%, it counts as NO DEMAND for this stage.
-                  pass
-             else:
-                  # In Deadband (8-15%). Keep previous state?
-                  # Since we are stateless here (coordinator update drives us), 
-                  # we rely on the implementation below (Delta T) or return False?
-                  # To implement Hysteresis properly without local state storage causing sync issues,
-                  # we can't easily latch "ON" inside this property without `self._attr_is_on` management.
-                  # BUT: HA Entity state is preserved. We could check `self.is_on`?
-                  # No, `self.is_on` calls this property. Infinite loop.
-                  # WE MUST CHECK `self._attr_is_on` (if managed) or `self.state` (async).
-                  # Simplified: Treat > 15% as ON. Treat 8-15% as "Maybe" (Check Delta T).
-                  pass
+             # 1. HVAC Action
+             if data.hvac_action == "heating":
+                  raw_demand = True
+             
+             # 2. Valve Position (with Deadband)
+             # V_on = 15%, V_off = 8%
+             # If HVAC didn't decide, we check Valve
+             if not raw_demand and data.valve_signal is not None:
+                  if data.valve_signal >= 15.0:
+                       raw_demand = True
+                  elif data.valve_signal > 8.0 and current_state:
+                       # Deadband retention (if was ON, stay ON down to 8%)
+                       raw_demand = True
+             
+             # 3. Delta T (with Deadband)
+             # D_on = 0.4, D_off = 0.2
+             if not raw_demand and data.target_setpoint is not None and data.operative_temp is not None:
+                  delta = data.target_setpoint - data.operative_temp
+                  if delta >= 0.4:
+                       raw_demand = True
+                  elif delta > 0.2 and current_state:
+                       # Deadband retention
+                       raw_demand = True
 
-        # Stage C: Delta T (The Mathematical Truth)
-        # Fallback if Valve/HVAC unknown or ambiguous.
-        # Thresholds: ON > 0.3 K, OFF < 0.1 K
-        current = data.operative_temp
-        target = data.target_setpoint
+        # --- Step 2: Apply Timers (Anti-Short-Cycle) ---
+        new_state = current_state
         
-        if current is not None and target is not None:
-             delta = target - current
-             if delta >= 0.3:
-                  return True
-             # If delta is small (<0.3) but positive, we might still be in deadband.
+        if forced_off_safety:
+             # Safety Override: Instant OFF
+             new_state = False
+        else:
+             if raw_demand != current_state:
+                  # State Change Requested
+                  if self._last_switch_time is None:
+                       # First change -> Allow
+                       new_state = raw_demand
+                  else:
+                       elapsed = (now - self._last_switch_time).total_seconds()
+                       
+                       if raw_demand: 
+                            # Turning ON -> Check Min OFF Time (3 min)
+                            # "Wenn er OFF wurde, bleibt er mindestens 3 min OFF"
+                            if elapsed >= (3 * 60):
+                                 new_state = True
+                       else:
+                            # Turning OFF -> Check Min ON Time (5 min)
+                            # "Wenn er ON wurde, bleibt er mindestens 5 min ON"
+                            if elapsed >= (5 * 60):
+                                 new_state = False
         
-        return False
+        # --- Step 3: Update State ---
+        if new_state != current_state:
+             self._attr_is_on = new_state
+             self._last_switch_time = now
+        
+        # Call super to write state to HA
+        super()._handle_coordinator_update()
 
     @property
     def extra_state_attributes(self):
@@ -281,5 +306,5 @@ class PreheatHeatDemandBinarySensor(PreheatBaseBinarySensor):
          if data.preheat_active: return "preheat"
          if data.hvac_action == "heating": return "hvac_action"
          if data.valve_signal is not None and data.valve_signal >= 15.0: return "valve"
-         if delta is not None and delta >= 0.3: return "delta_t"
+         if delta is not None and delta >= 0.4: return "delta_t"
          return "none"
