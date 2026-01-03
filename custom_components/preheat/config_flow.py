@@ -90,6 +90,8 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # if user_input.get(CONF_ENABLE_OPTIMAL_STOP, False) and not user_input.get(CONF_SCHEDULE_ENTITY):
             #      errors[CONF_SCHEDULE_ENTITY] = "required_for_optimal_stop"
                 # If errors exist, re-show form without creating entry
+            if errors:
+                # If errors exist, re-show form without creating entry
                 pass
             else:
                  # V3: Split Core (Data) vs Behavior (Options)

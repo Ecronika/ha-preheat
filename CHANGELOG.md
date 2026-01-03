@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.9.0-beta4 (2026-01-03) - Hotfix 🔥
+**CI Stability Fix**
+
+*   **Fixed Indentation Error**: Corrected a syntax error in `config_flow.py` that caused CI checks (`hassfest`) to fail.
+
+---
+
 ## v2.9.0-beta3 (2026-01-03) - Schedule-Free Fixes 🚑
 **Bugfix & Polish for Beta 2**
 
