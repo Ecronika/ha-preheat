@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.9.0-beta5 (2026-01-04) - Button Fix 🖱️
+**Bugfix**
+
+*   **Fixed Action**: The "Analyze History" button now correctly triggers the history report (it was previously silent).
+
+---
+
 ## v2.9.0-beta4 (2026-01-03) - Hotfix 🔥
 **CI Stability Fix**
 

@@ -102,6 +102,8 @@ class PreheatButton(CoordinatorEntity[PreheatingCoordinator], ButtonEntity):
         if self.entity_description.press_action == "reset_schedule":
             await self.coordinator.reset_arrivals()
             await self.coordinator.analyze_history()
+        elif self.entity_description.press_action == "analyze_history":
+             await self.coordinator.analyze_history()
         elif self.entity_description.press_action == "reset_model":
             await self.coordinator.reset_model()
         elif self.entity_description.press_action == "recompute":
