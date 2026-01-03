@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.9.0-beta1 (2026-01-03) - Heat Demand & UX Polish 🛠️
+**Feature Update: Heat Demand Sensor & External Control**
+
+This release introduces a powerful new signal for central heating control and significantly improves the "Lock Switch" user experience.
+
+### 🔥 New: Heat Demand Sensor
+A dedicated binary sensor (`binary_sensor.<zone>_heat_demand`) that tells you exactly when a zone needs active heat supply.
+*   **Logic**: 3-Stage Smart Check (HVAC Action -> Valve Position -> Delta T).
+*   **Hysteresis**: Prevents short-cycling with min. 5 min ON / 3 min OFF timers.
+*   **Thresholds**: ON if Valve > 15% or Target - Temp > 0.4°C.
+*   **Safety**: Automatically OFF if Window Open, Optimal Stop Active, or Externally Blocked.
+*   *Note: Opt-In (Disabled by default). Enable via entity settings.*
+
+### ✨ UX Improvements
+*   **Refined "Lock Switch"**: Renamed to "External Inhibit / Window Sensor" and moved to the main configuration page.
+*   **Expanded Compatibility**: The External Inhibit selector now accepts `binary_sensor` and `switch` entities, supporting direct integration of window contacts.
+*   **Traceability**: "External Inhibit" is now a distinct blocking reason in the decision trace, separate from manual "Hold".
+
+---
+
 ## v2.8.0 (2025-01-02) - The Autonomous Brain 🧠
 **Major Release: Self-Learning Departure & Calendar Intelligence**
 
