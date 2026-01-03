@@ -61,7 +61,7 @@
           "outdoor_temp_sensor": "Au\u00dfentemperatur",
           "workday_sensor": "Arbeitstag-Sensor",
           "only_on_workdays": "Nur an Arbeitstagen vorheizen (Wochenende/Feiertage ignorieren)",
-          "preheat_lock": "Sperr-Schalter (Lock)",
+          "preheat_lock": "Externe Sperre / Fensterkontakt",
           "ema_alpha": "Lerngeschwindigkeit (Alpha)",
           "initial_gain": "Start-Aufheizfaktor (min/K)",
           "buffer_minutes": "Sicherheitspuffer (Minuten)",

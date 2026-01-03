@@ -216,6 +216,7 @@ REASON_END_TOO_SOON: Final = "end_too_soon"
 REASON_LOW_CONFIDENCE: Final = "low_confidence"
 REASON_BLOCKED_BY_GATES: Final = "blocked_by_gates"
 REASON_INSUFFICIENT_DATA: Final = "insufficient_data"
+REASON_EXTERNAL_INHIBIT: Final = "external_inhibit"
 
 # Gate Failure Keys
 GATE_FAIL_SAVINGS: Final = "low_savings"

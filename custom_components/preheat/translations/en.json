@@ -221,6 +221,10 @@
       "optimal_stop_active": {
         "name": "Optimal Stop Active"
       },
+      "preheat_lock": {
+        "name": "External Inhibit / Window Sensor",
+        "description": "If this entity is ON, preheating is prevented (e.g. Window Contact or Maintenance Switch)."
+      },
       "preheat_active": {
         "name": "Preheat Active"
       },

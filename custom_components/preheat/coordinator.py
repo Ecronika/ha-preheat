@@ -97,7 +97,17 @@ from .const import (
     GATE_FAIL_MANUAL,
     GATE_MIN_SAVINGS_MIN,
     GATE_MIN_TAU_CONF,
-    GATE_MIN_PATTERN_CONF
+    GATE_MIN_PATTERN_CONF,
+    REASON_UNAVAILABLE,
+    REASON_UNKNOWN,
+    REASON_OFF,
+    REASON_NO_NEXT_EVENT,
+    REASON_PARSE_ERROR,
+    REASON_END_TOO_SOON,
+    REASON_LOW_CONFIDENCE,
+    REASON_BLOCKED_BY_GATES,
+    REASON_INSUFFICIENT_DATA,
+    REASON_EXTERNAL_INHIBIT
 )
 
 from .planner import PreheatPlanner
@@ -1001,9 +1011,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 if start_time <= now < next_event:
                      should_start = True
             
-            # 4. Overrides & Blockers (Accumulate Reasons)
-            blocked_reasons = [] # For decision_trace
-            
+            # 4. Decison Logic (Should we start?)
+            # -----------------------------------
+            blocked_reasons = [] # Collect all blocking reasons
+            should_start = None # None=Idle/Evaluating, True=Start, False=Blocked
+
             # Master Switch
             if not self.enable_active:
                 blocked_reasons.append("disabled")
@@ -1026,11 +1038,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             if self._get_conf(CONF_DONT_START_IF_WARM, True):
                 if delta_in < 0.2: should_start = False
                 
-            # Lock (Hold)
-            lock = self._get_conf(CONF_LOCK)
-            if self.hold_active or (lock and self.hass.states.is_state(lock, STATE_ON)): 
+            # Internal Hold Switch
+            if self.hold_active:
                  blocked_reasons.append("hold")
                  should_start = False
+
+            # External Inhibit / Lock
+            lock = self._get_conf(CONF_LOCK)
+            if lock:
+                 if self.hass.states.is_state(lock, STATE_ON):
+                      blocked_reasons.append(REASON_EXTERNAL_INHIBIT)
+                      should_start = False
                  
             # Calendar / Holiday (Already checked in Step 1?)
             # blocked_dates was fetched earlier.

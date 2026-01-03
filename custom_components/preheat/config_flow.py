@@ -323,6 +323,11 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="schedule")
             ),
+            
+            # External Control (Promoted)
+            vol.Optional(CONF_LOCK): selector.EntitySelector(
+                 selector.EntitySelectorConfig(domain=["input_boolean", "binary_sensor", "switch"])
+            ),
 
             vol.Optional(CONF_EXPERT_MODE): selector.BooleanSelector()
         }
@@ -332,7 +337,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_VALVE_POSITION): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["sensor", "input_number"]) 
                 ),
-                vol.Optional(CONF_LOCK): selector.EntitySelector(selector.EntitySelectorConfig(domain="input_boolean")),
+                # Lock moved to main
                 vol.Optional(CONF_WORKDAY): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
                 vol.Optional(CONF_CALENDAR_ENTITY): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
                 vol.Optional(CONF_ONLY_ON_WORKDAYS): selector.BooleanSelector(),
