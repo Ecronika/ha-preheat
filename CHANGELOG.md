@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.9.0-beta2 (2026-01-03) - Schedule-Free Optimal Stop 🏃
+**Feature Update: Flexible Optimal Stop**
+
+This release removes the strict requirement for a Schedule Entity to use "Optimal Stop" (Coasting).
+
+### 🆕 Schedule-Free Operation
+You can now enable Optimal Stop (Coasting) without configuring a Home Assistant Schedule Helper!
+*   **Observer Fallback**: If no schedule is provided, the system uses the new "Departure Prediction" AI (from v2.8) to determine when you likely leave.
+*   **Input Datetime**: The `schedule_entity` field now accepts `input_datetime` (timestamp) entities if you want to set a manual one-off departure time.
+*   **Migration**: The "Missing Schedule" warning has been removed for users who want to rely on the AI or manual events.
+
+---
+
 ## v2.9.0-beta1 (2026-01-03) - Heat Demand & UX Polish 🛠️
 **Feature Update: Heat Demand Sensor & External Control**
 

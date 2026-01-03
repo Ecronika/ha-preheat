@@ -246,9 +246,10 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             if user_input.get(CONF_MAX_PREHEAT_HOURS, 3.0) > 12.0:
                  errors[CONF_MAX_PREHEAT_HOURS] = "max_duration_too_high"
             
-            # Validation: Schedule required if Optimal Stop enabled
-            if user_input.get(CONF_ENABLE_OPTIMAL_STOP, False) and not user_input.get(CONF_SCHEDULE_ENTITY):
-                 errors[CONF_SCHEDULE_ENTITY] = "required_for_optimal_stop"
+            # Validation: Schedule is OPTIONAL for Optimal Stop (v2.9.0-beta2)
+            # If missing, we fallback to Observer logic.
+            # if user_input.get(CONF_ENABLE_OPTIMAL_STOP, False) and not user_input.get(CONF_SCHEDULE_ENTITY):
+            #      errors[CONF_SCHEDULE_ENTITY] = "required_for_optimal_stop"
             
             
             # 2. Logic: Should we Reload or Save?
@@ -321,7 +322,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(CONF_ARRIVAL_WINDOW_END): selector.TimeSelector(),
             vol.Optional(CONF_ENABLE_OPTIMAL_STOP): selector.BooleanSelector(),
             vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="schedule")
+                selector.EntitySelectorConfig(domain=["schedule", "input_datetime", "sensor"])
             ),
             
             # External Control (Promoted)

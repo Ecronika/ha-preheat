@@ -1161,15 +1161,57 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             }
 
             # 3. Provider Query
-            # 3. Provider Query
-            # Log schedule attributes for debugging (traceability)
+            # 3. Provider Query (Schedule / Static Timestamp)
             sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
-            if sched_ent:
-                st = self.hass.states.get(sched_ent)
-                if st:
-                    _LOGGER.debug("Schedule Attributes (%s): State=%s, Attrs=%s", sched_ent, st.state, st.attributes)
+            sched_decision = None
+            scheduled_end = None
             
-            sched_decision = self.schedule_provider.get_decision(context)
+            # Case A: Schedule Entity (Standard)
+            if sched_ent and sched_ent.startswith("schedule."):
+                sched_decision = self.schedule_provider.get_decision(context)
+                scheduled_end = sched_decision.session_end
+            
+            # Case B: Timestamp Entity (input_datetime or sensor)
+            elif sched_ent:
+                # We replicate a "Virtual Schedule" decision
+                state = self.hass.states.get(sched_ent)
+                if state and state.state not in ("unavailable", "unknown"):
+                    ts = None
+                    # Is it a timestamp?
+                    try:
+                        # input_datetime usually has timestamp attribute if full date, or we interpret time
+                        if "timestamp" in state.attributes and state.attributes["timestamp"]:
+                             ts = dt_util.utc_from_timestamp(state.attributes["timestamp"])
+                        else:
+                             ts = dt_util.parse_datetime(state.state)
+                        
+                        if ts:
+                            # If it's just time, assume today/tomorrow?
+                            # input_datetime with only time returns 1970-01-01 usually?
+                            # For simplicity, assume user provides full datetime or we handle naive time later.
+                            # Actually, parse_datetime handles ISO.
+                            
+                            # Valid Timestamp found. Check if it's in the future.
+                            if ts > now:
+                                 scheduled_end = ts
+                                 # Fake a decision
+                                 from .planner import PlanningDecision
+                                 sched_decision = PlanningDecision(
+                                     should_heat=True, # We assume if a time is set, we aim for it
+                                     session_end=ts,
+                                     is_valid=True,
+                                     source="timestamp",
+                                     confidence=1.0
+                                 )
+                    except Exception as e:
+                        _LOGGER.warning("Failed to parse timestamp from %s: %s", sched_ent, e)
+
+            # Case C: No Schedule (Fallback to None)
+            if not sched_decision:
+                 # Default empty decision
+                 from .planner import PlanningDecision
+                 sched_decision = self.schedule_provider.get_decision(context) # Returns safe defaults
+            
             scheduled_end = sched_decision.session_end
             
             
@@ -1205,6 +1247,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             elif scheduled_end is not None:
                  effective_departure = scheduled_end
                  effective_departure_source = "schedule"
+            elif learned_decision.session_end is not None:
+                 # Fallback to AI if no schedule is present (Observer Mode -> Active)
+                 # This enables "Schedule-Free Optimal Stop"
+                 effective_departure = learned_decision.session_end
+                 effective_departure_source = "ai_fallback"
             else:
                  effective_departure = None
                  effective_departure_source = "none"
@@ -1275,28 +1322,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             )            
             
             # Feature Migration/Warning UX (Preserved)
-            if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
-                 # Check for missing schedule entity (Migration UX)
-                 sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
-                 if not sched_ent:
-                    async_create_issue(
-                        self.hass,
-                        DOMAIN,
-                        f"missing_schedule_{self.entry.entry_id}",
-                        is_fixable=False,
-                        severity=IssueSeverity.WARNING,
-                        translation_key="missing_schedule_entity",
-                        translation_placeholders={
-                            "name": self.device_name,
-                            "entry_id": self.entry.entry_id
-                        },
-                        learn_more_url="https://github.com/Ecronika/ha-preheat#configuration"
-                    )
-                 else:
-                    async_delete_issue(self.hass, DOMAIN, f"missing_schedule_{self.entry.entry_id}")
-            else:
-                 # Clean up issue if feature is disabled
-                 async_delete_issue(self.hass, DOMAIN, f"missing_schedule_{self.entry.entry_id}")
+            # v2.9.0-beta2: Schedule is optional, so we always remove the "missing_schedule" warning if it exists.
+            async_delete_issue(self.hass, DOMAIN, f"missing_schedule_{self.entry.entry_id}")
             
             # Read detailed state from manager (Always, to catch active/savings state)
             opt_active = self.optimal_stop_manager.is_active
