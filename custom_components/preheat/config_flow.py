@@ -85,10 +85,10 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             # Validation logic
-            if user_input.get(CONF_ENABLE_OPTIMAL_STOP, False) and not user_input.get(CONF_SCHEDULE_ENTITY):
-                 errors[CONF_SCHEDULE_ENTITY] = "required_for_optimal_stop"
-
-            if errors:
+            # Validation logic
+            # v2.9.0-beta2: Schedule is now OPTIONAL (Schedule-Free Mode)
+            # if user_input.get(CONF_ENABLE_OPTIMAL_STOP, False) and not user_input.get(CONF_SCHEDULE_ENTITY):
+            #      errors[CONF_SCHEDULE_ENTITY] = "required_for_optimal_stop"
                 # If errors exist, re-show form without creating entry
                 pass
             else:
@@ -147,7 +147,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Key Feature: Optimal Stop (Promoted)
             vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=defaults.get(CONF_ENABLE_OPTIMAL_STOP, False)): selector.BooleanSelector(),
             vol.Optional(CONF_SCHEDULE_ENTITY, default=defaults.get(CONF_SCHEDULE_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="schedule")
+                selector.EntitySelectorConfig(domain=["schedule", "input_datetime", "sensor"])
             ),
 
             vol.Optional(CONF_PRESET_MODE, default=defaults.get(CONF_PRESET_MODE, PRESET_BALANCED)): selector.SelectSelector(

@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.9.0-beta3 (2026-01-03) - Schedule-Free Fixes 🚑
+**Bugfix & Polish for Beta 2**
+
+*   **Fixed Critical Crash**: Resolved an `ImportError` that caused the new Schedule-Free logic to crash on startup.
+*   **Fixed Config Flow**: You can now properly select `input_datetime` entities during initial setup (previously blocked).
+*   **Logic Safety**: Added protection against "Instant Stop" if the predicted departure time is in the past (e.g. late night override).
+
+---
+
 ## v2.9.0-beta2 (2026-01-03) - Schedule-Free Optimal Stop 🏃
 **Feature Update: Flexible Optimal Stop**
 

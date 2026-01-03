@@ -1195,12 +1195,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                             if ts > now:
                                  scheduled_end = ts
                                  # Fake a decision
-                                 from .planner import PlanningDecision
-                                 sched_decision = PlanningDecision(
-                                     should_heat=True, # We assume if a time is set, we aim for it
+                                 from .providers import ProviderDecision
+                                 sched_decision = ProviderDecision(
+                                     should_stop=False,
                                      session_end=ts,
                                      is_valid=True,
-                                     source="timestamp",
+                                     is_shadow=False,
                                      confidence=1.0
                                  )
                     except Exception as e:
@@ -1208,9 +1208,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
             # Case C: No Schedule (Fallback to None)
             if not sched_decision:
-                 # Default empty decision
-                 from .planner import PlanningDecision
-                 sched_decision = self.schedule_provider.get_decision(context) # Returns safe defaults
+                 # Default empty decision using ProviderDecision directly if needed, or rely on defaults
+                 # Actually, calling schedule_provider.get_decision with empty context returns a safe default?
+                 # Better: Use the provider properly.
+                 sched_decision = self.schedule_provider.get_decision(context)
             
             scheduled_end = sched_decision.session_end
             
@@ -1249,9 +1250,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  effective_departure_source = "schedule"
             elif learned_decision.session_end is not None:
                  # Fallback to AI if no schedule is present (Observer Mode -> Active)
-                 # This enables "Schedule-Free Optimal Stop"
-                 effective_departure = learned_decision.session_end
-                 effective_departure_source = "ai_fallback"
+                 # Guard: If AI prediction is in the Past (e.g. today 17:00, now 18:00), ignore it to prevent instant logic firing.
+                 if learned_decision.session_end > now:
+                      effective_departure = learned_decision.session_end
+                      effective_departure_source = "ai_fallback"
+                 else:
+                      effective_departure = None
+                      effective_departure_source = "ai_expired"
             else:
                  effective_departure = None
                  effective_departure_source = "none"
