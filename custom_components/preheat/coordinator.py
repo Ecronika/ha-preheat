@@ -961,24 +961,33 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     req = self.physics.calculate_duration(delta_in, d_out)
                     return req - test_dur_min
 
-                max_h = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0)
-                predicted_duration = math_preheat.root_find_duration(_duration_eval, int(max_h * 60))
+                # Fix v2.9.0-beta6: Use wider horizon to detect if limit is exceeded
+                # We search up to 12 hours. If result > max_preheat_hours, we warn the user.
+                uncapped_duration = math_preheat.root_find_duration(_duration_eval, 720)
                 
-                # Extrapolation Warning
-                if forecasts and (now + timedelta(minutes=predicted_duration)) > forecasts[-1]["datetime"]:
-                     if predicted_duration > 15: # Ignore trivial
-                        _LOGGER.warning("Forecast extrapolation active (> 50%% window). Prediction may be inaccurate.")
+                # Extrapolation Warning (Check based on what we would need)
+                if forecasts and (now + timedelta(minutes=uncapped_duration)) > forecasts[-1]["datetime"]:
+                     if uncapped_duration > 15: # Ignore trivial
+                        _LOGGER.warning("Forecast extrapolation active (> 50% window). Prediction may be inaccurate.")
+                
+                # Assign explicitly for logic usage (Capped by User Limit)
+                max_dur_minutes = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0) * 60
+                predicted_duration = min(uncapped_duration, max_dur_minutes)
             
             else:
                 # Classic Logic
                 delta_out = target_setpoint - outdoor_temp 
-                predicted_duration = self.physics.calculate_duration(delta_in, delta_out)
+                raw_duration = self.physics.calculate_duration(delta_in, delta_out)
+                
+                max_dur_minutes = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0) * 60
+                uncapped_duration = raw_duration
+                predicted_duration = min(raw_duration, max_dur_minutes)
             
             # -----------------------------------
             
             # Smart Diagnostic: Check if duration exceeds limit
-            max_dur_minutes = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0) * 60
-            if predicted_duration > (max_dur_minutes + 15):
+            # We compare the UNCAPPED requirement vs the limit.
+            if uncapped_duration > (max_dur_minutes + 15):
                 # We need more time than allowed!
                 async_create_issue(
                     self.hass, DOMAIN, f"limit_exceeded_{self.entry.entry_id}",
@@ -986,7 +995,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     severity=IssueSeverity.WARNING,
                     translation_key="duration_limit_exceeded",
                     translation_placeholders={
-                        "predicted": f"{predicted_duration/60:.1f}",
+                        "predicted": f"{uncapped_duration/60:.1f}",
                         "limit": f"{max_dur_minutes/60:.1f}",
                         "name": self.device_name
                     },
@@ -997,7 +1006,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             
             # 3. Decision Logic
             start_time = None
-            should_start = False
+            should_start = None # None=Idle/Evaluating, True=Start, False=Blocked
             
             if next_event:
                 # Add Buffer
@@ -1019,7 +1028,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # 4. Decison Logic (Should we start?)
             # -----------------------------------
             blocked_reasons = [] # Collect all blocking reasons
-            should_start = None # None=Idle/Evaluating, True=Start, False=Blocked
+            # should_start decision flows from Step 3. Do NOT reset it here.
 
             # Master Switch
             if not self.enable_active:

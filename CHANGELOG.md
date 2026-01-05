@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.9.0-beta8 (2026-01-05) - Critical Start Logic Fix 🚨
+**High Priority Fix**
+
+*   **Fixed Silent Non-Start**: Resolved a critical regression where the "Start Decision" was accidentally reset to `None` internally, causing the preheating to *never start* even when calculations were correct and no blockers were active. This explains why `binary_sensor.active` remained off despite `Next Start Time` being reached.
+
+---
+
+## v2.9.0-beta7 (2026-01-05) - Multi-Event Fix 📅
+**Bugfix**
+
+*   **Fixed Scheduled Events**: Resolved a bug where the planner would skip all remaining heating events for the day if the *first* scheduled event (e.g., early morning shift) had already passed. The system now correctly scans for *all* valid events in the day (e.g., afternoon shifts) and targets the next upcoming one.
+
+---
+
+## v2.9.0-beta6 (2026-01-05) - Forecast Logic Fix 🩺
+**Bugfix (Regression)**
+
+*   **Fixed "Max Duration" Warning**: Fixed a regression in the Forecast Logic (introduced in v2.5) where the predicted duration was capped *before* checking if it exceeded the limit. The system now correctly detects if the required time exceeds your "Maximum Preheat Duration" and raises a Repair Issue warning as intended (while still capping the actual start time for safety).
+
+---
+
 ## v2.9.0-beta5 (2026-01-04) - Button Fix 🖱️
 **Bugfix**
 

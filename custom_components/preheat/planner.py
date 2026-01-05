@@ -269,32 +269,38 @@ class PreheatPlanner:
             v3_count = len(v3_data)
             
             # LOGIC START
+            # --- LOGIC START ---
+            # Fix v2.9.0-beta6: Support Multiple Events per Day (e.g. Schedule: 05:00, 14:00)
+            # Previously returned single 'prediction_minute', causing skip if 05:00 was past.
+            
+            candidates = []
+            
             if v3_count < MIN_POINTS_FOR_V3:
                 # Phase 1: Pure v2
-                prediction_minute = self._predict_v2(v2_data)
+                candidates = self._predict_v2_candidates(v2_data)
                 
-                # Setup legacy result for Sensor
-                if prediction_minute is not None:
-                     # Create a dummy result to show something
+                if candidates:
+                     # For metadata, we just pick the primary (first) one
                      self.last_pattern_result = PatternResult(
                          prediction="legacy",
-                         prediction_time=prediction_minute,
+                         prediction_time=candidates[0], 
                          pattern_type="legacy_v2",
-                         confidence=1.0, # Legacy is trusted by default
+                         confidence=1.0, 
                          fallback_used=True,
                          modes_found={"legacy": 1}
                      )
                 
             elif v3_count < FULL_V3_POINTS:
-                # Phase 2: Hybrid Blending
-                v2_min = self._predict_v2(v2_data)
+                # Phase 2: Hybrid Blending (Single Prediction Target)
+                # Blending creates synthetic time, usually single-mode.
+                v2_cands = self._predict_v2_candidates(v2_data)
+                v2_min = v2_cands[0] if v2_cands else None
+                
                 v3_res = self.detector.predict(v3_data, check_date)
                 
-                # Store result for inspection (even if blending)
                 if v3_res.prediction != "insufficient_data":
                      self.last_pattern_result = v3_res
                 elif v2_min is not None:
-                     # Fallback to legacy metadata if v3 failed pattern check
                       self.last_pattern_result = PatternResult(
                          prediction="legacy_blended",
                          prediction_time=v2_min,
@@ -303,42 +309,60 @@ class PreheatPlanner:
                          fallback_used=True
                      )
 
+                # For blending, we stick to single-target logic for now as v3 isn't fully multi-modal in output yet
+                prediction_minute = None
                 if v2_min is not None and v3_res.prediction_time is not None:
                     weight = (v3_count - MIN_POINTS_FOR_V3) / (FULL_V3_POINTS - MIN_POINTS_FOR_V3)
-                    # Blended
                     prediction_minute = int(v2_min * (1 - weight) + v3_res.prediction_time * weight)
                 elif v3_res.prediction_time is not None:
                      prediction_minute = v3_res.prediction_time
                 else:
                      prediction_minute = v2_min
+                
+                if prediction_minute is not None:
+                    candidates = [prediction_minute]
 
             else:
                 # Phase 3: Pure v3
+                # Ideally v3 detector should return list of modes.
+                # Currently pattern_detector.predict returns "dominant" mode.
+                # TODO: Upgrade v3 to support multi-modal return.
+                # For now, it returns single primary.
                 v3_res = self.detector.predict(v3_data, check_date)
                 self.last_pattern_result = v3_res
-                prediction_minute = v3_res.prediction_time
+                if v3_res.prediction_time is not None:
+                    candidates = [v3_res.prediction_time]
             
-            # --- END LOGIC ---
-
-            if prediction_minute is None:
-                continue
-                
-            event_dt = datetime.combine(check_date, datetime.min.time()) + timedelta(minutes=prediction_minute)
-            event_dt = event_dt.replace(tzinfo=now.tzinfo)
+            # --- FIND FIRST VALID CANDIDATE ---
+            found_event = None
+            if candidates:
+                candidates.sort() # Ensure order
+                for minute in candidates:
+                    event_dt = datetime.combine(check_date, datetime.min.time()) + timedelta(minutes=minute)
+                    event_dt = event_dt.replace(tzinfo=now.tzinfo)
+                    
+                    if event_dt > now:
+                        found_event = event_dt
+                        break
             
-            if event_dt > now:
-                return event_dt
+            if found_event:
+                return found_event
                 
         return None
 
     def _predict_v2(self, timestamps: list[int]) -> int | None:
-        """Legacy helper: Earliest cluster."""
+        """Legacy helper: Earliest cluster. (Deprecated wrapper)"""
+        c = self._predict_v2_candidates(timestamps)
+        return c[0] if c else None
+
+    def _predict_v2_candidates(self, timestamps: list[int]) -> list[int]:
+        """Legacy helper: Return ALL cluster centers."""
         if not timestamps:
-            return None
+            return []
         clusters = self.detector.find_clusters_v2(timestamps)
         if not clusters:
-            return None
-        return min(c.time_minutes for c in clusters)
+            return []
+        return [c.time_minutes for c in clusters]
 
     def get_schedule_summary(self) -> dict[str, str]:
         """Get a human readable summary of learned times per weekday."""
