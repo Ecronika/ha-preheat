@@ -325,6 +325,86 @@
     "physics_partial_reset": {
       "title": "Thermisches Modell teilweise neu kalibriert (v2.7.1)",
       "description": "Die Physik-Engine wurde in v2.7.1 aktualisiert. Ihre Heizhistorie ({samples} Sitzungen) wurde beibehalten, aber Isolationsdaten wurden auf Profil-Standardwerte zur\u00fcckgesetzt. Das System lernt Au\u00dfeneinfl\u00fcsse \u00fcber die n\u00e4chsten 5-10 Heizzyklen neu.\n\nKeine Handlung erforderlich. [Mehr erfahren]({learn_more_url})"
+    },
+    "forecast_stale": {
+      "title": "Wetterdaten veraltet (>2 Std.)",
+      "description": "Der Cache der Wettervorhersage hat sich seit \u00fcber 2 Stunden nicht aktualisiert. Die Simulation nutzt veraltete Daten.\n\n**H\u00e4ufige Ursachen:**\n- API-Limit des Wetteranbieters erreicht.\n- Internet-Verbindungsprobleme."
+    },
+    "valve_saturation": {
+      "title": "Ventil ges\u00e4ttigt (>95% f\u00fcr 3 Std.)",
+      "description": "Das Ventil ist seit \u00fcber 3 Stunden zu >95% ge\u00f6ffnet. Der Raum erreicht die Zieltemperatur nur schwer.\n\n**M\u00f6gliche Ursachen:**\n- Fenster offen (W\u00e4rmeverlust).\n- Heizk\u00f6rper unterdimensioniert oder Vorlauf zu kalt.\n- Sensor falsch platziert."
+    },
+    "physics_limit_mass_min": {
+      "title": "Thermische Masse am Minimum (1.0)",
+      "description": "Das Modell hat das Minimum (1.0) erreicht. Der Raum heizt sich viel schneller auf als physikalisch erwartet.\n\n**M\u00f6gliche Ursachen:**\n- Temperatursensor ist zu nah an der Heizquelle (misst lokale W\u00e4rme, nicht den Raum).\n- Raum ist extrem klein oder extrem gut isoliert.\n- 'Standard Thermische Masse' im Profil ist zu niedrig eingestellt.\n\n**Aktueller Wert:** {current}"
+    },
+    "physics_limit_mass_max": {
+      "title": "Thermische Masse am Maximum",
+      "description": "Das Modell hat das Maximum erreicht. Der Raum heizt sich viel langsamer auf als erwartet.\n\n**M\u00f6gliche Ursachen:**\n- Ventil \u00f6ffnet nicht vollst\u00e4ndig (Defekt oder blockiert).\n- Temperatursensor ist verdeckt oder isoliert.\n- Heizleistung reicht nicht f\u00fcr die Raumgr\u00f6\u00dfe.\n\n**Aktueller Wert:** {current}"
+    },
+    "physics_limit_loss_max": {
+      "title": "Thermischer Verlust extrem hoch",
+      "description": "Das Modell erkennt extremen W\u00e4rmeverlust. Der Raum k\u00fchlt sehr schnell aus.\n\n**M\u00f6gliche Ursachen:**\n- Fenster ist dauerhaft offen oder undicht.\n- Au\u00dfentemperatur-Sensor zeigt viel w\u00e4rmere Werte als die Realit\u00e4t (Delta wird untersch\u00e4tzt).\n- Isolation ist extrem schlecht.\n\n**Aktueller Wert:** {current}"
+    },
+    "zombie_schedule": {
+      "title": "Zeitplan hat keine Ereignisse",
+      "description": "Optimal Stop ist aktiviert, aber der konfigurierte Zeitplan hat keine zuk\u00fcnftigen Ereignisse (next_event fehlt).\n\n**Auswirkung:** Das System wei\u00df nicht, wann Sie gehen, daher wird 'Optimal Stop' nie aktiv.\n\n**L\u00f6sung:** F\u00fcgen Sie Ereignisse zum Zeitplan-Helfer hinzu oder nutzen Sie Input Datetime Entit\u00e4ten."
+    },
+    "stale_sensor": {
+      "title": "Temperatursensor veraltet / inaktiv",
+      "description": "Der konfigurierte Raumtemperatur-Sensor hat sich seit \u00fcber 6 Stunden nicht aktualisiert oder ist nicht verf\u00fcgbar.\n\n**Auswirkung:** Vorheizen funktioniert ohne aktuelle Temperaturdaten nicht.\n\n**L\u00f6sung:** Pr\u00fcfen Sie Batterie, Zigbee-Verbindung oder Entit\u00e4tsnamen."
+    },
+    "weather_no_forecast": {
+      "title": "Wetter-Entit\u00e4t hat keine Vorhersage",
+      "description": "Erweiterte Physik (Euler) ist aktiviert, aber die Wetter-Entit\u00e4t liefert keine Vorhersagedaten (Attribut `forecast` ist leer/fehlt).\n\n**Auswirkung:** Die Simulationsgenauigkeit f\u00e4llt auf Standard-Modus (konstante Au\u00dfentemp) zur\u00fcck.\n\n**L\u00f6sung:** Konfigurieren Sie eine Wetter-Integration mit st\u00fcndlicher Vorhersage (z.B. PirateWeather, Met.no)."
+    },
+    "adv_no_weather": {
+      "title": "Erweiterter Modus ben\u00f6tigt Wetter-Entit\u00e4t",
+      "description": "Sie haben 'Erweiterte Physik (Euler)' aktiviert, aber keine Wetter-Entit\u00e4t konfiguriert.\n\n**L\u00f6sung:** Bitte konfigurieren Sie eine Wetter-Entit\u00e4t in den Einstellungen oder wechseln Sie zur\u00fcck auf 'Standard'."
+    },
+    "forecast_short": {
+      "title": "Vorhersage-Horizont zu kurz",
+      "description": "Die Wettervorhersage endet fr\u00fcher als Ihre 'Max. Coasting-Dauer'. Die Simulation kann nicht weit genug in die Zukunft blicken.\n\n**L\u00f6sung:** Reduzieren Sie die 'Max. Coasting-Dauer' oder nutzen Sie einen Wetterdienst mit l\u00e4ngerer st\u00fcndlicher Vorhersage (48h+)."
+    },
+    "occupancy_stale": {
+      "title": "Belegungssensor h\u00e4ngt",
+      "description": "Der Belegungssensor hat seinen Status seit \u00fcber 14 Tagen nicht ge\u00e4ndert.\n\n**Auswirkung:** Falls dies unbeabsichtigt ist, kann das System Ihre Ankunftsmuster nicht korrekt lernen.\n\n**L\u00f6sung:** Pr\u00fcfen Sie den Sensor und die Zuordnung."
+    },
+    "hold_stuck": {
+      "title": "Vorheizen blockiert > 24h",
+      "description": "Der Schalter 'Vorheizen tempor\u00e4r blockieren' (Hold) ist seit \u00fcber 24 Stunden AN. Das System ist effektiv deaktiviert.\n\n**L\u00f6sung:** Schalten Sie den 'Hold'-Schalter aus, um den Automatikbetrieb wiederaufzunehmen."
+    },
+    "inhibit_stuck": {
+      "title": "Externe Sperre / Fenster offen > 24h",
+      "description": "Das System wird durch einen externen Sensor (Fensterkontakt oder Sperr-Schalter) seit \u00fcber 24 Stunden blockiert.\n\n**L\u00f6sung:** Pr\u00fcfen Sie Ihre Fenstersensoren oder die Externe Sperr-Entit\u00e4t."
+    },
+    "learning_stalled": {
+      "title": "Thermisches Lernen stagniert",
+      "description": "Das Modell hat seit \u00fcber 7 Tagen keine neuen Lern-Samples gesammelt, obwohl das System aktiv war.\n\n**M\u00f6gliche Ursachen:**\n- Temperaturdifferenz (Delta T) beim Heizen ist zu gering (< 0.5K).\n- Ventil meldet keine Position (falls konfiguriert).\n- System heizt real nicht, obwohl angefordert."
+    },
+    "sensor_unit_mismatch": {
+      "title": "Sensor-Einheit ung\u00fcltig",
+      "description": "Der konfigurierte Temperatursensor scheint kein g\u00fcltiger Celsius-Sensor zu sein (Einheit nicht '°C' oder falsche Device Class).\n\n**L\u00f6sung:** Bitte \u00fcberpr\u00fcfen Sie die Sensorauswahl in den Einstellungen."
+    },
+    "sanity_temp": {
+      "title": "Unplausible Temperaturwerte",
+      "description": "Die Temperaturwerte wirken unrealistisch. Entweder ist die Innentemperatur extrem (< -10°C / > 45°C) oder sie folgt exakt der Au\u00dfentemperatur (Vertauschte Sensoren?).\n\n**L\u00f6sung:** Bitte pr\u00fcfen Sie die Zuordnung von Innen- und Au\u00dfensensoren."
+    },
+    "no_outdoor_source": {
+      "title": "Keine Au\u00dfentemperatur-Quelle",
+      "description": "Weder ein dedizierter Au\u00dfensensor noch eine Wetter-Entit\u00e4t ist konfiguriert.\n\n**Auswirkung:** Das Physik-Modell kann den Isolationsverlust nicht berechnen, die Genauigkeit sinkt massiv."
+    },
+    "coast_capped": {
+      "title": "Optimal Stop h\u00e4ufig begrenzt",
+      "description": "In den letzten 10 Sitzungen wurde 'Optimal Stop' h\u00e4ufig durch das Limit 'Max. Coasting-Dauer' begrenzt.\n\n**Empfehlung:** Erh\u00f6hen Sie die 'Max. Coasting-Dauer', um fr\u00fcheres Abschalten und mehr Einsparung zu erlauben."
+    },
+    "max_coast_high": {
+      "title": "Max Coast zu hoch f\u00fcr Heizk\u00f6rper",
+      "description": "Eine 'Max. Coasting-Dauer' von > 3 Stunden ist konfiguriert, obwohl das System nach Heizk\u00f6rpern aussieht (Schnelle Reaktion).\n\n**Risiko:** Der Raum k\u00f6nnte vor Ihrer Abreise zu stark ausk\u00fchlen. Empfohlen: 1.0 - 2.0 Stunden f\u00fcr Heizk\u00f6rper."
+    },
+    "tolerance_sanity": {
+      "title": "Abschalt-Toleranz ungew\u00f6hnlich",
+      "description": "Die 'Abschalt-Toleranz' ist auf einen un\u00fcblichen Wert eingestellt (< 0.1K oder > 1.5K).\n\n**Risiko:**\n- Zu niedrig: System k\u00f6nnte takten (An/Aus).\n- Zu hoch: Komfort k\u00f6nnte vor Ende der Sitzung sp\u00fcrbar sinken."
     }
   }
 }

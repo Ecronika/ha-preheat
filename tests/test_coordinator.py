@@ -25,6 +25,8 @@ sys.modules["homeassistant.util"] = MagicMock()
 from datetime import timezone
 mock_dt = MagicMock()
 mock_dt.UTC = timezone.utc
+# Return real UTC time for logic checks
+mock_dt.utcnow.side_effect = lambda: datetime.now(timezone.utc)
 sys.modules["homeassistant.util.dt"] = mock_dt
 sys.modules["homeassistant.helpers"] = MagicMock()
 sys.modules["homeassistant.helpers.event"] = MagicMock()
@@ -78,6 +80,15 @@ class TestCoordinatorWindowLogic(unittest.TestCase):
              patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
              coord = PreheatingCoordinator(hass, entry)
         
+        # Patch local mock_dt into coordinator for THIS test class
+        self.patcher = patch("custom_components.preheat.coordinator.dt_util", mock_dt)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+        
+        # Bypass startup grace period
+        coord._startup_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        coord.diagnostics_data = {} # Init dict
+        
         # Mock Time
         now = datetime(2023, 1, 1, 12, 0, 0)
         
@@ -129,6 +140,17 @@ class TestCoordinatorArbitration(unittest.TestCase):
              
             self.coord = PreheatingCoordinator(self.hass, self.entry)
         
+        # Patch local mock_dt into coordinator for THIS test class
+        self.patcher = patch("custom_components.preheat.coordinator.dt_util", mock_dt)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+        
+        # Bypass startup grace period
+        self.coord._startup_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        self.coord.diagnostics_data = {}
+        self.coord._external_inhibit = False
+        self.coord._window_open_detected = False
+        
         # Mock Providers
         self.coord.schedule_provider = MagicMock()
         self.coord.learned_provider = MagicMock()
@@ -140,6 +162,9 @@ class TestCoordinatorArbitration(unittest.TestCase):
         self.coord.physics = MagicMock()
         self.coord.physics.deadtime = 15.0
         self.coord.physics.mass_factor = 20.0
+        self.coord.physics.sample_count = 10
+        self.coord.physics.avg_error = 2.0
+        self.coord.physics.get_confidence.return_value = 20
         self.coord.physics.calculate_duration.return_value = 30.0 # Return float
         
         # Mock Helper methods used in update

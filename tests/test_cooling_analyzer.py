@@ -1,9 +1,20 @@
 """Tests for Cooling Analyzer."""
+import sys
 import unittest
 from datetime import datetime, timedelta
 import math
 from unittest.mock import MagicMock
-from homeassistant.util import dt as dt_util
+
+# --- MOCK Home Assistant ---
+import types
+ha = types.ModuleType("homeassistant")
+ha.__path__ = []
+sys.modules["homeassistant"] = ha
+sys.modules["homeassistant.util"] = MagicMock()
+
+# Mock dt_util for import
+mock_dt = MagicMock()
+sys.modules["homeassistant.util.dt"] = mock_dt
 
 from custom_components.preheat.cooling_analyzer import CoolingAnalyzer
 

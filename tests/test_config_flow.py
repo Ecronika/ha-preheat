@@ -124,7 +124,7 @@ class TestConfigFlow(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(options[CONF_ENABLE_OPTIMAL_STOP])
 
     async def test_setup_with_optimal_stop_missing_schedule(self):
-        """Test that missing schedule validation error hits."""
+        """Test that missing schedule is ALLOWED (Fall back to Observer)."""
         await self.flow.async_step_user()
         
         user_input = {
@@ -135,11 +135,14 @@ class TestConfigFlow(unittest.IsolatedAsyncioTestCase):
             CONF_ENABLE_OPTIMAL_STOP: True,
         }
         
+        self.flow.async_create_entry.return_value = {"type": FlowResultType.CREATE_ENTRY, "result": "created"}
+        self.flow.async_create_entry.reset_mock()
+        
+        # Should now SUCCEED, not fail
         await self.flow.async_step_user(user_input)
         
-        self.flow.async_show_form.assert_called()
-        call_kwargs = self.flow.async_show_form.call_args[1]
-        self.assertEqual(call_kwargs["errors"], {CONF_SCHEDULE_ENTITY: "required_for_optimal_stop"})
+        self.flow.async_create_entry.assert_called_once()
+
 
     async def test_setup_without_optimal_stop(self):
         """Test without optimal stop (Schedule not required)."""
@@ -193,13 +196,12 @@ class TestConfigFlow(unittest.IsolatedAsyncioTestCase):
         options_flow = PreheatingOptionsFlow(entry)
         self._inject_methods(options_flow)
         
-        # 1. Submit Invalid
+        # 1. Submit valid (Missing schedule is now ignored/allowed)
         user_input = {CONF_ENABLE_OPTIMAL_STOP: True}
-        await options_flow.async_step_init(user_input)
+        options_flow.async_create_entry.return_value = {"type": FlowResultType.CREATE_ENTRY, "data": user_input}
         
-        options_flow.async_show_form.assert_called()
-        call_kwargs = options_flow.async_show_form.call_args[1]
-        self.assertEqual(call_kwargs["errors"], {CONF_SCHEDULE_ENTITY: "required_for_optimal_stop"})
+        result = await options_flow.async_step_init(user_input)
+        self.assertEqual(result["type"], FlowResultType.CREATE_ENTRY)
         
         # 2. Submit Valid
         user_input = {CONF_ENABLE_OPTIMAL_STOP: True, CONF_SCHEDULE_ENTITY: "schedule.test"}

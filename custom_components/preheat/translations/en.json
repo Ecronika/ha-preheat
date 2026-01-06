@@ -262,6 +262,86 @@
     "physics_partial_reset": {
       "title": "Thermal Model Partially Recalibrated (v2.7.1)",
       "description": "The physics engine was updated in v2.7.1 for improved stability. Your heating history ({samples} sessions) was preserved, but insulation data was reset to profile defaults. The system will re-learn outdoor influences over the next 5-10 heating cycles.\n\nNo action required. [Learn more]({learn_more_url})"
+    },
+    "forecast_stale": {
+      "title": "Forecast Data Stale (>2h)",
+      "description": "The weather forecast cache has not updated for over 2 hours. The simulation is using outdated data.\n\n**Common Causes:**\n- Weather provider API limit reached.\n- Internet connectivity issues."
+    },
+    "valve_saturation": {
+      "title": "Valve Saturated (>95% for 3h)",
+      "description": "The valve has been open >95% for over 3 hours. The room is struggling to reach temperature.\n\n**Possible Causes:**\n- Window open (heat escaping).\n- Radiator undersized or flow temperature too low.\n- Sensor miscalibration."
+    },
+    "physics_limit_mass_min": {
+      "title": "Thermal Mass at Minimum (1.0)",
+      "description": "The thermal mass model has hit the minimum limit (1.0). This means the room temperature consistently rises faster than physically expected.\n\n**Possible Causes:**\n- Temperature sensor is too close to the heat source (measuring local heat, not room).\n- Room is extremely small or extremely well insulated.\n- 'Default Mass' profile setting is too low.\n\n**Current Value:** {current}"
+    },
+    "physics_limit_mass_max": {
+      "title": "Thermal Mass at Maximum",
+      "description": "The thermal mass model has hit the maximum limit. The room heats much slower than expected.\n\n**Possible Causes:**\n- Valve is not opening fully (broken or stuck).\n- Temperature sensor is buried or insulated.\n- Heating power is insufficient for the room size.\n\n**Current Value:** {current}"
+    },
+    "physics_limit_loss_max": {
+      "title": "Thermal Loss Very High",
+      "description": "The model detects extremely high heat loss. The room cools down very rapidly or struggles to hold heat.\n\n**Possible Causes:**\n- Window permanentely open or drafty.\n- Outdoor temperature sensor is reporting values much warmer than reality (hiding the true delta).\n- Insulation is extremely poor.\n\n**Current Value:** {current}"
+    },
+    "zombie_schedule": {
+      "title": "Schedule has no events",
+      "description": "Optimal Stop is enabled, but the configured Schedule entity has no upcoming events (next_event is missing).\n\n**Impact:** The system cannot determine when you will leave, so 'Optimal Stop' will never active.\n\n**Fix:** Add events to your Schedule Helper or switch to using Input Datetime entities."
+    },
+    "stale_sensor": {
+      "title": "Temperature Sensor Stale",
+      "description": "The configured Room Temperature sensor has not updated for over 6 hours or is unavailable.\n\n**Impact:** Preheat cannot function without current temperature data.\n\n**Fix:** Check battery, Zigbee link, or entity naming."
+    },
+    "weather_no_forecast": {
+      "title": "Weather Entity has no Forecast",
+      "description": "Advanced Physics (Euler) is enabled, but the configured Weather entity does not provide forecast data (attribute `forecast` is empty/missing).\n\n**Impact:** Simulation accuracy is degraded to standard mode (constant outdoor temp).\n\n**Fix:** Configure a Weather integration that supports hourly forecasts (e.g. PirateWeather, Met.no)."
+    },
+    "adv_no_weather": {
+      "title": "Advanced Mode requires Weather Entity",
+      "description": "You have enabled 'Advanced Physics (Euler)', but no Weather Entity is configured.\n\n**Fix:** Please configure a Weather entity in the integration options, or switch back to 'Standard' physics."
+    },
+    "forecast_short": {
+      "title": "Forecast Horizon too Short",
+      "description": "The weather forecast ends sooner than your 'Max Coast Duration'. The simulation cannot look far enough into the future.\n\n**Fix:** Reduce 'Max Coast Duration' or use a weather provider with longer hourly forecasts (48h+)."
+    },
+    "occupancy_stale": {
+      "title": "Occupancy Sensor Stuck",
+      "description": "The occupancy sensor has not changed state for over 14 days.\n\n**Impact:** If this is unintentional, the system cannot learn your daily arrival patterns correctly.\n\n**Fix:** Verify the sensor is working and mapped correctly."
+    },
+    "hold_stuck": {
+      "title": "Preheat Held > 24h",
+      "description": "The 'Preheat Logic Hold' switch has been ON for over 24 hours. The system is effectively disabled.\n\n**Fix:** Turn off the 'Preheat Hold' switch if you want the system to resume automatic operation."
+    },
+    "inhibit_stuck": {
+      "title": "External Inhibit / Window Open > 24h",
+      "description": "The system is inhibited by an external sensor (Window Contact or Inhibit Switch) for over 24 hours.\n\n**Fix:** Check your window sensors or the External Inhibit entity."
+    },
+    "learning_stalled": {
+      "title": "Thermal Learning Stalled",
+      "description": "The thermal model has not collected any new samples in over 7 days, despite the system being active.\n\n**Possible Causes:**\n- Temperature difference (Delta T) is too small (< 0.5K) during heating.\n- Valve is not reporting position (if configured).\n- System is not actually heating when requested."
+    },
+    "sensor_unit_mismatch": {
+      "title": "Sensor Unit Mismatch",
+      "description": "The configured temperature sensor does not appear to be a Celsius temperature entity (Unit is not '°C' or Device Class is wrong).\n\n**Fix:** Please review the sensor selection in the integration options."
+    },
+    "sanity_temp": {
+      "title": "Implausible Temperature Readings",
+      "description": "The temperature readings seem unrealistic. Either the Indoor Temperature is extreme (< -10°C / > 45°C), or it tracks the Outdoor Temperature exactly (Swapped Sensors?).\n\n**Fix:** Please verify that Indoor and Outdoor sensors are assigned correctly."
+    },
+    "no_outdoor_source": {
+      "title": "No Outdoor Temperature Source",
+      "description": "Neither a dedicated Outdoor Sensor nor a Weather Entity is configured.\n\n**Impact:** The physics model cannot account for insulation loss, severely degrading accuracy."
+    },
+    "coast_capped": {
+      "title": "Optimal Stop Frequently Capped",
+      "description": "In the last 10 sessions, 'Optimal Stop' was frequently limited by the 'Max Coast Duration' setting.\n\n**Recommendation:** Consider increasing 'Max Coast Duration' to allow for earlier stops and more savings."
+    },
+    "max_coast_high": {
+      "title": "Max Coast High for Radiators",
+      "description": "A 'Max Coast Duration' of > 3 hours is configured for a system that appears to be Radiator-based (Fast Response).\n\n**Risk:** The room may cool down too much before you leave. Recommended: 1.0 - 2.0 hours for radiators."
+    },
+    "tolerance_sanity": {
+      "title": "Stop Tolerance Unusual",
+      "description": "The 'Stop Tolerance' is configured to an unusual value (< 0.1K or > 1.5K).\n\n**Risk:**\n- Too low: System may cycle on/off (flapping).\n- Too high: Comfort may drop significantly before session end."
     }
   }
 }

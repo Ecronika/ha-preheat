@@ -1,4 +1,21 @@
-# Changelog
+## v2.9.0-beta9 (2026-01-06) - Setup Repairs & Diagnostics 🛠️
+**Feature Release**
+
+This release focuses on **System Health** and **Diagnostics**. It introduces 15 new "Repair Issues" that will appear in your Home Assistant Settings -> Repairs dashboard if something is wrong with your configuration or sensors.
+
+*   **Repair Issues System**:
+    *   **Stale Sensors**: Helper warnings if Temperature or Occupancy sensors stop updating (>6h or >14d).
+    *   **Physics Railing**: Alert if thermal mass/loss factors hit limits (indicating sensor placement issues or windows open permanently).
+    *   **Zombie Schedule**: Error if a Schedule helper exists but has no events.
+    *   **Valve Saturation**: Warning if valve stays at 100% for >3h (undersized heating or open window).
+    *   **Temperature Sanity**: Checks for "Swapped Indoor/Outdoor Sensors" (identical values) or implausible readings (< -10°C).
+    *   **Forecast Checks**: Warnings if Weather data is missing or stale in Advanced Mode.
+
+*   **Logic Refinements**:
+    *   **Startup Grace Period**: Repairs and Checks are now suppressed for the first 30 minutes of uptime to allow sensors to initialize.
+    *   **Rate Limiting**: Diagnostic checks run max once per hour to save resources.
+
+---
 
 ## v2.9.0-beta8 (2026-01-05) - Critical Start Logic Fix 🚨
 **High Priority Fix**

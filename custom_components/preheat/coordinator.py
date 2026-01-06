@@ -54,6 +54,7 @@ from .const import (
     CONF_DEBOUNCE_MIN,
     CONF_PHYSICS_MODE,
     PHYSICS_STANDARD,
+    PHYSICS_ADVANCED,
     CONF_COMFORT_MIN,
     CONF_COMFORT_FALLBACK,
     DEFAULT_COMFORT_MIN,
@@ -341,6 +342,18 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._last_shadow_log_state: bool = False
         
         self._startup_time = dt_util.utcnow()
+        
+        # Diagnostics Persistence (v2.9.1)
+        self.diagnostics_data: dict[str, Any] = {
+            "last_sample_count": 0,
+            "last_sample_change": 0.0,
+            "hold_started_ts": None,
+            "inhibit_started_ts": None,
+            "occupancy_last_change_ts": 0.0,
+            "capped_events": [], # Rolling list of bools
+            "last_check_ts": 0.0,
+        }
+
         self._setup_listeners()
         
 
@@ -455,6 +468,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 self.cooling_analyzer.learned_tau = data.get("model_cooling_tau", 4.0)
                 self.cooling_analyzer.confidence = data.get("cooling_confidence", 0.0)
                 
+                # V2.9.1 Load Diagnostics Data
+                loaded_diag = data.get("diagnostics", {})
+                if loaded_diag:
+                     # Merge to preserve defaults/types
+                     self.diagnostics_data.update(loaded_diag)
+                
                 self._last_comfort_setpoint = data.get("last_comfort_setpoint")
                 
                 # --- Smart Migration v2.7.1 ---
@@ -528,6 +547,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "model_cooling_tau": self.cooling_analyzer.learned_tau,
             "cooling_confidence": self.cooling_analyzer.confidence,
             "enable_active": self.enable_active,
+            # V2.9.1
+            "diagnostics": self.diagnostics_data,
         }
 
     async def _async_save_data(self) -> None:
@@ -537,6 +558,343 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             await self._store.async_save(data)
         except Exception as err:
             _LOGGER.error("Failed to save preheat data: %s", err)
+
+    async def _check_diagnostics(self) -> None:
+        """Run periodic health checks and create repair issues."""
+        # Rate Limit: Run max once per hour
+        now = dt_util.utcnow().timestamp()
+        last_check = self.diagnostics_data.get("last_check_ts", 0)
+        
+        # Debounce: If run recently (< 3600s) and not startup
+        boot_time = self._startup_time.timestamp()
+        uptime = now - boot_time
+        
+        # Guard: Grace Period on Startup (30 min)
+        if uptime < 1800:
+            return
+
+        if last_check > 0 and (now - last_check) < 3600:
+            return
+
+        self.diagnostics_data["last_check_ts"] = now
+        
+        from homeassistant.helpers.issue_registry import async_create_issue, async_delete_issue, IssueSeverity
+        
+        # --- Helper for managing issues ---
+        def raise_issue(issue_slug: str, msg_key: str, severity: IssueSeverity, params: dict | None = None):
+             async_create_issue(
+                self.hass, DOMAIN, f"{issue_slug}_{self.entry.entry_id}",
+                is_fixable=False, is_persistent=True, severity=severity,
+                translation_key=msg_key, translation_placeholders=params
+             )
+
+        def clear_issue(issue_slug: str):
+             async_delete_issue(self.hass, DOMAIN, f"{issue_slug}_{self.entry.entry_id}")
+        
+        # --- 1. Physics Railing (Refined) ---
+        # Logic: Early warning (>15 samples) if confidence is decent (>25) OR Error is huge (>10 min)
+        # Prevents "Silent Failure" for months.
+        p = self.physics
+        s_count = p.sample_count
+        conf = p.get_confidence()
+        avg_err = p.avg_error
+        
+        is_railing = False
+        msg_key = None
+        current_val = 0.0
+        
+        # Threshold: 15 samples (approx 2 weeks)
+        # Condition: High Error (>10min) OR (Confidence > 25 AND Limit Hit)
+        if s_count > 15 and (avg_err > 10.0 or conf > 25):
+             if p.mass_factor <= p.min_mass:
+                 is_railing = True
+                 msg_key = "physics_limit_mass_min"
+                 current_val = p.mass_factor
+             elif p.mass_factor >= p.max_mass:
+                 is_railing = True
+                 msg_key = "physics_limit_mass_max"
+                 current_val = p.mass_factor
+             elif p.loss_factor >= 50.0:
+                 is_railing = True
+                 msg_key = "physics_limit_loss_max"
+                 current_val = p.loss_factor
+        
+        if is_railing:
+            raise_issue("physics_limit", msg_key, IssueSeverity.WARNING, {"current": f"{current_val:.1f}"})
+        else:
+            clear_issue("physics_limit")
+
+        # --- 2. Zombie Schedule ---
+        # Logic: EnableOptStop=True AND Schedule has no events
+        if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
+            sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
+            if sched_ent and sched_ent.startswith("schedule."):
+                state = self.hass.states.get(sched_ent)
+                # Check for empty attributes
+                if state and not state.attributes.get("next_event"):
+                     raise_issue("zombie_schedule", "zombie_schedule", IssueSeverity.ERROR)
+                else:
+                     clear_issue("zombie_schedule")
+            else:
+                clear_issue("zombie_schedule")
+        else:
+            clear_issue("zombie_schedule")
+
+        # --- 3. Stale Sensor ---
+        # Logic: Unavailable OR > 6h no change. Requires 2 hits (Debounce).
+        temp_ent = self._get_conf(CONF_TEMPERATURE)
+        is_stale = False
+        if temp_ent:
+            state = self.hass.states.get(temp_ent)
+            if not state or state.state in ("unavailable", "unknown"):
+                is_stale = True
+            elif state.last_changed:
+                 age = (dt_util.utcnow() - state.last_changed).total_seconds()
+                 if age > 21600: # 6h
+                     is_stale = True
+        
+        # Debounce Logic
+        stale_counter = self.diagnostics_data.get("stale_sensor_counter", 0)
+        if is_stale:
+            stale_counter += 1
+        else:
+            stale_counter = 0
+        self.diagnostics_data["stale_sensor_counter"] = stale_counter
+        
+        if stale_counter >= 2:
+             raise_issue("stale_sensor", "stale_sensor", IssueSeverity.ERROR)
+        else:
+             clear_issue("stale_sensor")
+
+        # --- 4. Weather No Forecast (Advanced) ---
+        # Logic: Advanced Mode AND Cache Invalid
+        if self._get_conf(CONF_PHYSICS_MODE) == PHYSICS_ADVANCED:
+             # Check Service Cache
+             has_data = False
+             if self.weather_service and self.weather_service.get_cached_forecast():
+                 has_data = True
+             
+             if not has_data:
+                 raise_issue("weather_no_forecast", "weather_no_forecast", IssueSeverity.WARNING)
+             else:
+                 clear_issue("weather_no_forecast")
+             
+             # Check 11: No Weather Entity Configured
+             if not self._get_conf(CONF_WEATHER_ENTITY):
+                  raise_issue("adv_no_weather", "adv_no_weather", IssueSeverity.ERROR)
+             else:
+                  clear_issue("adv_no_weather")
+
+             # Check 8: Forecast Horizon Short
+             # We need to know if forecast covers now + max_coast
+             if has_data:
+                 cache = self.weather_service.get_cached_forecast()
+                 if cache:
+                     last_pt = cache[-1]["datetime"]
+                     max_coast = self._get_conf(CONF_MAX_COAST_HOURS, 4.0)
+                     needed = dt_util.utcnow() + timedelta(hours=max_coast)
+                     if last_pt < needed:
+                         raise_issue("forecast_short", "forecast_short", IssueSeverity.WARNING)
+                     else:
+                         clear_issue("forecast_short")
+        else:
+             clear_issue("weather_no_forecast")
+             clear_issue("adv_no_weather")
+             clear_issue("forecast_short")
+
+        # --- 5. Occupancy Zombie (Refined) ---
+        # Logic: Adaptive Threshold. ON -> 7d (Homeoffice), OFF -> 3d (Suspicious)
+        occ_ent = self._get_conf(CONF_OCCUPANCY)
+        if occ_ent:
+            state = self.hass.states.get(occ_ent)
+            current_state_str = state.state if state else "unknown"
+            
+            # Update Timestamp if state changed
+            saved_state = self.diagnostics_data.get("last_occ_state")
+            if saved_state != current_state_str:
+                self.diagnostics_data["last_occ_state"] = current_state_str
+                self.diagnostics_data["occupancy_last_change_ts"] = now
+            
+            diff = now - self.diagnostics_data.get("occupancy_last_change_ts", now)
+            
+            # Adaptive Limit
+            limit = 604800 # Default 7 days
+            if current_state_str == STATE_OFF:
+                 limit = 259200 # 3 days if OFF (sensor dead?)
+            
+            if diff > limit:
+                # Differentiate message? Using generic for now.
+                raise_issue("occupancy_stale", "occupancy_stale", IssueSeverity.WARNING)
+            else:
+                clear_issue("occupancy_stale")
+
+        # --- 6. Hold/Inhibit Stuck ---
+        # Logic: > 24h
+        # Check Hold
+        is_hold = self.hold_active
+        if is_hold:
+            if not self.diagnostics_data.get("hold_started_ts"):
+                self.diagnostics_data["hold_started_ts"] = now
+            elif (now - self.diagnostics_data["hold_started_ts"]) > 86400:
+                raise_issue("hold_stuck", "hold_stuck", IssueSeverity.WARNING)
+        else:
+            self.diagnostics_data["hold_started_ts"] = None
+            clear_issue("hold_stuck")
+            
+        # Check Inhibit
+        is_inhib = self._external_inhibit or self._window_open_detected
+        if is_inhib:
+            if not self.diagnostics_data.get("inhibit_started_ts"):
+                self.diagnostics_data["inhibit_started_ts"] = now
+            elif (now - self.diagnostics_data["inhibit_started_ts"]) > 86400:
+                 raise_issue("inhibit_stuck", "inhibit_stuck", IssueSeverity.WARNING)
+        else:
+             self.diagnostics_data["inhibit_started_ts"] = None
+             clear_issue("inhibit_stuck")
+
+        # --- 7. Learning Stalled ---
+        # Logic: No samples > 7 days AND preheat was active
+        # We need to know if preheat WAS active. Best proxy: sample_count increased?
+        # If preheat runs, sample count increases. 
+        # So "Learning Stalled" = "Sample Count Static"
+        # User condition: "AND preheat_active occurred". We can't easily track that in history.
+        # Simplified: If sample count static > 7 days AND sample_count > 0 (it worked once).
+        curr_samp = p.sample_count
+        last_samp = self.diagnostics_data.get("last_sample_count", 0)
+        last_samp_ts = self.diagnostics_data.get("last_sample_change", now)
+        
+        if curr_samp != last_samp:
+            self.diagnostics_data["last_sample_count"] = curr_samp
+            self.diagnostics_data["last_sample_change"] = now
+            clear_issue("learning_stalled")
+        else:
+            if (now - last_samp_ts) > 604800 and curr_samp > 0:
+                raise_issue("learning_stalled", "learning_stalled", IssueSeverity.WARNING)
+            else:
+                clear_issue("learning_stalled")
+
+        # --- 9. Unit Mismatch ---
+        if temp_ent:
+            st = self.hass.states.get(temp_ent)
+            if st:
+                uorn = st.attributes.get("unit_of_measurement")
+                dc = st.attributes.get("device_class")
+                if uorn not in ("°C", "C", "c", "C°"):
+                    raise_issue("sensor_unit", "sensor_unit_mismatch", IssueSeverity.ERROR)
+                elif dc and dc != "temperature":
+                     raise_issue("sensor_unit", "sensor_unit_mismatch", IssueSeverity.ERROR)
+                else:
+                    clear_issue("sensor_unit")
+
+        # --- 10. Unrealistic Temps / Swapped (Refined) ---
+        # Check 1: Extreme values
+        # Check 2: Identical values (Swapped) - ONLY if Heating is OFF (otherwise divergence is expected)
+        outdoor_ent = self._get_conf(CONF_OUTDOOR_TEMP)
+        sanity_fail = False
+        msg_sanity = None
+        
+        if temp_ent:
+             ts = self.hass.states.get(temp_ent)
+             if ts and ts.state not in ("unavailable", "unknown"):
+                 try:
+                     val = float(ts.state)
+                     if val < -10 or val > 45:
+                         sanity_fail = True
+                         msg_sanity = "sanity_temp_extreme"
+                 except ValueError:
+                     pass # handled by stale check
+        
+        # Only start correlation check if heating is NOT active (prevent false positive)
+        # Note: We check _preheat_active and heat_demand
+        if not sanity_fail and outdoor_ent and temp_ent and not self._preheat_active:
+             ts_in = self.hass.states.get(temp_ent)
+             ts_out = self.hass.states.get(outdoor_ent)
+             if ts_in and ts_out:
+                  try:
+                      v_in = float(ts_in.state)
+                      v_out = float(ts_out.state)
+                      if abs(v_in - v_out) < 0.5: # Tighter threshold, 0.5K
+                          # Potential Swap. Requires persistence to be sure (12h).
+                          # We check 'sanity_swap_counter'
+                          ctr = self.diagnostics_data.get("sanity_swap_counter", 0)
+                          ctr += 1
+                          self.diagnostics_data["sanity_swap_counter"] = ctr
+                          if ctr > 12: # 12 checks = 12 hours
+                              sanity_fail = True
+                              msg_sanity = "sanity_temp_swap"
+                      else:
+                          self.diagnostics_data["sanity_swap_counter"] = 0
+                  except ValueError:
+                      pass
+        else:
+             # Reset counter if heating runs or diff is healthy
+             self.diagnostics_data["sanity_swap_counter"] = 0
+
+        if sanity_fail:
+             raise_issue("sanity_temp", msg_sanity, IssueSeverity.WARNING)
+        else:
+             clear_issue("sanity_temp")
+
+        # --- 12. No Outdoor Source ---
+        # If no weather and no outdoor sensor -> Error
+        if not self._get_conf(CONF_WEATHER_ENTITY) and not self._get_conf(CONF_OUTDOOR_TEMP):
+             raise_issue("no_outdoor_source", "no_outdoor_source", IssueSeverity.ERROR)
+        else:
+             clear_issue("no_outdoor_source")
+
+        # --- 13. Max Coast Capping ---
+        # Check rolling list
+        capped_evts = self.diagnostics_data.get("capped_events", [])
+        # Count True in last 10
+        if capped_evts and sum(1 for x in capped_evts if x) > 3:
+             # TODO: Differentiate reason if possible. For now generic.
+             raise_issue("coast_capped", "coast_capped", IssueSeverity.WARNING)
+        else:
+             clear_issue("coast_capped")
+
+        # --- 14. Forecast Data Stale (NEW) ---
+        # Logic: Forecast cache > 2 hours old?
+        if self.weather_service and self.weather_service._cache_ts:
+             age = now - self.weather_service._cache_ts.timestamp()
+             if age > 7200: # 2 hours
+                 raise_issue("forecast_stale", "forecast_stale", IssueSeverity.WARNING)
+             else:
+                 clear_issue("forecast_stale")
+        
+        # --- 15. Valve Saturation (NEW) ---
+        # Logic: Valve > 95% for > 3 hours
+        # Detects: Undersized heater or open window
+        valve_pos = self._get_valve_position()
+        is_saturated = False
+        if valve_pos is not None and valve_pos > 95:
+             ts_sat = self.diagnostics_data.get("valve_saturation_ts")
+             if not ts_sat:
+                 self.diagnostics_data["valve_saturation_ts"] = now
+             elif (now - ts_sat) > 10800: # 3h
+                 is_saturated = True
+        else:
+             self.diagnostics_data["valve_saturation_ts"] = None
+        
+        if is_saturated:
+             raise_issue("valve_saturation", "valve_saturation", IssueSeverity.WARNING)
+        else:
+             clear_issue("valve_saturation")
+
+        # --- 16. Max Coast High (TRV) ---
+        max_c = self._get_conf(CONF_MAX_COAST_HOURS, 4.0)
+        # Heuristic: Fast response system (Mass < 30) with long coast (>3h)
+        if max_c >= 3.0 and p.mass_factor < 30.0:
+             raise_issue("max_coast_high", "max_coast_high", IssueSeverity.WARNING)
+        else:
+             clear_issue("max_coast_high")
+
+        # --- 17. Tolerance Sanity ---
+        tol = self._get_conf(CONF_STOP_TOLERANCE, 0.5)
+        if tol < 0.1 or tol > 1.5:
+             raise_issue("tolerance_sanity", "tolerance_sanity", IssueSeverity.WARNING)
+        else:
+             clear_issue("tolerance_sanity")
+
 
     def _parse_time_to_minutes(self, time_str: str, default_str: str) -> int:
         try:
@@ -1118,6 +1476,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 # 4. Window Open
                 elif self._window_open_detected:
                      await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=True)
+
+            # V2.9.1 Diagnostics Check (Debounced inside)
+            await self._check_diagnostics()
 
             # Comfort Learning (Update Setpoint preference)
             await self._update_comfort_learning(target_setpoint, is_occupied)
