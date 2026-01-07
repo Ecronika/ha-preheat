@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 import logging
+import sys # Added for debug
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
@@ -118,12 +119,35 @@ class WeatherService:
         return None
 
     def _clean_data(self, raw_data: list[dict]) -> list[dict]:
-        """Validate and sort raw data."""
+        """Validate, parse (to UTC datetime), and sort raw data."""
         cleaned = []
         for item in raw_data:
             if "temperature" not in item or item["temperature"] is None: continue
             if "datetime" not in item: continue
-            cleaned.append(item)
+            
+            # Parse & Normalize to UTC
+            try:
+                # If already datetime, ensure UTC
+                if isinstance(item["datetime"], datetime):
+                    dt = item["datetime"]
+                else:
+                    # DEBUG
+                    # print(f"DEBUG: Parsing {item['datetime']}", file=sys.stderr)
+                    dt = dt_util.parse_datetime(str(item["datetime"]))
+                
+                if dt is None: 
+                    print("DEBUG: dt is None", file=sys.stderr)
+                    continue
+                
+                # Convert to UTC
+                dt_utc = dt.astimezone(dt_util.UTC)
+                
+                cleaned.append({
+                    "datetime": dt_utc,
+                    "temperature": float(item["temperature"])
+                })
+            except (ValueError, TypeError):
+                continue
         
         # Sort by time
         cleaned.sort(key=lambda x: x["datetime"])
@@ -143,15 +167,13 @@ class WeatherService:
         # Re-using coordinator's parser logic is hard here without dependency loop.
         # Let's assume standard ISO strings.
         
-        # Helper to parse
-        def parse(t_str):
-            try: return datetime.fromisoformat(t_str).replace(tzinfo=dt_util.UTC) 
-            except: return dt_util.parse_datetime(t_str)
-
+        # Data is already cleaned (datetime objects in UTC)
         points = []
         for item in data:
-            dt = parse(item["datetime"])
-            if dt: points.append( (dt, float(item["temperature"])) )
+            dt = item["datetime"]
+            # Ensure it is a datetime
+            if isinstance(dt, datetime):
+                 points.append( (dt, float(item["temperature"])) )
             
         if not points: return []
         
@@ -176,14 +198,14 @@ class WeatherService:
                 v_new = v_start + (slope * h)
                 
                 interpolated.append({
-                    "datetime": t_new.isoformat(),
+                    "datetime": t_new, # Keep as datetime object (UTC)
                     "temperature": round(v_new, 1) # Round to 1 decimal like forecast
                 })
                 
         # Append last point
         last_t, last_v = points[-1]
         interpolated.append({
-             "datetime": last_t.isoformat(),
+             "datetime": last_t, # Keep as datetime object (UTC)
              "temperature": last_v
         })
         

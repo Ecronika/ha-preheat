@@ -1,3 +1,11 @@
+## v2.9.0-beta13 (2026-01-07) - Critical Logic Fix 🩹
+**Bugfix**
+
+*   **Fixed Comparison Error**: Resolved `TypeError: '<=' not supported between instances of 'datetime.datetime' and 'str'` in diagnostics. This occured because the fallback logic was returning strings instead of proper datetime objects.
+*   **Fixed Interpolation Crash**: Resolved an internal crash where the interpolation engine tried to re-parse already-parsed datetime objects.
+
+---
+
 ## v2.9.0-beta12 (2026-01-07) - Translation Hotfix 🩹
 **Bugfix**
 
