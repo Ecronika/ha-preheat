@@ -27,6 +27,7 @@ class WeatherService:
         
         self._forecast_cache: list[dict] | None = None
         self._cache_ts: datetime | None = None
+        self._forecast_type_used: str = "none" # Fix: Initialize to avoid AttributeError
         self._lock = asyncio.Lock()
         
         self._setup_listener()
@@ -100,6 +101,7 @@ class WeatherService:
                                  self._forecast_cache = clean_data
                                  self._cache_ts = dt_util.utcnow()
                                  self._forecast_type_used = "hourly"
+                                 _LOGGER.debug("Cached %d forecast points for %s (hourly)", len(clean_data), self.entity_id)
                                  return clean_data
                         else:
                              # Needs Interpolation
@@ -110,6 +112,7 @@ class WeatherService:
                                  self._forecast_cache = interpolated
                                  self._cache_ts = dt_util.utcnow()
                                  self._forecast_type_used = f_type
+                                 _LOGGER.debug("Cached %d forecast points for %s (interpolated from %s)", len(interpolated), self.entity_id, f_type)
                                  return interpolated
             except Exception as err:
                 _LOGGER.debug("Failed fetching %s for %s: %s", f_type, self.entity_id, err)
@@ -139,8 +142,8 @@ class WeatherService:
                     print("DEBUG: dt is None", file=sys.stderr)
                     continue
                 
-                # Convert to UTC
-                dt_utc = dt.astimezone(dt_util.UTC)
+                # Convert to UTC (Robust for naive datetimes)
+                dt_utc = dt_util.as_utc(dt)
                 
                 cleaned.append({
                     "datetime": dt_utc,

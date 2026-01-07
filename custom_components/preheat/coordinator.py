@@ -571,12 +571,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         uptime = now - boot_time
         
         # Guard: Grace Period on Startup (30 min)
+        # Guard: Grace Period on Startup (30 min)
         if uptime < 1800:
+            # _LOGGER.debug("Diagnostics skipped: Grace Period (Uptime: %.1f min)", uptime/60)
             return
 
         if last_check > 0 and (now - last_check) < 3600:
-            return
+             # _LOGGER.debug("Diagnostics skipped: Rate Limit (Last: %s)", last_check)
+             return
 
+        _LOGGER.debug("Running Diagnostics Check (Uptime: %.1f min)", uptime/60)
         self.diagnostics_data["last_check_ts"] = now
         
         from homeassistant.helpers.issue_registry import async_create_issue, async_delete_issue, IssueSeverity
@@ -672,13 +676,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if self._get_conf(CONF_PHYSICS_MODE) == PHYSICS_ADVANCED:
              # Check Service Cache
              has_data = False
-             if self.weather_service and self.weather_service.get_cached_forecast():
-                 has_data = True
-             
+             cache = self.weather_service.get_cached_forecast() if self.weather_service else None
+             if cache:
+                  has_data = True
+                  
+             _LOGGER.debug("Diagnostics [Weather]: Advanced Mode=True, HasData=%s, CacheSize=%s", has_data, len(cache) if cache else 0)
+              
              if not has_data:
-                 raise_issue("weather_no_forecast", "weather_no_forecast", IssueSeverity.WARNING)
+                  raise_issue("weather_no_forecast", "weather_no_forecast", IssueSeverity.WARNING)
              else:
-                 clear_issue("weather_no_forecast")
+                  clear_issue("weather_no_forecast")
              
              # Check 11: No Weather Entity Configured
              if not self._get_conf(CONF_WEATHER_ENTITY):

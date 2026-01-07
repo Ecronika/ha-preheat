@@ -1,3 +1,13 @@
+## v2.9.0-beta14 (2026-01-07) - Diagnostics & Logging 🩺
+**Improvements**
+
+*   **Enhanced Logging**: Added success messages for weather forecast retrieval ("Cached X points...").
+*   **Startup Diagnostics**: Added explicit debugging for the "Startup Grace Period" (30 min).
+*   **Bugfix**: Fixed `AttributeError` by initializing `_forecast_type_used`.
+*   **Bugfix**: Fixed "No Forecast" issue by correctly handling Naive Datetimes (missing timezone) from providers like PirateWeather using `dt_util.as_utc()`.
+
+---
+
 ## v2.9.0-beta13 (2026-01-07) - Critical Logic Fix 🩹
 **Bugfix**
 
