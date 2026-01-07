@@ -111,6 +111,11 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_ENABLE_OPTIMAL_STOP: user_input.get(CONF_ENABLE_OPTIMAL_STOP, False),
                         CONF_SCHEDULE_ENTITY: user_input.get(CONF_SCHEDULE_ENTITY),
                         CONF_EXPERT_MODE: False,
+                        # Dynamic Default: Max Coast based on Profile
+                        CONF_MAX_COAST_HOURS: HEATING_PROFILES.get(
+                            user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW), 
+                            HEATING_PROFILES[PROFILE_RADIATOR_NEW]
+                        ).get("default_coast", DEFAULT_MAX_COAST_HOURS)
                     }
                  )
 
@@ -445,7 +450,8 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         if CONF_ENABLE_OPTIMAL_STOP not in data: data[CONF_ENABLE_OPTIMAL_STOP] = False
         if CONF_SCHEDULE_ENTITY not in data: data[CONF_SCHEDULE_ENTITY] = None
         if CONF_STOP_TOLERANCE not in data: data[CONF_STOP_TOLERANCE] = DEFAULT_STOP_TOLERANCE
-        if CONF_MAX_COAST_HOURS not in data: data[CONF_MAX_COAST_HOURS] = DEFAULT_MAX_COAST_HOURS
+        if CONF_MAX_COAST_HOURS not in data: 
+             data[CONF_MAX_COAST_HOURS] = profile_data.get("default_coast", DEFAULT_MAX_COAST_HOURS)
         
         if CONF_ARRIVAL_WINDOW_START not in data: data[CONF_ARRIVAL_WINDOW_START] = DEFAULT_ARRIVAL_WINDOW_START
         if CONF_ARRIVAL_WINDOW_END not in data: data[CONF_ARRIVAL_WINDOW_END] = DEFAULT_ARRIVAL_WINDOW_END

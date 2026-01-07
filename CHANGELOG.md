@@ -1,3 +1,15 @@
+## v2.9.0-beta15 (2026-01-07) - Smart Defaults & Quick Fixes 🧠🚀
+**Improvements**
+
+*   **Intelligent Defaults (New Installations)**: The setup wizard now automatically selects the best 'Max Coast Duration' based on your heating profile:
+    *   **Radiators / IR**: 2.0 Hours (Prevents "Max Coast High" warning).
+    *   **Floor Heating**: 4.0 Hours (Ensures sufficient overlap).
+*   **Reactive Diagnostics**: Repair Issues (like warnings) now clear automatically ~60 seconds after you fix the configuration.
+    *   *Previously, you had to wait 30 minutes or restart HA.*
+    *   This makes fixing "Max Coast" or "Sensor" errors much less frustrating.
+
+---
+
 ## v2.9.0-beta14 (2026-01-07) - Diagnostics & Logging 🩺
 **Improvements**
 

@@ -571,10 +571,21 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         uptime = now - boot_time
         
         # Guard: Grace Period on Startup (30 min)
-        # Guard: Grace Period on Startup (30 min)
-        if uptime < 1800:
-            # _LOGGER.debug("Diagnostics skipped: Grace Period (Uptime: %.1f min)", uptime/60)
-            return
+        # Guard: Grace Period
+        # If HA is just starting -> 30 min wait (settle everything)
+        # If HA is running (Reload) -> 1 min wait (settle this component)
+        from homeassistant.core import CoreState
+        
+        # 1. HA Startup Check
+        if self.hass.state != CoreState.RUNNING:
+             if uptime < 1800:
+                 # _LOGGER.debug("Diagnostics skipped: HA Starting (Uptime: %.1f min)", uptime/60)
+                 return
+
+        # 2. Reload Settle Time (Wait 60s after coordinator init)
+        coord_uptime = now - self._startup_time.timestamp()
+        if coord_uptime < 60:
+             return
 
         if last_check > 0 and (now - last_check) < 3600:
              # _LOGGER.debug("Diagnostics skipped: Rate Limit (Last: %s)", last_check)

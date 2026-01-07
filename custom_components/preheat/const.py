@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.9.0-beta14"
+VERSION = "2.9.0-beta15"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -21,7 +21,8 @@ HEATING_PROFILES: Final = {
         "mass_factor_max": 20,  # min/K
         "default_mass": 10,
         "max_duration": 1.5,    # Hours
-        "buffer": 5             # Minutes
+        "buffer": 5,            # Minutes
+        "default_coast": 2.0    # Hours (Fast response -> short coast)
     },
     PROFILE_RADIATOR_NEW: {
         "name": "Radiators (Modern)",
@@ -30,7 +31,8 @@ HEATING_PROFILES: Final = {
         "mass_factor_max": 40,
         "default_mass": 20,
         "max_duration": 2.5,
-        "buffer": 10
+        "buffer": 10,
+        "default_coast": 2.0 # Standard
     },
     PROFILE_RADIATOR_OLD: {
         "name": "Radiators (Old/Cast Iron)",
@@ -39,7 +41,8 @@ HEATING_PROFILES: Final = {
         "mass_factor_max": 60,
         "default_mass": 30,
         "max_duration": 3.0,
-        "buffer": 15
+        "buffer": 15,
+        "default_coast": 2.0
     },
     PROFILE_FLOOR_DRY: {
         "name": "Floor Heating (Dry/Light)",
@@ -48,7 +51,8 @@ HEATING_PROFILES: Final = {
         "mass_factor_max": 90,
         "default_mass": 50,
         "max_duration": 4.0,
-        "buffer": 20
+        "buffer": 20,
+        "default_coast": 4.0 # High mass -> long coast
     },
     PROFILE_FLOOR_CONCRETE: {
         "name": "Floor Heating (Concrete/Screed)",
@@ -57,7 +61,8 @@ HEATING_PROFILES: Final = {
         "mass_factor_max": 240, 
         "default_mass": 100,
         "max_duration": 8.0,
-        "buffer": 30
+        "buffer": 30,
+        "default_coast": 4.0
     }
 }
 
@@ -161,7 +166,7 @@ DEFAULT_USE_FORECAST: Final = False
 DEFAULT_RISK_MODE: Final = RISK_BALANCED
 DEFAULT_CACHE_TTL: Final = 30
 DEFAULT_STOP_TOLERANCE: Final = 0.5
-DEFAULT_MAX_COAST_HOURS: Final = 4.0
+DEFAULT_MAX_COAST_HOURS: Final = 2.0
 
 # Storage Attributes
 ATTR_LAST_COMFORT_SETPOINT: Final = "last_comfort_setpoint"
