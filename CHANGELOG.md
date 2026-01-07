@@ -1,3 +1,9 @@
+## v2.9.0-beta16 (2026-01-07) - Hotfix (CoreState) 🩹
+**Bugfix**
+*   Fixed a runtime error (`AttributeError: type object 'CoreState' ...`) caused by varying Home Assistant versions. Switched to safe string comparison.
+
+---
+
 ## v2.9.0-beta15 (2026-01-07) - Smart Defaults & Quick Fixes 🧠🚀
 **Improvements**
 

@@ -574,10 +574,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # Guard: Grace Period
         # If HA is just starting -> 30 min wait (settle everything)
         # If HA is running (Reload) -> 1 min wait (settle this component)
-        from homeassistant.core import CoreState
         
-        # 1. HA Startup Check
-        if self.hass.state != CoreState.RUNNING:
+        # 1. HA Startup Check (String comparison for compat)
+        if str(self.hass.state) != "RUNNING":
              if uptime < 1800:
                  # _LOGGER.debug("Diagnostics skipped: HA Starting (Uptime: %.1f min)", uptime/60)
                  return
