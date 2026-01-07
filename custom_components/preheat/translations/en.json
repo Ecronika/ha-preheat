@@ -267,6 +267,10 @@
       "title": "Forecast Data Stale (>2h)",
       "description": "The weather forecast cache has not updated for over 2 hours. The simulation is using outdated data.\n\n**Common Causes:**\n- Weather provider API limit reached.\n- Internet connectivity issues."
     },
+    "weather_quality": {
+      "description": "The weather integration does not provide hourly forecasts. The system is falling back to '{type}' data, which is interpolated. This reduces the precision of the physics simulation. Please be aware that preheating times might be less accurate.",
+      "title": "Low Quality Forecast Data ({type})"
+    },
     "valve_saturation": {
       "title": "Valve Saturated (>95% for 3h)",
       "description": "The valve has been open >95% for over 3 hours. The room is struggling to reach temperature.\n\n**Possible Causes:**\n- Window open (heat escaping).\n- Radiator undersized or flow temperature too low.\n- Sensor miscalibration."

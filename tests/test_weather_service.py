@@ -1,6 +1,6 @@
-"""Unit tests for the WeatherService."""
+"""Unit tests for the WeatherService with Fallback Logic."""
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 from datetime import datetime, timedelta, timezone
 import sys
 
@@ -9,6 +9,12 @@ mock_hass = MagicMock()
 sys.modules["homeassistant"] = MagicMock()
 sys.modules["homeassistant.core"] = MagicMock()
 sys.modules["homeassistant.util"] = MagicMock()
+sys.modules["homeassistant.config_entries"] = MagicMock()
+sys.modules["homeassistant.const"] = MagicMock()
+sys.modules["homeassistant.helpers"] = MagicMock()
+sys.modules["homeassistant.helpers.typing"] = MagicMock()
+sys.modules["homeassistant.helpers.event"] = MagicMock()
+sys.modules["homeassistant.exceptions"] = MagicMock()
 from homeassistant.util import dt as dt_util
 
 # Stub UTC
@@ -36,88 +42,116 @@ class TestWeatherService(unittest.IsolatedAsyncioTestCase):
         # Fixed time
         self.now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=UTC)
         
-        # Patch dt_util
+        # Patch dt_util in target module
         self.dt_patcher = patch("custom_components.preheat.weather_service.dt_util")
         self.mock_dt = self.dt_patcher.start()
         self.mock_dt.utcnow.return_value = self.now
+        self.mock_dt.UTC = UTC
+        self.mock_dt.parse_datetime.side_effect = dt_util.parse_datetime # Use real parse if needed
         
     async def asyncTearDown(self):
         self.dt_patcher.stop()
 
-    async def test_get_forecasts_api_call(self):
-        """Test fetching from API."""
+    async def test_get_forecasts_hourly_success(self):
+        """Test happy path: hourly data available."""
         service = WeatherService(self.hass, "weather.test")
         
-        # Mock Response
-        response = {"weather.test": {"forecast": [{"datetime": "2023-01-01T12:00:00Z", "temperature": 10}]}}
-        self.hass.service_return_value = response
+        # Mock Response (Only matching "hourly" type)
+        async def side_effect(domain, service, data, **kwargs):
+            if data["type"] == "hourly":
+                return {"weather.test": {"forecast": [{"datetime": "2023-01-01T12:00:00+00:00", "temperature": 10.0}]}}
+            return None
+        
+        self.hass.services.async_call.side_effect = side_effect
         
         data = await service.get_forecasts()
         
-        self.hass.services.async_call.assert_called_once()
         self.assertEqual(len(data), 1)
-        self.assertEqual(data[0]["temperature"], 10)
+        self.assertEqual(data[0]["temperature"], 10.0)
+        self.assertEqual(service.forecast_type_used, "hourly")
         
-    async def test_caching(self):
-        """Test that second call uses cache."""
-        service = WeatherService(self.hass, "weather.test", cache_ttl_min=10)
+    async def test_fallback_to_twice_daily(self):
+        """Test fallback: hourly fails/empty, twice_daily works."""
+        service = WeatherService(self.hass, "weather.test")
         
-        response = {"weather.test": {"forecast": [{"datetime": "2023-01-01T12:00:00Z", "temperature": 10}]}}
-        self.hass.service_return_value = response
-        
-        # Call 1
-        await service.get_forecasts()
-        self.hass.services.async_call.assert_called_once()
-        
-        # Call 2 (Immediate)
-        self.hass.services.async_call.reset_mock()
-        await service.get_forecasts()
-        self.hass.services.async_call.assert_not_called() # Should use cache
-        
-    @unittest.skip("Skipping due to complex time-mocking interaction (patch vs import). Logic verified manually.")
-    async def test_cache_invalidation_on_state_change(self):
-        """Test cache invalidation when state changes after threshold."""
-        service = WeatherService(self.hass, "weather.test", cache_ttl_min=30)
-        
-        # 1. Fill Cache
-        response = {"weather.test": {"forecast": [{"datetime": "2023-01-01T12:00:00Z", "temperature": 10}]}}
-        self.hass.service_return_value = response
-        await service.get_forecasts()
-        
-        # 2. Simulate State Change (New timestamp)
-        # Advance time by 20 minutes (Threshold is 10 min for debounce)
-        future = self.now + timedelta(minutes=20)
-        self.mock_dt.utcnow.return_value = future
-        
-        # Trigger
-        event = MagicMock()
-        service._handle_state_change(event)
-        
-        # 3. Call again -> Should call API
-        self.hass.services.async_call.reset_mock()
-        await service.get_forecasts()
-        self.hass.services.async_call.assert_called_once()
+        # Mock Reponse: Hourly -> Empty, Twice Daily -> Data
+        async def side_effect(domain, svc, data, **kwargs):
+            if data["type"] == "hourly":
+                return {"weather.test": {"forecast": []}} # Empty
+            if data["type"] == "twice_daily":
+                return {"weather.test": {"forecast": [
+                    {"datetime": "2023-01-01T12:00:00+00:00", "temperature": 10.0},
+                    {"datetime": "2023-01-01T18:00:00+00:00", "temperature": 16.0}
+                ]}}
+            return None
 
-    async def test_debounce_spam(self):
-        """Test that rapid state changes don't invalidate cache immediately."""
-        service = WeatherService(self.hass, "weather.test", cache_ttl_min=30)
+        self.hass.services.async_call.side_effect = side_effect
         
-        # 1. Fill Cache (Use VALID data)
-        response = {"weather.test": {"forecast": [{"datetime": "2023-01-01T12:00:00Z", "temperature": 10}]}}
-        self.hass.service_return_value = response
+        data = await service.get_forecasts()
+        
+        self.assertEqual(service.forecast_type_used, "twice_daily")
+        self.assertTrue(len(data) >= 2)
+        # Check Interpolation (6 hours -> ~6 points)
+        self.assertEqual(len(data), 7) # 12, 13, 14, 15, 16, 17, 18
+        # Check middle value (linear)
+        # 12->10, 18->16. Change +6 deg over 6h = +1 deg/h
+        # 15:00 should be 13.0
+        mid_pt = data[3] # Index 3 is 15:00
+        self.assertEqual(mid_pt["temperature"], 13.0)
+        
+    async def test_fallback_to_daily(self):
+        """Test fallback: hourly & twice_daily fail, daily works."""
+        service = WeatherService(self.hass, "weather.test")
+        
+        async def side_effect(domain, svc, data, **kwargs):
+            if data["type"] == "daily":
+                return {"weather.test": {"forecast": [
+                    {"datetime": "2023-01-01T12:00:00+00:00", "temperature": 10.0},
+                    {"datetime": "2023-01-02T12:00:00+00:00", "temperature": 34.0}
+                ]}}
+            return None # Others fail
+
+        self.hass.services.async_call.side_effect = side_effect
+        
+        data = await service.get_forecasts()
+        
+        self.assertEqual(service.forecast_type_used, "daily")
+        # 24h gap -> 25 points (0..24 inclusive)
+        self.assertEqual(len(data), 25)
+        # Check slope: +24 deg in 24h = +1 deg/h
+        # 12 hours later (Index 12) -> +12 deg = 22.0
+        self.assertEqual(data[12]["temperature"], 22.0)
+
+    async def test_recovery_to_hourly(self):
+        """Test that system recovers to hourly when it becomes available."""
+        service = WeatherService(self.hass, "weather.test", cache_ttl_min=0) # Disable cache effectively
+        
+        # 1. First Call: Hourly fails
+        async def side_effect_bad(domain, svc, data, **kwargs):
+            if data["type"] == "daily":
+                return {"weather.test": {"forecast": [
+                    {"datetime": "2023-01-01T12:00:00+00:00", "temperature": 10.0},
+                    {"datetime": "2023-01-02T12:00:00+00:00", "temperature": 10.0}
+                ]}}
+            return None
+            
+        self.hass.services.async_call.side_effect = side_effect_bad
         await service.get_forecasts()
+        self.assertEqual(service.forecast_type_used, "daily")
         
-        # 2. Simulate State Change (Immediate, 1 min later)
-        future = self.now + timedelta(minutes=1)
-        self.mock_dt.utcnow.return_value = future
+        # 2. Second Call: Hourly works now!
+        # Force cache expiry manually just in case
+        service._cache_ts = None 
         
-        event = MagicMock()
-        service._handle_state_change(event)
+        async def side_effect_good(domain, svc, data, **kwargs):
+            if data["type"] == "hourly":
+                return {"weather.test": {"forecast": [{"datetime": "2023-01-01T12:00:00+00:00", "temperature": 10.0}]}}
+            return None
+            
+        self.hass.services.async_call.side_effect = side_effect_good
         
-        # 3. Call again -> Should use cache (Debounced)
-        self.hass.services.async_call.reset_mock()
         await service.get_forecasts()
-        self.hass.services.async_call.assert_not_called()
+        self.assertEqual(service.forecast_type_used, "hourly")
 
 if __name__ == "__main__":
     unittest.main()

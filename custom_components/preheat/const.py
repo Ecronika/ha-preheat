@@ -1,8 +1,9 @@
+```
 """Constants for the Preheat integration."""
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.9.0-beta9"
+VERSION = "2.9.0-beta10"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"

@@ -1,3 +1,18 @@
+## v2.9.0-beta10 (2026-01-07) - Weather Fallback & Stability ☁️
+**Bugfix & Improvement**
+
+This release significantly improves compatibility with Weather Integrations (like PirateWeather) and fixes crashes introduced in beta9.
+
+*   **Weather Forecast Fallback**:
+    *   **Fallback Logic**: If your weather integration doesn't provide `hourly` data, the system now automatically tries `twice_daily` and then `daily`.
+    *   **Interpolation**: If fallback data is used, the system intelligently interpolates temperature curves to provide smooth hourly data for the physics engine (instead of rough "steps").
+    *   **Low Quality Warning**: If fallback data is used in **Advanced Mode**, a new Repair Issue ("Low Quality Forecast Data") informs you that precision might be reduced.
+
+*   **Bugfixes**:
+    *   **Fixed Crashes**: Resolved `AttributeError: get_cached_forecast` and `AttributeError: _external_inhibit` which caused the integration to crash during diagnostics checks.
+
+---
+
 ## v2.9.0-beta9 (2026-01-06) - Setup Repairs & Diagnostics 🛠️
 **Feature Release**
 

@@ -324,6 +324,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._prev_temp: float | None = None
         self._prev_temp_time: datetime | None = None
         self._window_open_detected: bool = False
+        self._external_inhibit: bool = False # Init to prevent AttributeError
         self._window_cooldown_counter: int = 0
         
         # Caching
@@ -697,10 +698,28 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                          raise_issue("forecast_short", "forecast_short", IssueSeverity.WARNING)
                      else:
                          clear_issue("forecast_short")
+                         
+             # Check 8.1: Forecast Quality (Fallback Used)
+             # Logic: If using interpolated data (daily/twice_daily), warn user about precision.
+             if has_data and self.weather_service.forecast_type_used != "hourly":
+                 f_type = self.weather_service.forecast_type_used
+                 if f_type != "none":
+                     raise_issue(
+                         "weather_quality", 
+                         "weather_quality", 
+                         IssueSeverity.WARNING, 
+                         {"type": f_type}
+                     )
+                 else:
+                     clear_issue("weather_quality")
+             else:
+                 clear_issue("weather_quality")
+
         else:
              clear_issue("weather_no_forecast")
              clear_issue("adv_no_weather")
              clear_issue("forecast_short")
+             clear_issue("weather_quality")
 
         # --- 5. Occupancy Zombie (Refined) ---
         # Logic: Adaptive Threshold. ON -> 7d (Homeoffice), OFF -> 3d (Suspicious)
