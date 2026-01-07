@@ -1,3 +1,10 @@
+## v2.9.0-beta11 (2026-01-07) - Hotfix for Syntax Error 🩹
+**Bugfix**
+
+*   **Fixed Syntax Error**: Removed accidental characters in `const.py` that caused startup failures in some environments (and CI).
+
+---
+
 ## v2.9.0-beta10 (2026-01-07) - Weather Fallback & Stability ☁️
 **Bugfix & Improvement**
 
