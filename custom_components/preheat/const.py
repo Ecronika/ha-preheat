@@ -1,4 +1,4 @@
-```
+
 """Constants for the Preheat integration."""
 from typing import Final
 
