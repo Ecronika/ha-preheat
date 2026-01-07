@@ -1,3 +1,10 @@
+## v2.9.0-beta12 (2026-01-07) - Translation Hotfix 🩹
+**Bugfix**
+
+*   **Fixed Translation Errors**: Removed invalid quotes around placeholders in translation files that caused validation failures in Home Assistant CI (`hassfest`).
+
+---
+
 ## v2.9.0-beta11 (2026-01-07) - Hotfix for Syntax Error 🩹
 **Bugfix**
 

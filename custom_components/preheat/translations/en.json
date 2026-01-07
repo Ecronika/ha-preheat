@@ -268,7 +268,7 @@
       "description": "The weather forecast cache has not updated for over 2 hours. The simulation is using outdated data.\n\n**Common Causes:**\n- Weather provider API limit reached.\n- Internet connectivity issues."
     },
     "weather_quality": {
-      "description": "The weather integration does not provide hourly forecasts. The system is falling back to '{type}' data, which is interpolated. This reduces the precision of the physics simulation. Please be aware that preheating times might be less accurate.",
+      "description": "The weather integration does not provide hourly forecasts. The system is falling back to {type} data, which is interpolated. This reduces the precision of the physics simulation. Please be aware that preheating times might be less accurate.",
       "title": "Low Quality Forecast Data ({type})"
     },
     "valve_saturation": {

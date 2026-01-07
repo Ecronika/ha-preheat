@@ -263,7 +263,7 @@
     },
     "weather_quality": {
       "title": "Low Quality Forecast Data ({type})",
-      "description": "The weather integration does not provide hourly forecasts. The system is falling back to '{type}' data, which is interpolated. This reduces the precision of the physics simulation. Please be aware that preheating times might be less accurate."
+      "description": "The weather integration does not provide hourly forecasts. The system is falling back to {type} data, which is interpolated. This reduces the precision of the physics simulation. Please be aware that preheating times might be less accurate."
     },
     "valve_saturation": {
       "title": "Valve Saturated (>95% for 3h)",

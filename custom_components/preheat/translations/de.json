@@ -331,7 +331,7 @@
       "description": "Der Cache der Wettervorhersage hat sich seit \u00fcber 2 Stunden nicht aktualisiert. Die Simulation nutzt veraltete Daten.\n\n**H\u00e4ufige Ursachen:**\n- API-Limit des Wetteranbieters erreicht.\n- Internet-Verbindungsprobleme."
     },
     "weather_quality": {
-      "description": "Die Wetter-Integration liefert keine stündlichen Vorhersagen. Das System greift auf '{type}'-Daten zurück, die interpoliert werden. Dies verringert die Präzision der Physik-Simulation. Bitte beachten Sie, dass die Vorheizzeiten ungenauer sein können.",
+      "description": "Die Wetter-Integration liefert keine stündlichen Vorhersagen. Das System greift auf {type}-Daten zurück, die interpoliert werden. Dies verringert die Präzision der Physik-Simulation. Bitte beachten Sie, dass die Vorheizzeiten ungenauer sein können.",
       "title": "Geringe Vorhersage-Qualität ({type})"
     },
     "valve_saturation": {
