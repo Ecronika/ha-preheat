@@ -597,6 +597,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # --- Helper for managing issues ---
         def raise_issue(issue_slug: str, msg_key: str, severity: IssueSeverity, params: dict | None = None):
+             if params is None: params = {}
+             # UX Polish: Always inject zone name
+             if "name" not in params: params["name"] = self.device_name
+             
              async_create_issue(
                 self.hass, DOMAIN, f"{issue_slug}_{self.entry.entry_id}",
                 is_fixable=False, is_persistent=True, severity=severity,
@@ -1678,19 +1682,32 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             elif learned_decision.is_valid and not learned_decision.is_shadow:
                 selected_provider = PROVIDER_LEARNED
             
-            # --- Optimal Stop & Manager Update (Centralized) ---
-            # We ALWAYS update the manager to ensure state consistency (latches reset etc).
-            # If feature is disabled, we pass schedule_end=None which ensures "Reset/Inactive".
+            # -----------------------------------
+            # Update Active Decision (Optimal Stop)
+            # -----------------------------------
             
-            # Prepare config (even if disabled, for consistent call)
-            opt_config = {
-                CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
-                CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
-                "system_inertia": context.get("physics_deadtime", 0.0),
-                CONF_PHYSICS_MODE: self._get_conf(CONF_PHYSICS_MODE, PHYSICS_STANDARD),
-                "forecasts": forecasts
-            }
+            # v2.9 Schedule-Free Logic: Pass predicted arrival as fallback
+            predicted_arrival = self.planner.last_pattern_result.next_predicted_arrival if self.planner.last_pattern_result else None
             
+            # Note: next_event might already be set from prediction if planner fallback used,
+            # but usually next_event here comes from Schedule Entity if present.
+            # We explicitly pass the prediction to let OptimalStopManager decide.
+            
+            self.optimal_stop_manager.update(
+                current_temp=operative_temp,
+                target_temp=target_setpoint,
+                schedule_end=next_event,
+                predicted_end=predicted_arrival, # New v2.9 arg
+                forecast_provider=forecast_temp_at,
+                tau_hours=self.cooling_analyzer.learned_tau,
+                config={
+                    CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
+                    CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
+                    CONF_PHYSICS_MODE: self._get_conf(CONF_PHYSICS_MODE, PHYSICS_STANDARD),
+                    "system_inertia": self.physics.deadtime, # Dynamic Inertia
+                    "forecasts": forecasts
+                }
+            )
             # Helper for forecast callback
             def _forecast_cb(s, e):
                 if forecasts:

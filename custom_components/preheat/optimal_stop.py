@@ -107,7 +107,8 @@ class OptimalStopManager:
         schedule_end: datetime | None,
         forecast_provider, # Callable or Module to get forecast temp
         tau_hours: float,
-        config: dict
+        config: dict,
+        predicted_end: datetime | None = None # v2.9 New
     ) -> None:
         """
         Main logic loop. Called periodically by Coordinator.
@@ -137,25 +138,32 @@ class OptimalStopManager:
         self._last_target_temp = target_temp
         
         # B. Session End or Schedule OFF
+        effective_end = schedule_end
+        used_prediction = False
         
-        # v2.8 Midnight Wrapping Heuristic
-        # If the session ends exactly at 00:00:00, we assume it might wrap to the next day (contiguous).
-        # To avoid a "Coast-to-Stop" gap right before midnight (followed by a hard start at 00:00),
-        # we strictly DISABLE optimal stop for midnight boundaries.
-        if schedule_end:
-            if schedule_end.hour == 0 and schedule_end.minute == 0 and schedule_end.second == 0:
+        # v2.9 Logic: If Schedule missing, check Prediction
+        if effective_end is None and predicted_end:
+             # Ensure prediction is in future
+             if predicted_end > now:
+                  effective_end = predicted_end
+                  used_prediction = True
+                  # _LOGGER.debug("Using Predicted End for Optimal Stop: %s", effective_end)
+        
+        # v2.8 Midnight Wrapping Heuristic (Disable if at midnight)
+        if effective_end:
+            if effective_end.hour == 0 and effective_end.minute == 0 and effective_end.second == 0:
                  _LOGGER.debug("Session ends at Midnight. Disabling Optimal Stop to ensure continuity.")
-                 schedule_end = None # Treat as "No Definitive End" -> Disable Logic
-
-        if schedule_end is None:
-            # Schedule is OFF or unavailable
+                 effective_end = None # Disable
+        
+        if effective_end is None:
+            # Schedule is OFF, Prediction invalid, or Midnight Wrap
             if self._active:
                 # Debounce Logic
                 if self._schedule_off_since is None:
                     self._schedule_off_since = now
                 
                 if (now - self._schedule_off_since).total_seconds() > LATCH_RESET_DEBOUNCE_SEC:
-                    _LOGGER.info("Optimal Stop RESET: Schedule OFF for > %ds", LATCH_RESET_DEBOUNCE_SEC)
+                    _LOGGER.info("Optimal Stop RESET: Schedule/Prediction OFF for > %ds", LATCH_RESET_DEBOUNCE_SEC)
                     self._active = False
                     self._reason = "no_session"
                     self._schedule_off_since = None
@@ -167,9 +175,9 @@ class OptimalStopManager:
             if not self._active: return
 
         else:
-            # Schedule is ON
+            # Schedule/Prediction is ON
             self._schedule_off_since = None # Reset debounce
-            self.session_end = schedule_end
+            self.session_end = effective_end
 
         # C. Safety Break (Too Cold)
         floor = target_temp - tolerance

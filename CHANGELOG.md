@@ -1,3 +1,13 @@
+## v2.9.0-beta17 (2026-01-08) - Schedule-Free & UX Polish 🏃✨
+**Feature & UX Update**
+
+*   **Schedule-Free Optimal Stop**: The "Optimal Stop" (Coasting) feature now works even without a configured Schedule Helper!
+    *   **AI Fallback**: If no schedule is present (or the schedule is empty), the system automatically uses the **Learned Departure Prediction** to calculate the optimal stop time.
+    *   **Input Datetime**: You can also use manual `input_datetime` entities for one-off departures.
+*   **UX Polish (Repair Issues)**: All Repair Issues (e.g., "Max Duration Exceeded", "Stale Sensor") now include the **Zone Name** in the title. This makes it much easier to identify which room needs attention in multi-zone setups.
+
+---
+
 ## v2.9.0-beta16 (2026-01-07) - Hotfix (CoreState) 🩹
 **Bugfix**
 *   Fixed a runtime error (`AttributeError: type object 'CoreState' ...`) caused by varying Home Assistant versions. Switched to safe string comparison.
