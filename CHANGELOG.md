@@ -1,3 +1,12 @@
+## v2.9.0-beta24 (2026-01-09) - Adaptive Polling 🐇🐢
+**Performance Enhancement (Action 3.2)**
+*   **Adaptive Update Interval**: The integration now dynamically adjusts its update frequency to reduce system load.
+    *   **Idle Mode (5 min)**: When the system is OFF, Unoccupied, and no events are approaching.
+    *   **Active Mode (1 min)**: When Heating, Occupied, Window Open, or Approaching Start (< 2 hours).
+*   **Result**: Reduces database writes and CPU usage by ~80% during idle periods (e.g., at night or when away).
+
+---
+
 ## v2.9.0-beta23 (2026-01-09) - Config Flow Simplification 🧹✨
 **UX & Usability Update (Response to Review)**
 *   **Massive UX Clean-up**: Removed ~70% of "Expert Mode" configuration options. The integration now behaves more like a smart appliance and less like a development tool.

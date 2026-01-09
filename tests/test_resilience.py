@@ -9,11 +9,42 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import timedelta
 
 # Mock dependencies before importing integration
-sys.modules['homeassistant'] = MagicMock()
-sys.modules['homeassistant.core'] = MagicMock()
-sys.modules['homeassistant.config_entries'] = MagicMock()
-sys.modules['homeassistant.const'] = MagicMock()
-sys.modules['homeassistant.helpers'] = MagicMock()
+import types
+ha = types.ModuleType("homeassistant")
+ha.__path__ = []
+sys.modules['homeassistant'] = ha
+ha.core = MagicMock()
+sys.modules['homeassistant.core'] = ha.core
+ha.config_entries = MagicMock()
+sys.modules['homeassistant.config_entries'] = ha.config_entries
+ha.const = MagicMock()
+sys.modules['homeassistant.const'] = ha.const
+ha.helpers = types.ModuleType("homeassistant.helpers")
+ha.helpers.__path__ = []
+sys.modules['homeassistant.helpers'] = ha.helpers
+ha.helpers.config_validation = MagicMock()
+sys.modules['homeassistant.helpers.config_validation'] = ha.helpers.config_validation
+ha.helpers.entity_platform = MagicMock()
+sys.modules['homeassistant.helpers.entity_platform'] = ha.helpers.entity_platform
+ha.helpers.issue_registry = MagicMock()
+sys.modules['homeassistant.helpers.issue_registry'] = ha.helpers.issue_registry
+ha.helpers.storage = MagicMock()
+ha.helpers.entity_registry = MagicMock()
+sys.modules['homeassistant.helpers.entity_registry'] = ha.helpers.entity_registry
+ha.helpers.selector = MagicMock()
+sys.modules['homeassistant.helpers.selector'] = ha.helpers.selector
+ha.helpers.discovery = MagicMock()
+sys.modules['homeassistant.helpers.discovery'] = ha.helpers.discovery
+ha.helpers.template = MagicMock()
+sys.modules['homeassistant.helpers.template'] = ha.helpers.template
+ha.helpers.service = MagicMock()
+sys.modules['homeassistant.helpers.service'] = ha.helpers.service
+ha.components = types.ModuleType("homeassistant.components")
+ha.components.__path__ = []
+sys.modules['homeassistant.components'] = ha.components
+
+ha.exceptions = MagicMock() 
+sys.modules['homeassistant.exceptions'] = ha.exceptions
 # Deep Mock for components with real classes to avoid Metaclass conflicts
 class MockEntity:
     pass

@@ -997,19 +997,25 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             win_start_min = self._parse_time_to_minutes(win_start_str, DEFAULT_ARRIVAL_WINDOW_START)
             win_end_min = self._parse_time_to_minutes(win_end_str, DEFAULT_ARRIVAL_WINDOW_END)
 
-            count = 0
+            count_arrival = 0
+            count_departure = 0
             for state in states:
-                if state.state != STATE_ON: continue
                 local_dt = dt_util.as_local(state.last_changed)
                 current_minutes = local_dt.hour * 60 + local_dt.minute
                 
-                # Basic window filter
-                if win_start_min <= current_minutes <= win_end_min:
-                    self.planner.record_arrival(local_dt)
-                    count += 1
+                if state.state == STATE_ON:
+                    # Basic window filter for arrivals
+                    if win_start_min <= current_minutes <= win_end_min:
+                        self.planner.record_arrival(local_dt)
+                        count_arrival += 1
+                elif state.state != STATE_ON: # OFF, UNAVAILABLE (End of session)
+                    # Departures don't need window filtering (or maybe minimal?)
+                    # record_departure handles deduplication logic internally
+                    self.planner.record_departure(local_dt)
+                    count_departure += 1
             
-            if count > 0:
-                _LOGGER.info("Identified %d arrival events from history.", count)
+            if count_arrival > 0 or count_departure > 0:
+                _LOGGER.info("Identified %d arrival and %d departure events from history.", count_arrival, count_departure)
                 await self._async_save_data()
                 
         except Exception as e:
@@ -1912,7 +1918,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                       hvac_mode = state.state
                       hvac_action = state.attributes.get("hvac_action")
 
-            return PreheatData(
+            data = PreheatData(
                 preheat_active=self._preheat_active,
                 next_start_time=start_time,
                 operative_temp=operative_temp,
@@ -1938,7 +1944,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 coast_tau=self.cooling_analyzer.learned_tau,
                 tau_confidence=self.cooling_analyzer.confidence,
                 # V2.6
-                # V2.6
                 pattern_type=pattern_type,
                 pattern_confidence=pattern_conf,
                 pattern_stability=pattern_stab,
@@ -1951,6 +1956,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 hvac_action=hvac_action,
                 hvac_mode=hvac_mode
             )
+            
+            # Action 3.2: Adaptive Polling
+            self._update_polling_interval(data)
+            
+            return data
 
         except Exception as err:
             raise UpdateFailed(f"Update failed: {err}") from err
@@ -2109,6 +2119,35 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                         try: return float(val)
                         except ValueError: pass
         return None
+
+    def _update_polling_interval(self, data: PreheatData) -> None:
+        """
+        Adjust polling interval based on activity (Adaptive Polling).
+        - Active (1 min): Preheat Active, Occupied, Window Open, or approaching Next Start.
+        - Idle (5 min): Otherwise.
+        """
+        # Default: Idle
+        new_interval = timedelta(minutes=5)
+        
+        # 1. Preheat Active (Highest Priority)
+        # 2. Occupied (User might change setpoint manually -> fast reaction)
+        # 3. Window Open (Fast recovery detection)
+        if data.preheat_active or data.is_occupied or data.window_open:
+            new_interval = timedelta(minutes=1)
+        
+        # 4. Approaching Start (< 2 hours)
+        elif data.next_start_time:
+            # Check time delta
+            now = dt_util.utcnow()
+            diff = (data.next_start_time - now).total_seconds()
+            if 0 < diff < 7200: # 2 hours
+                 new_interval = timedelta(minutes=1)
+                 
+        # Update if changed
+        if self.update_interval != new_interval:
+            _LOGGER.debug("Adaptive Polling: Updating interval to %s (was %s)", new_interval, self.update_interval)
+            self.update_interval = new_interval
+
 
     @property
     def preheat_active(self) -> bool:

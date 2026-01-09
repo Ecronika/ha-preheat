@@ -35,6 +35,9 @@ class FakeDtUtil:
     def parse_datetime(self, s):
         return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
+    def as_utc(self, dt_in):
+        return dt_in.replace(tzinfo=self.UTC)
+
 class TestWeatherService(unittest.IsolatedAsyncioTestCase):
     
     async def asyncSetUp(self):

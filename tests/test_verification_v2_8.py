@@ -8,6 +8,58 @@ import unittest
 import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
+import sys
+
+# --- Mock Entities to avoid Metaclass Conflict (Pollution from other tests) ---
+class MockEntity:
+    pass
+
+class MockSensorEntity(MockEntity):
+    pass
+
+class MockBinarySensorEntity(MockEntity):
+    pass
+
+class MockCoordinatorEntity(MockEntity):
+    def __init__(self, coordinator):
+        self.coordinator = coordinator
+    def __class_getitem__(cls, item): return cls
+
+# Patch sys.modules BEFORE imports
+import types
+ha = types.ModuleType("homeassistant")
+ha.__path__ = []
+sys.modules['homeassistant'] = ha
+
+# Core
+ha.core = MagicMock()
+sys.modules['homeassistant.core'] = ha.core
+
+# Helpers
+ha.helpers = types.ModuleType("homeassistant.helpers")
+ha.helpers.__path__ = []
+sys.modules['homeassistant.helpers'] = ha.helpers
+
+ha.helpers.update_coordinator = MagicMock()
+sys.modules['homeassistant.helpers.update_coordinator'] = ha.helpers.update_coordinator
+ha.helpers.update_coordinator.CoordinatorEntity = MockCoordinatorEntity
+
+# Components
+ha.components = types.ModuleType("homeassistant.components")
+ha.components.__path__ = []
+sys.modules['homeassistant.components'] = ha.components
+
+ha.components.sensor = MagicMock()
+sys.modules['homeassistant.components.sensor'] = ha.components.sensor
+ha.components.sensor.SensorEntity = MockSensorEntity
+ha.components.sensor.SensorDeviceClass = MagicMock()
+ha.components.sensor.SensorStateClass = MagicMock()
+
+ha.components.binary_sensor = MagicMock()
+sys.modules['homeassistant.components.binary_sensor'] = ha.components.binary_sensor
+ha.components.binary_sensor.BinarySensorEntity = MockBinarySensorEntity
+ha.components.binary_sensor.BinarySensorDeviceClass = MagicMock()
+
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
