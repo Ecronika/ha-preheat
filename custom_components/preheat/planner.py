@@ -171,8 +171,21 @@ class PreheatPlanner:
         # Dedup by date:
         # BETA 1 LIMITATION: We only record 1 departure per day (the first one that sticks).
         # This simplifies storage but misses multi-session days. Improving this requires a full Session ID concept (v3.0).
-        existing = next((x for x in self.history_departure[weekday] if x["date"] == date_iso), None)
-        if not existing:
+        # 2. Add New Entry
+        # Dedup by date + time window (Multi-Modal Support v2.9)
+        # We allow multiple departures per day if they are distinct (e.g. > 2 hours apart).
+        # This supports Lunch vs Evening shifts.
+        
+        is_duplicate = False
+        for existing in self.history_departure[weekday]:
+            if existing["date"] == date_iso:
+                # Check time difference
+                diff = abs(existing["minutes"] - minutes)
+                if diff < 120: # 2 Hour Debounce for same day
+                    is_duplicate = True
+                    break
+        
+        if not is_duplicate:
             entry = {
                 "date": date_iso,
                 "minutes": minutes,
@@ -188,8 +201,53 @@ class PreheatPlanner:
             ]
             
             # 4. Pruning (Count Second - FIFO)
-            if len(self.history_departure[weekday]) > max_entries:
-                self.history_departure[weekday] = self.history_departure[weekday][-max_entries:]
+            # Increased limit for multi-modal (allow up to 20 entries per weekday to capture history)
+            if len(self.history_departure[weekday]) > 20:
+                self.history_departure[weekday] = self.history_departure[weekday][-20:]
+
+    def get_next_predicted_departure(self, now: datetime) -> datetime | None:
+        """
+        Predict the next probable departure time based on history.
+        Uses Clustering to find multi-modal patterns (e.g. Lunch 12:00 AND Evening 18:00).
+        """
+        today_date = now.date()
+        
+        # Lookahead 3 days
+        for day_offset in range(3):
+            check_date = today_date + timedelta(days=day_offset)
+            weekday = check_date.weekday()
+            
+            raw_entries = self.history_departure.get(weekday, [])
+            if not raw_entries:
+                continue
+                
+            # Extract minutes list
+            minutes_list = [x["minutes"] for x in raw_entries]
+            
+            # Use PatternDetector to find clusters (reusing v2 engine)
+            # This handles outliers and finds centers of density
+            clusters = self.detector.find_clusters_v2(minutes_list)
+            
+            if not clusters:
+                continue
+            
+            # Convert cluster centers to potential datetimes
+            candidates = []
+            for c in clusters:
+                # Construct naive
+                dt = datetime.combine(check_date, datetime.min.time()) + timedelta(minutes=c.time_minutes)
+                # Ensure timezone aware
+                dt = dt.replace(tzinfo=now.tzinfo)
+                candidates.append(dt)
+            
+            # Sort to find the next one
+            candidates.sort()
+            
+            for cand in candidates:
+                if cand > now:
+                    return cand
+                    
+        return None
 
     def prune_all_history(self, max_age_days: int = 60, max_entries: int = 10) -> None:
         """Global Pruning for all weekdays (Startup Maintenance)."""

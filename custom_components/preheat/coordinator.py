@@ -1686,8 +1686,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # Update Active Decision (Optimal Stop)
             # -----------------------------------
             
-            # v2.9 Schedule-Free Logic: Pass predicted arrival as fallback
-            predicted_arrival = self.planner.last_pattern_result.next_predicted_arrival if self.planner.last_pattern_result else None
+            # v2.9 Schedule-Free Logic: Pass predicted departure (multi-modal) as fallback
+            predicted_departure = self.planner.get_next_predicted_departure(now)
             
             # Note: next_event might already be set from prediction if planner fallback used,
             # but usually next_event here comes from Schedule Entity if present.
@@ -1697,7 +1697,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 current_temp=operative_temp,
                 target_temp=target_setpoint,
                 schedule_end=next_event,
-                predicted_end=predicted_arrival, # New v2.9 arg
+                predicted_end=predicted_departure, # v2.9 Multi-Modal Prediction
                 forecast_provider=forecast_temp_at,
                 tau_hours=self.cooling_analyzer.learned_tau,
                 config={

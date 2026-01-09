@@ -1,3 +1,13 @@
+## v2.9.0-beta18 (2026-01-09) - Multi-Modal Departure 🚉
+**Feature Update**
+
+*   **Smart Multi-Modal Prediction**: The "Schedule-Free" logic has been significantly upgraded.
+    *   **Multiple Shifts**: It now detects multiple departures per day (e.g., coming home for lunch and leaving again).
+    *   **Logic**: Uses Clustering (K-Means) to find distinct departure times (debounced by 2 hours) instead of just averaging them.
+    *   **Precision**: Optimal Stop now targets the *next* likely departure time in your daily pattern.
+
+---
+
 ## v2.9.0-beta17 (2026-01-08) - Schedule-Free & UX Polish 🏃✨
 **Feature & UX Update**
 
