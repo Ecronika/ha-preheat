@@ -1,3 +1,9 @@
+## v2.9.0-beta20 (2026-01-09) - Hotfix: NameError 🚑
+**Bug Fix**
+*   Fixed a critical `NameError: name 'forecast_temp_at' is not defined` that caused the integration to crash during update cycles. (Regression from beta19).
+
+---
+
 ## v2.9.0-beta19 (2026-01-09) - Smart Arrival & Anti-Flapping 🚽✨
 **Feature & Data Quality Update**
 

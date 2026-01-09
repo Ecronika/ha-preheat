@@ -1718,6 +1718,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # but usually next_event here comes from Schedule Entity if present.
             # We explicitly pass the prediction to let OptimalStopManager decide.
             
+            # Helper for forecast callback
+            def _forecast_cb(s, e):
+                if forecasts:
+                    return math_preheat.calculate_risk_metric(forecasts, s, e, "balanced")
+                return context.get("outdoor_temp", 10.0)
+            forecast_temp_at = _forecast_cb
+
             self.optimal_stop_manager.update(
                 current_temp=operative_temp,
                 target_temp=target_setpoint,
@@ -1733,11 +1740,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     "forecasts": forecasts
                 }
             )
-            # Helper for forecast callback
-            def _forecast_cb(s, e):
-                if forecasts:
-                    return math_preheat.calculate_risk_metric(forecasts, s, e, "balanced")
-                return context.get("outdoor_temp", 10.0)
 
             # Determine Target Departure for Manager
             # Only use real departure if:
