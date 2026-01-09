@@ -1,3 +1,12 @@
+## v2.9.0-beta23 (2026-01-09) - Config Flow Simplification 🧹✨
+**UX & Usability Update (Response to Review)**
+*   **Massive UX Clean-up**: Removed ~70% of "Expert Mode" configuration options. The integration now behaves more like a smart appliance and less like a development tool.
+*   **Auto-Configuration**: Tuning parameters like `Physics Mode`, `Initial Gain`, `Alpha`, and `Coast Duration` are now automatically determined based on your selected **Heating Profile** and system context (e.g., presence of weather data).
+*   **Simplified Interface**: The configuration flow is now streamlined to just the essentials: Profile, Buffer, and Thermostat.
+*   **Backward Compatibility**: Existing installations retain their settings, but hidden expert options are now managed internally.
+
+---
+
 ## v2.9.0-beta22 (2026-01-09) - Physics Validation & Safety Net 🛡️🧪
 **Quality & Stability Update (Response to Review)**
 *   **Physics Validation**: Added ISO 12831 compliant validation suite to ensure thermal models behave according to physical laws (Standard Radiators vs. Floor Heating).

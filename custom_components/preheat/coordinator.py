@@ -376,14 +376,35 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if key in self.entry.data:
              return self.entry.data[key]
              
-        # 2. Heating Profile Defaults
+        # 2. Dynamic Defaults from Profile (V3) / Context (Action 2.3)
         profile_key = options.get(CONF_HEATING_PROFILE, self.entry.data.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW))
         profile = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
         
+        # Action 2.3: Config Cleanup - Map Legacy Keys to Profile/Context
+        
+        # Physics / Weather
+        if key == CONF_PHYSICS_MODE or key == CONF_USE_FORECAST:
+            # Auto-enable Advanced Physics if Weather Entity is configured
+            if self.entry.data.get(CONF_WEATHER_ENTITY) or self.entry.options.get(CONF_WEATHER_ENTITY):
+                 return PHYSICS_ADVANCED if key == CONF_PHYSICS_MODE else True
+            return PHYSICS_STANDARD if key == CONF_PHYSICS_MODE else False
+            
+        # Tuning Parameters (From Profile)
         if key == CONF_BUFFER_MIN and "buffer" in profile:
              return profile["buffer"]
         if key == CONF_MAX_PREHEAT_HOURS and "max_duration" in profile:
              return profile["max_duration"]
+        if key == CONF_INITIAL_GAIN and "default_mass" in profile:
+             return profile["default_mass"]
+        if key == CONF_MAX_COAST_HOURS and "default_coast" in profile:
+             return profile.get("default_coast", DEFAULT_MAX_COAST_HOURS)
+
+        # Hardcoded Best Practices (Removal of Expert Tweaks)
+        if key == CONF_RISK_MODE: return RISK_BALANCED
+        if key == CONF_EMA_ALPHA: return 0.3
+        if key == CONF_STOP_TOLERANCE: return 0.5
+        if key == CONF_DONT_START_IF_WARM: return True
+        if key == CONF_AIR_TO_OPER_BIAS: return 0.0
              
         # 3. Fallback to code defaults
         return default
