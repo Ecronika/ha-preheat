@@ -1,3 +1,9 @@
+## v2.9.0-beta21 (2026-01-09) - Hotfix: NameError Cleanup 🧹
+**Bug Fix**
+*   Fixed another `NameError name 'opt_config' is not defined` by removing redundant legacy code that was accidentally left in during the multi-modal refactor.
+
+---
+
 ## v2.9.0-beta20 (2026-01-09) - Hotfix: NameError 🚑
 **Bug Fix**
 *   Fixed a critical `NameError: name 'forecast_temp_at' is not defined` that caused the integration to crash during update cycles. (Regression from beta19).

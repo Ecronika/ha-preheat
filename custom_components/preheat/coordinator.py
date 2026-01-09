@@ -1766,15 +1766,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             if self.hold_active or not self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
                 target_departure_for_manager = None
             
-            # Update Manager
-            self.optimal_stop_manager.update(
-                current_temp=operative_temp,
-                target_temp=target_setpoint,
-                schedule_end=target_departure_for_manager, 
-                forecast_provider=_forecast_cb,
-                tau_hours=self.cooling_analyzer.learned_tau,
-                config=opt_config
-            )            
+
             
             # Feature Migration/Warning UX (Preserved)
             # v2.9.0-beta2: Schedule is optional, so we always remove the "missing_schedule" warning if it exists.
