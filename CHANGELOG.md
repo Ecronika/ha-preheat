@@ -1,3 +1,13 @@
+## v2.9.0-beta22 (2026-01-09) - Physics Validation & Safety Net 🛡️🧪
+**Quality & Stability Update (Response to Review)**
+*   **Physics Validation**: Added ISO 12831 compliant validation suite to ensure thermal models behave according to physical laws (Standard Radiators vs. Floor Heating).
+*   **Model Safety Net**: Implemented "Model Instability Protection" (Action 1.2).
+    *   Parameters (`mass`, `loss`, `tau`) are now clamped if they attempt to jump >20% in a single update.
+    *   Unstable updates are logged as warnings and *rejected* from contributing to confidence scores.
+    *   Refined internal gradient clipping to allow faster learning while relying on the new safety net.
+
+---
+
 ## v2.9.0-beta21 (2026-01-09) - Hotfix: NameError Cleanup 🧹
 **Bug Fix**
 *   Fixed another `NameError name 'opt_config' is not defined` by removing redundant legacy code that was accidentally left in during the multi-modal refactor.

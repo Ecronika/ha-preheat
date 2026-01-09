@@ -175,31 +175,67 @@ class ThermalPhysics:
         
         # Mass connects to Delta_In
         delta_mass = lr * (error * weight_mass) / delta_t_in
-        delta_mass = self._clip_dual(delta_mass, self.mass_factor, 0.05, 5.0)
-        self.mass_factor += delta_mass
+        # V3.0 Action 1.2: Relaxed gradient clip (0.05 -> 0.30) because we now have a hard 20% Stability Clamp.
+        # This allows faster learning while preventing explosions.
+        delta_mass = self._clip_dual(delta_mass, self.mass_factor, 0.30, 5.0)
+        
+        # Action 1.2: Stability Check
+        new_mass = self.mass_factor + delta_mass
+        self.mass_factor, mass_stable = self._apply_stable_update("Mass Factor", self.mass_factor, new_mass)
 
         # Loss connects to Delta_Out
+        loss_stable = True
+        delta_loss = 0.0
+        
         # GUARD: Only learn loss if significant outdoor delta exists to avoid division by zero/noise
         if delta_t_out > 0.5: 
             # Strong Signal
             delta_loss = lr * (error * weight_loss) / delta_t_out
-            delta_loss = self._clip_dual(delta_loss, self.loss_factor, 0.05, 2.0)
-            self.loss_factor += delta_loss
+            delta_loss = self._clip_dual(delta_loss, self.loss_factor, 0.30, 2.0)
         elif delta_t_out > 0.1:
-            # Weak Signal (0.1 < dt_out < 0.5) - e.g. mild spring/autumn
-            # Learn with reduced confidence to prevent drift but allow adaptation
+            # Weak Signal (0.1 < dt_out < 0.5)
             delta_loss = lr * (error * weight_loss) / max(delta_t_out, 0.5) # Clamp divisor
             delta_loss *= 0.3 # Dampen update
-            delta_loss = self._clip_dual(delta_loss, self.loss_factor, 0.05, 2.0)
-            self.loss_factor += delta_loss
+            delta_loss = self._clip_dual(delta_loss, self.loss_factor, 0.30, 2.0)
+            
+        if abs(delta_loss) > 0.0001:
+            new_loss = self.loss_factor + delta_loss
+            self.loss_factor, loss_stable = self._apply_stable_update("Loss Factor", self.loss_factor, new_loss)
 
         # Enforce bounds
         self.mass_factor = max(self.min_mass, min(self.max_mass, self.mass_factor))
         # Loss can go to 0.0 if perfectly insulated/warm
-        self.loss_factor = max(0.0, min(50.0, self.loss_factor)) 
+        self.loss_factor = max(0.0, min(50.0, self.loss_factor))
         
-        self.sample_count += 1
+        # Action 1.2: Confidence Impact
+        if mass_stable and loss_stable:
+             self.sample_count += 1
+             
         return True
+
+    def _apply_stable_update(self, name: str, old_val: float, new_val: float) -> tuple[float, bool]:
+        """
+        Action 1.2: Apply update with stability clamping (max 20% jump).
+        Returns: (clamped_value, is_stable)
+        """
+        if old_val == 0: return new_val, True
+        
+        change_pct = abs(new_val - old_val) / old_val
+        if change_pct > 0.2: # 20% Limit
+            # Clamp
+            limit = old_val * 0.2
+            if new_val > old_val:
+                clamped = old_val + limit
+            else:
+                clamped = old_val - limit
+            
+            _LOGGER.warning(
+                "Model Instability detected for %s! Attempted jump %.2f -> %.2f (%.1f%%). Clamped to %.2f.",
+                name, old_val, new_val, change_pct*100, clamped
+            )
+            return clamped, False
+            
+        return new_val, True
 
     def _clip_dual(self, delta: float, current: float, rel_limit: float, abs_limit: float) -> float:
         """Dual clipping: relative AND absolute limits."""

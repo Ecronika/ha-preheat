@@ -228,5 +228,33 @@ class TestPhysics(unittest.TestCase):
         heat_2 = d2 - 10.0 - 20.0 # 40
         self.assertAlmostEqual(heat_2 / heat_1, 2.0, delta=0.05)
 
+    def test_model_stability_clamping(self):
+        """Action 1.2: Vfy massive changes are clamped at 20% and don't increment sample_count."""
+        p = ThermalPhysics()
+        p.sample_count = 100
+        p.mass_factor = 20.0
+        
+        # Scenario: Massive Error creates Massive Gradient
+        # Actual=70, Pred=20 (Mass=20*1=20). Error=50.
+        # Delta In = 1.0. Delta Out = 0.0
+        
+        # Run Update
+        p.update_model(actual_duration=70.0, delta_t_in=1.0, delta_t_out=0.0)
+        
+        # Expected:
+        # Pred = 20 + 0 = 20.
+        # Error = 50.
+        # Delta = 0.1 * 50 / 1 = 5.0.
+        # ClipDual(5.0): Max Abs is 5.0. Returns 5.0.
+        # New Mass Unchecked = 25.0 (25% jump).
+        # Stable Update Check: 5 / 20 = 0.25 > 0.20.
+        # Clamps to 1.2 * 20 = 24.0.
+        
+        self.assertAlmostEqual(p.mass_factor, 24.0, delta=0.1) # Clamped value
+        self.assertNotEqual(p.mass_factor, 25.0) # Not full value
+        
+        # Sample Count should NOT increment
+        self.assertEqual(p.sample_count, 100)
+
 if __name__ == '__main__':
     unittest.main()

@@ -97,6 +97,21 @@ class CoolingAnalyzer:
             # Gate: Only update if high confidence?
             # User Logic: Gate > 60%
             if avg_confidence > 0.6 and total_samples > 60: # 60 mins total
+                
+                # Action 1.2: Model Stability Check for Tau
+                old_tau = self.learned_tau
+                change = abs(final_tau - old_tau) / old_tau
+                
+                if change > 0.2:
+                    limit = old_tau * 0.2
+                    clamped_tau = old_tau + limit if final_tau > old_tau else old_tau - limit
+                    _LOGGER.warning("Tau Model Instability! Jump %.2fh->%.2fh (%.1f%%). Clamped to %.2fh",
+                                   old_tau, final_tau, change*100, clamped_tau)
+                    final_tau = clamped_tau
+                    # Confidence Penalty: Don't set self.confidence to full value?
+                    # Or keep confidence but acknowledge value is capped.
+                    avg_confidence *= 0.8 # Penalty
+                
                 self.learned_tau = final_tau
                 self.confidence = avg_confidence
                 _LOGGER.info("CoolingAnalyzer learned new Tau: %.2fh (Conf: %.1f%%)", final_tau, avg_confidence*100)
