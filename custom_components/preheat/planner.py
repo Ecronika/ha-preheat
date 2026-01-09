@@ -130,9 +130,21 @@ class PreheatPlanner:
         minutes = dt.hour * 60 + dt.minute
         
         # Update v3 History
-        # Dedup: Don't add if already exists for this date
-        today_entry = next((item for item in self.history[weekday] if item[0] == dt.date()), None)
-        if not today_entry:
+        # Multi-Modal Support (v2.9-beta19): Allow multiple arrivals per day
+        # Condition: Must be distinct (> 2 hours apart) to capture separate shifts.
+        
+        is_duplicate = False
+        today_entries = [item for item in self.history[weekday] if item[0] == dt.date()]
+        
+        for item in today_entries:
+            # item is (date, minutes)
+            existing_mins = item[1]
+            diff = abs(existing_mins - minutes)
+            if diff < 120: # 2 Hour Debounce
+                is_duplicate = True
+                break
+        
+        if not is_duplicate:
             self.history[weekday].append((dt.date(), minutes))
             
             # Rolling Window

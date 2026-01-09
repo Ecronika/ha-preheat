@@ -354,6 +354,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "capped_events": [], # Rolling list of bools
             "last_check_ts": 0.0,
         }
+        
+        # v2.9.0-beta19: Anti-Flapping State
+        self._last_occupancy_off_time: datetime | None = None
 
         self._setup_listeners()
         
@@ -1006,15 +1009,37 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         old_state = event.data.get("old_state")
         if not new_state or not old_state: return
         
+        now = dt_util.utcnow()
+        
         if old_state.state != STATE_ON and new_state.state == STATE_ON:
-            self._occupancy_on_since = dt_util.utcnow()
-            # Feed planner
-            self.hass.async_create_task(self._learn_arrival_event())
-            self.occupancy_debouncer.handle_change(True, dt_util.utcnow())
+            # ARRIVAL (ON)
+            
+            # v2.9 Anti-Flapping: Check if we were gone long enough
+            # Logic: If off_duration < debounce_min, it's just a short break (e.g. Toilet).
+            debounce_min = self._get_conf(CONF_DEBOUNCE_MIN, DEFAULT_DEBOUNCE_MIN)
+            is_valid_new_session = True
+            
+            if self._last_occupancy_off_time:
+                off_duration = (now - self._last_occupancy_off_time).total_seconds() / 60.0
+                if off_duration < debounce_min:
+                    is_valid_new_session = False
+                    _LOGGER.debug("[Anti-Flapping] Ignored Arrival (Gap %.1f min < %.1f min). Maintaining previous session.", 
+                                  off_duration, debounce_min)
+            
+            self._occupancy_on_since = now
+            
+            if is_valid_new_session:
+                 # Feed planner (Learns this as a Start Time)
+                 self.hass.async_create_task(self._learn_arrival_event())
+            
+            # Always notify debouncer (Cancel departure timer)
+            self.occupancy_debouncer.handle_change(True, now)
         
         if old_state.state == STATE_ON and new_state.state != STATE_ON:
+            # DEPARTURE (OFF)
             self._occupancy_on_since = None
-            self.occupancy_debouncer.handle_change(False, dt_util.utcnow())
+            self._last_occupancy_off_time = now # Track valid OFF time
+            self.occupancy_debouncer.handle_change(False, now)
 
     async def _learn_arrival_event(self) -> None:
         now = dt_util.now()

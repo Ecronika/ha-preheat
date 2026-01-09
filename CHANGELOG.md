@@ -1,3 +1,15 @@
+## v2.9.0-beta19 (2026-01-09) - Smart Arrival & Anti-Flapping 🚽✨
+**Feature & Data Quality Update**
+
+*   **Anti-Flapping (Re-Arrival Debounce)**:
+    *   **Problem**: Short absences (e.g. bathroom breaks, taking out trash) were previously logged as "New Arrivals", polluting the data and ignoring the rest of the day.
+    *   **Solution**: A new "Arrival" is now only recorded if you were absent (Sensor OFF) for **> 15 minutes** (configurable via Debounce). Short gaps are ignored, maintaining the current session.
+*   **Multi-Modal Arrival**:
+    *   We now support **multiple valid arrivals per day**!
+    *   Example: Start work at 08:00, go to lunch, return at 14:00. Both 08:00 and 14:00 are now learned as distinct patterns, provided they are > 2 hours apart.
+
+---
+
 ## v2.9.0-beta18 (2026-01-09) - Multi-Modal Departure 🚉
 **Feature Update**
 
