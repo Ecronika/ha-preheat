@@ -455,6 +455,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                             fake_events.append(simulated)
                         history[int(k)] = fake_events
                 
+                # v2.9.0 Fix: Include departure data (key "888") in planner initialization
+                # The planner's _load_history() expects "888" key in the passed dict.
+                if "888" in data:
+                    history["888"] = data["888"]
+                
                 self.planner = PreheatPlanner(history)
                 
                 # Fix: Update Provider's reference to the new planner object
