@@ -6,11 +6,10 @@
 
 1.  **Check Occupancy**: Is your occupancy sensor currently `OFF`? The system only pre-heats if it thinks the room is currently *empty* but *will be occupied soon*. If you are already there (`ON`), it assumes the normal thermostat is running and does nothing.
 2.  **Check Target Temp**: Is the target setpoint higher than the current temperature?
-3.  **Check "Don't start if warm"**: In the settings, there is an option "Don't preheat if room > 20°C".
+3.  **Check "Frost Protection"**: If the room is below 5°C, the system will force-start regardless of other settings.
 
 ### "It starts too late / The room is cold."
-*   **Solution**: Increase the **initial gain** in the configuration options manually.
-*   **Solution**: Add a **Buffer** of 15-30 minutes in the settings.
+*   **Solution**: Increase the **Buffer** in the configuration options.
 *   The system *will* learn from this mistake. If it misses the target, the next day's prediction will be more aggressive.
 
 ### "It starts way too early!"
@@ -19,7 +18,21 @@
 
 ---
 
-## Diagnostics
+## 🛠️ Repair Issues (Diagnostics)
+
+**New in v2.9.0**: The integration includes 15+ built-in health checks that appear as "Repair Issues" in your Home Assistant **Settings → Repairs** dashboard.
+
+*   **Stale Sensor**: Warning if your temperature sensor hasn't updated in >6 hours.
+*   **Physics Railing**: Alert if the learning model has hit its limits.
+*   **Zombie Schedule**: Error if your Schedule Helper has no events.
+*   **Forecast Missing**: Warning if weather data is unavailable in Advanced Mode.
+
+> [!TIP]
+> Check the Repairs dashboard if the integration isn't behaving as expected!
+
+---
+
+## Diagnostics Download
 
 Intelligent Preheating supports Home Assistant **Diagnostics**.
 
@@ -43,8 +56,9 @@ logger:
     custom_components.preheat: debug
 ```
 
-### Why does "Analyze History" show 0 sessions?
-*   The "Recorder" feature (v2.8.0) starts fresh. It does not import old data from Home Assistant's general history to avoid corruption.
-*   It takes **7 days** to have at least one data point for every weekday.
-*   Wait a few days, and the numbers will grow automatically.
+### "Analyze History" / Retroactive Bootstrap
 
+**v2.9.0 Update**: The system now **automatically scans** your Home Assistant Recorder history on first install. You should see learned sessions within 5 minutes of installation.
+
+*   If it shows 0 sessions, check that your **Occupancy Sensor** has history in the Recorder (at least 7 days).
+*   You can manually trigger a rescan using the **"Analyze History"** button.

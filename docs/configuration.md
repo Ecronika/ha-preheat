@@ -6,64 +6,57 @@ When you add the integration, you will be asked for the essential entities:
 
 | **Setting** | **Description** | **Required** |
 | :--- | :--- | :--- |
+| **Heating Profile** | Select your heating type (Radiator, Floor, AC). Determines default physics. | ✅ Yes |
 | **Occupancy Sensor** | A `binary_sensor` that is **ON** when the room is in use (occupied). | ✅ Yes |
 | **Climate Entity** | The thermostat itself. | ✅ Yes |
 | **Temperature Sensor** | Room temperature sensor. Optional if Climate entity is accurate. | Optional |
 | **Weather Entity** | `weather.*` entity for forecast logic. | Optional |
-| **Enable Optimal Stop** | Activates "Coast-to-Stop" logic to save energy. | Optional |
-| **Schedule Entity** | A `schedule` helper defining when the day ends. **Required** if Optimal Stop is enabled. | **Conditionally** |
+| **External Inhibit / Window Sensor** | A `binary_sensor` or `switch` that blocks preheating when ON. | Optional |
+
+> [!NOTE]
+> **v2.9.0 Simplification**: Most "Expert" settings (Physics Mode, Initial Gain, Risk Mode, etc.) are now **automatically configured** based on your Heating Profile. You no longer need to tune them manually.
 
 ---
 
-## Detailed Settings (Configure)
+## Configure Options
 
-After installation, click **Configure** on the integration entry to access advanced settings.
+After installation, click **Configure** on the integration entry to access additional settings.
 
-### 🏗️ Physics & Learning
+### 🕐 Schedule & Triggers
 
-*   **Heating Profile**: Select the preset that best matches your hardware to help the initial learning.
-    *   *Radiator (Standard)*: Typical water-based radiators.
-    *   *Floor (Concrete)*: Slow reacting implementation. High deadtime defaults.
-    *   *Air Conditioning*: Fast reacting systems.
-*   **Physics Mode**: Choose the simulation engine.
-    *   *Standard (Default)*: Robust, noise-tolerant model. Best for most users.
-    *   *Advanced (Euler)*: Precise forward-simulation using 30-minute steps. Improved accuracy for complex variable-temperature schedules but more sensitive to sensor noise.
-*   **Initial Gain**: Manually override the "Minutes per Degree" factor if the automatic learning starts too slow/fast. Lower = Faster heating.
-
-
-### ⚠️ Risk & Buffers
-
-*   **Risk Mode**: How aggressively should we trust the weather forecast?
-    *   *Balanced (Default)*: Moderate trust.
-    *   *Pessimistic*: Assumes it's colder than forecasted. Safer, but uses more energy.
-    *   *Optimistic*: Assumes it's warmer. Saves energy, risk of being cold.
-*   **Buffer (Minutes)**: Add extra minutes to the calculated start time just to be safe. Default: `10`.
-
-### 🛑 Optimal Stop (Eco)
-
-*   **Enable Optimal Stop**: Turns on the coast-to-stop calculation.
-*   **Schedule Entity**: A `schedule` helper that defines your "Day". The system needs to know when the "End of Day" is to calculate when to shut off.
-    *   *Tip*: Create one in Settings → Helpers → Schedule.
-    *   **Note**: If Optimal Stop is enabled, this field is **mandatory**. You cannot save the configuration without it.
-*   **Stop Tolerance**: How many degrees drop is acceptable during the coasting phase? Default: `0.5°C`.
-
-### 🕐 Triggers
-
+*   **Enable Optimal Stop**: Activates "Coast-to-Stop" logic to save energy.
+*   **Schedule Entity**: A `schedule` or `input_datetime` helper defining when to stop heating.
+    *   **Note**: No longer mandatory! If not provided, the system uses **Learned Departure** patterns.
 *   **Only on Workdays**: If checked, preheating will only activate on Mon-Fri (or days defined by your `binary_sensor.workday_sensor`).
-*   **Earliest Start Time**: Prevent the heating from starting 03:00 AM if you don't wake up until 07:00.
+*   **Earliest Start Time**: Prevent the heating from starting at 03:00 AM if you don't wake up until 07:00.
 
----
-
-### 📅 Holidays & Intelligence
+### 📅 Holidays & Calendar Intelligence
 
 *   **Holiday Calendar**: Select a Home Assistant `calendar` entity.
     *   **Logic**: If *any* event is active on a day (e.g., "Holiday", "Vacation"), that day is treated as a **blocked day** (no preheating).
-    *   **Check**: The system checks 8 days into the future.
 *   **Workday Sensor**: Select a `binary_sensor` (usually `binary_sensor.workday_sensor`) to distinguish weekends/holidays.
-    *   **Fallback**: If not configured, Mon-Fri are considered workdays.
 *   **Occupancy Debounce**: Avoid false alarms when you leave for just 5 minutes.
-    *   **Setting**: `Occupancy Debounce Time (Minutes)`.
-    *   **Logic**: The system waits this many minutes after occupancy is lost before officially declaring "Departure" and fitting the heating curve. Default: `15 minutes`.
+    *   **Default**: `15 minutes`.
+
+### 🔒 External Inhibit (Window Sensor)
+
+*   **External Inhibit Entity**: Select a `binary_sensor` (e.g., window contact) or `switch`.
+    *   **Logic**: When this entity is **ON**, preheating is blocked (shows "External Inhibit" as blocking reason).
+    *   **Use Case**: Connect your window sensors to pause heating when a window is open.
+
+---
+
+## Advanced Settings (Auto-Configured)
+
+The following settings are now **automatically determined** based on your Heating Profile and environment. They are hidden from the UI but can still be accessed via YAML or the internal storage if needed.
+
+| **Setting** | **Default Behavior** |
+| :--- | :--- |
+| **Physics Mode** | Auto-selects "Advanced" if Weather Entity is configured. |
+| **Initial Gain** | Set from Heating Profile (e.g., 20 min/K for Radiators). |
+| **Buffer (Minutes)** | Profile-based (e.g., 10 min for Radiators, 30 for Floor). |
+| **Max Coast Duration** | Profile-based (e.g., 2h for Radiators, 4h for Floor). |
+| **Risk Mode** | Always "Balanced" (deprecated setting). |
 
 ---
 

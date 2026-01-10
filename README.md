@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.8.0)
+# Intelligent Preheating for Home Assistant (v2.9.0)
 
 **Turn your heating into a Predictive Smart System.**
 
@@ -34,17 +34,32 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 
 ## ✨ Features
 
-*   🧠 **Self-Learning Physics (Advanced)**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime` (Totzeit). Supports **Euler Simulation** for complex scenarios.
-*   👁️ **The Observer**: Learns your habits to predict *when* you leave (Shadow Mode), providing "Next Departure" insights.
-*   📅 **Calendar Intelligence**: Auto-detects holidays and shifts via Calendar integration to skip preheating intelligently.
-*   📉 **Optimal Stop (Coast-to-Vacancy)**: Turns off the heating early if the room stays warm enough until the schedule ends.
-*   🔌 **Stand-Alone**: Works with any thermostat entity. No external "Scheduler Component" or "Virtual Thermostat" required.
-*   ⛈️ **Weather Forecast Integration**: Looks ahead at the weather forecast to adjust heating power for incoming cold fronts.
-*   🪟 **Window Detection**: Pauses operation if a rapid temperature drop is detected.
-*   🛡️ **Robustness**: Filters out sensor noise and ignores "low valve position" learning to ensure data quality.
-*   🔍 **Transparent**: Provides detailed Diagnostics, Confidence scores, and "Reason" attributes so you know *why* it acted.
-*   🌎 **Localized**: Available in English and German.
-*   🐍 **Resilient**: Validated for Python 3.10 through 3.12 compatibility.
+### 🧠 Intelligence & Learning
+*   **Self-Learning Physics**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime`. Supports **Euler Simulation** for complex scenarios.
+*   **The Observer**: Learns your habits to predict *when* you leave (Shadow Mode), providing "Next Departure" insights.
+*   **Calendar Intelligence**: Auto-detects holidays and shifts via Calendar integration to skip preheating intelligently.
+*   **🚀 Retroactive Bootstrap (New in v2.9.0)**: On first install, the system automatically scans your Home Assistant history to learn your habits instantly. No more "cold start" week!
+
+### 🛡️ Safety & Responsiveness
+*   **Frost Protection**: Heating is automatically forced ON if the temperature drops below 5°C, even if the system is disabled.
+*   **⚡ Reactive Setpoints**: The system re-calculates *immediately* when you change the target temperature (0 latency).
+*   **Physics Safety Net**: The thermal model is ISO 12831 validated with protection against learning instability.
+
+### 📉 Energy Saving
+*   **Optimal Stop (Coast-to-Vacancy)**: Turns off the heating early if the room stays warm enough until the schedule ends.
+*   **Schedule-Free Operation**: Works with Learned Patterns alone—no Schedule Helper required.
+*   **Adaptive Polling**: Sleeps (5 min updates) when idle, sprints (1 min) when active—**80% less system load**.
+
+### 🔌 Compatibility & Control
+*   **Stand-Alone**: Works with any thermostat entity. No external "Scheduler Component" required.
+*   **Weather Forecast Integration**: Looks ahead at the weather forecast to adjust heating power for incoming cold fronts.
+*   **🪟 Window Detection**: Pauses operation if a rapid temperature drop is detected.
+*   **🔥 Heat Demand Sensor**: `binary_sensor.<zone>_heat_demand` signals when a zone needs active heat supply.
+
+### 🔍 Transparency & Diagnostics
+*   **15+ Repair Issues**: Built-in health checks alert you to stale sensors, misconfigurations, or learning problems.
+*   **Decision Trace**: Provides detailed Diagnostics, Confidence scores, and "Reason" attributes so you know *why* it acted.
+*   **🌎 Localized**: Available in English and German.
 
 ---
 
@@ -52,9 +67,10 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 
 1.  **Install** via HACS (Custom Repository).
 2.  **Add Integration** in Home Assistant settings.
-3.  **Config**: Select your **Climate Entity** (Thermostat), **Occupancy Sensor**, and optionally a **Target Temp** helper.
-4.  **Wait**: The system needs about 3-5 days of typical usage to learn your room's physics perfectly.
+3.  **Config**: Select your **Heating Profile**, **Climate Entity** (Thermostat), and **Occupancy Sensor**.
+4.  **Done**: The system auto-scans your history and starts learning immediately!
 
 ---
 
 **License**: MIT
+
