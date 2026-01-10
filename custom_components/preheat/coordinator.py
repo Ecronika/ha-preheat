@@ -625,7 +625,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         """Run retroactive history scan if needed (bootstrap)."""
         # v2.9.0 Fix: Force check for missing departures even if bootstrap was done before
         # This ensures users upgrading from v2.8 (or broken v2.9) get the retroactive scan.
-        has_departures = len(self.planner.history_departure) > 0
+        has_departures = any(len(entries) > 0 for entries in self.planner.history_departure.values())
         if self.bootstrap_done and has_departures:
             return
             
@@ -641,7 +641,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if has_v2 or has_v3:
              # v2.9.0 Fix: If we have Arrivals but NO Departures, force a scan anyway.
              # This populates the new "Learned Departures" feature for existing users.
-             has_departures = len(self.planner.history_departure) > 0
+             has_departures = any(len(entries) > 0 for entries in self.planner.history_departure.values())
              if not has_departures:
                  _LOGGER.info("Existing Arrivals found, but NO Departures. Forcing Retroactive Scan to populate new feature...")
                  # Detect if we should proceed (Fallthrough to scan)
