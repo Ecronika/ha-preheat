@@ -660,24 +660,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              _LOGGER.info("Bootstrap Complete.")
         except Exception as e:
              _LOGGER.error("Bootstrap Scan failed (will retry next reboot): %s", e)
-        # If HA is running (Reload) -> 1 min wait (settle this component)
-        
-
-        
-        # 1. HA Startup Check (String comparison for compat)
-        if str(self.hass.state) != "RUNNING":
-             if uptime < 1800:
-
-                 # _LOGGER.debug("Diagnostics skipped: HA Starting (Uptime: %.1f min)", uptime/60)
-                 return
-
-        # 2. Reload Settle Time (Wait 60s after coordinator init)
-        coord_uptime = now - self._startup_time.timestamp()
-        if coord_uptime < 60:
-
-             return
-
-        if last_check > 0 and (now - last_check) < 3600:
 
              # _LOGGER.debug("Diagnostics skipped: Rate Limit (Last: %s)", last_check)
              return
