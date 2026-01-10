@@ -316,6 +316,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._start_temp: float | None = None
         self._occupancy_on_since: datetime | None = None
         self._preheat_active: bool = False
+        self._frost_active: bool = False # Safety override (v2.9.1)
         self._last_opt_active: bool = False # Track edge for events
         self.enable_active: bool = True # Master Switch
         self._last_comfort_setpoint: float | None = None
@@ -354,6 +355,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "capped_events": [], # Rolling list of bools
             "last_check_ts": 0.0,
         }
+        
+        self.bootstrap_done = False
+
         
         # v2.9.0-beta19: Anti-Flapping State
         self._last_occupancy_off_time: datetime | None = None
@@ -544,11 +548,21 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     await self._async_save_data()
                 else:
                     self.extra_store_data["physics_version"] = physics_version
-            else:
-                await self.scan_history_from_recorder()
+            if not self.bootstrap_done:
+                 # v2.9.2: Retroactive Bootstrap (Auto-Scan)
+                 # We do NOT run this immediately to avoid startup slam.
+                 # We schedule it for 5 minutes later.
+                 self.hass.loop.call_later(300, lambda: self.hass.async_create_task(self._check_bootstrap()))
+                 
+                 # Fallback for very first install (empty data)
+                 if not data:
+                      # If absolutely no data, strictly speaking we are "done" with loading.
+                      pass
+
             
             # Load Enable State (Default True)
             self.enable_active = data.get("enable_active", True)
+            self.bootstrap_done = data.get("bootstrap_done", False)
                 
         except Exception:
             _LOGGER.exception("Failed loading data")
@@ -574,6 +588,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "enable_active": self.enable_active,
             # V2.9.1
             "diagnostics": self.diagnostics_data,
+            # V2.9.2
+            "bootstrap_done": self.bootstrap_done,
         }
 
     async def _async_save_data(self) -> None:
@@ -596,23 +612,60 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # Guard: Grace Period on Startup (30 min)
         # Guard: Grace Period
-        # If HA is just starting -> 30 min wait (settle everything)
+        if uptime < 1800: # 30 min
+             return
+             
+    async def _check_bootstrap(self) -> None:
+        """Run retroactive history scan if needed (bootstrap)."""
+        if self.bootstrap_done:
+            return
+            
+        _LOGGER.debug("Checking Retroactive Bootstrap status...")
+        
+        # 1. Migration Safety Check
+        # If we have ANY existing data, we assume the user has been running the system
+        # and doesn't need a full history rescan (which takes time).
+        # We just mark it as done.
+        has_v2 = len(self.planner.history_v2) > 0
+        has_v3 = len(self.planner.history) > 0
+        
+        if has_v2 or has_v3:
+             _LOGGER.info("Existing learning data detected. Marking Bootstrap as DONE (Skipping scan).")
+             self.bootstrap_done = True
+             await self._async_save_data()
+             return
+
+        # 2. Fresh Install - Run Scan
+        _LOGGER.info("First Run Detected (No History). Starting automatic history scan...")
+        try:
+             await self.scan_history_from_recorder()
+             self.bootstrap_done = True
+             await self._async_save_data()
+             _LOGGER.info("Bootstrap Complete.")
+        except Exception as e:
+             _LOGGER.error("Bootstrap Scan failed (will retry next reboot): %s", e)
         # If HA is running (Reload) -> 1 min wait (settle this component)
+        
+
         
         # 1. HA Startup Check (String comparison for compat)
         if str(self.hass.state) != "RUNNING":
              if uptime < 1800:
+
                  # _LOGGER.debug("Diagnostics skipped: HA Starting (Uptime: %.1f min)", uptime/60)
                  return
 
         # 2. Reload Settle Time (Wait 60s after coordinator init)
         coord_uptime = now - self._startup_time.timestamp()
         if coord_uptime < 60:
+
              return
 
         if last_check > 0 and (now - last_check) < 3600:
+
              # _LOGGER.debug("Diagnostics skipped: Rate Limit (Last: %s)", last_check)
              return
+
 
         _LOGGER.debug("Running Diagnostics Check (Uptime: %.1f min)", uptime/60)
         self.diagnostics_data["last_check_ts"] = now
@@ -686,15 +739,33 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # --- 3. Stale Sensor ---
         # Logic: Unavailable OR > 6h no change. Requires 2 hits (Debounce).
         temp_ent = self._get_conf(CONF_TEMPERATURE)
+        check_ent = temp_ent
+        
+        # Action 3.3b: Fallback to Climate Entity Check
+        if not check_ent:
+             check_ent = self._get_conf(CONF_CLIMATE)
+             
         is_stale = False
-        if temp_ent:
-            state = self.hass.states.get(temp_ent)
+        if check_ent:
+            state = self.hass.states.get(check_ent)
+
             if not state or state.state in ("unavailable", "unknown"):
                 is_stale = True
             elif state.last_changed:
                  age = (dt_util.utcnow() - state.last_changed).total_seconds()
+
                  if age > 21600: # 6h
                      is_stale = True
+                     
+            # Special Case: Climate entities might report state, but 'current_temperature' is None/null
+            if not is_stale and not temp_ent and check_ent:
+                 # We are relying on climate attributes
+                 curr_temp = state.attributes.get("current_temperature") if state else None
+
+                 if state and curr_temp is None:
+                      is_stale = True
+        
+        print(f"DEBUG: is_stale={is_stale}, counter={self.diagnostics_data.get('stale_sensor_counter', 0)}") # DEBUG
         
         # Debounce Logic
         stale_counter = self.diagnostics_data.get("stale_sensor_counter", 0)
@@ -1022,6 +1093,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             _LOGGER.error("Error analyzing history: %s", e)
 
     def _setup_listeners(self) -> None:
+        """Setup event listeners for state changes."""
+        # 1. Occupancy (Instant reaction to Arrival)
         occupancy_sensor = self._get_conf(CONF_OCCUPANCY)
         if occupancy_sensor:
             self.entry.async_on_unload(
@@ -1029,6 +1102,33 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     self.hass, [occupancy_sensor], self._handle_occupancy_change
                 )
             )
+
+        # 2. Climate & Temperature (Reactive Setpoints / Frost Protection - Action 3.3)
+        # We want to react immediately if the user changes the setpoint manually on the TRV
+        # or if the room temperature drops (Frost Protection).
+        # Otherwise, with Adaptive Polling (5 min), we might be too slow.
+        reactive_entities = []
+        
+        climate_entity = self._get_conf(CONF_CLIMATE)
+        if climate_entity: reactive_entities.append(climate_entity)
+        
+        temp_entity = self._get_conf(CONF_TEMPERATURE)
+        if temp_entity: reactive_entities.append(temp_entity)
+        
+        if reactive_entities:
+            self.entry.async_on_unload(
+                async_track_state_change_event(
+                    self.hass, reactive_entities, self._handle_reactive_change
+                )
+            )
+
+    @callback
+    def _handle_reactive_change(self, event) -> None:
+        """Handle change in climate or temp sensor (Reactive Mode)."""
+        # We don't need complex logic, just trigger an update check.
+        # The Debouncer in _async_update_data handles rate limiting if needed,
+        # but here we want to ensure we catch the edge.
+        self.hass.async_create_task(self.async_request_refresh())
 
     @callback
     def _handle_occupancy_change(self, event) -> None:
@@ -1482,8 +1582,26 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
             # Master Switch
             if not self.enable_active:
-                blocked_reasons.append("disabled")
-                should_start = False
+                # ACTION 3.3 A: FROST PROTECTION Override
+                # If disabled, but temp < 5.0 °C, force ON for safety.
+                is_frost_danger = operative_temp < 5.0 and operative_temp > INVALID_TEMP
+                
+                if is_frost_danger:
+                    if not self._frost_active:
+                         _LOGGER.warning("FROST PROTECTION ACTIVATED! Temp %.1f < 5.0. Forcing Preheat.", operative_temp)
+                         self._frost_active = True
+                    
+                    # Force decision to start/continue
+                    should_start = True
+                    blocked_reasons = [] # Clear blocks
+                    print(f"DEBUG: Frost Protection Active! should_start=True") # DEBUG
+                    
+                else:
+                    self._frost_active = False
+                    blocked_reasons.append("disabled")
+                    should_start = False
+            else:
+                 self._frost_active = False # Reset if manually enabled
             
             # Occupancy (User is Home)
             occ_sensor = self._get_conf(CONF_OCCUPANCY)
@@ -1491,11 +1609,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
                 is_occupied = True
                 should_start = False
+                print(f"DEBUG: Occupancy Block! should_start=False") # DEBUG
             
             # Window Open
             if self._window_open_detected:
                 blocked_reasons.append("window_open")
                 should_start = False
+                print(f"DEBUG: Window Block! should_start=False") # DEBUG
 
             # Don't start if warm (Comfort reached)
             # This is "Control Logic", not "Blocking". 

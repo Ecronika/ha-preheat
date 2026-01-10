@@ -1,233 +1,42 @@
-## v2.9.0-beta24 (2026-01-09) - Adaptive Polling 🐇🐢
-**Performance Enhancement (Action 3.2)**
-*   **Adaptive Update Interval**: The integration now dynamically adjusts its update frequency to reduce system load.
-    *   **Idle Mode (5 min)**: When the system is OFF, Unoccupied, and no events are approaching.
-    *   **Active Mode (1 min)**: When Heating, Occupied, Window Open, or Approaching Start (< 2 hours).
-*   **Result**: Reduces database writes and CPU usage by ~80% during idle periods (e.g., at night or when away).
+## v2.9.0 (2026-01-10) - The Integration Release 🧠✨
+**Major Feature Release**
+
+This release transforms Intelligent Preheating from a "power user" tool into a polished, smart appliance-grade integration. It introduces massive improvements in usability, safety, and intelligence.
+
+### 🧹 UX & Usability (Massive Cleanup)
+*   **Simplified Configuration**: We've removed ~70% of the complex "Expert" settings. The system now automatically tunes itself based on your selected **Heating Profile** (Radiators vs Floor Heating) and environment.
+*   **Smart Defaults**: Features like "Max Coast Duration" and "Physics Parameters" are now auto-determined, preventing common configuration errors.
+*   **Reactive Diagnostics**: The integration now includes 15+ built-in health checks (Repair Issues) that will alert you to:
+    *   **Stale Sensors**: Warning if your temperature sensors stop updating (>6h).
+    *   **Configuration Errors**: Alerting on missing entities or invalid physics.
+    *   **Zombie State**: Detecting if learning has stalled.
+    *   *Repair issues explicitly name the Zone, making multi-zone troubleshooting much easier.*
+
+### 🛡️ Safety & Responsiveness
+*   **Frost Protection**: Heating is now *forced* ON if Operative Temperature drops below 5.0°C, ensuring pipes don't freeze even if the integration is effectively disabled.
+*   **Reactive Setpoints**: The system now re-calculates logic *immediately* when you change the target temperature or thermostat state (0 latency response).
+*   **Physics Safety Net**: The thermal model is now ISO 12831 validated. We've added a "Safety Net" that prevents the learning model from becoming unstable (e.g. learning impossible physics values).
+*   **Entity Cleanup**: Internal debug entities are now hidden by default to keep your dashboard clean.
+
+### 🧠 Intelligence Upgrades
+*   **Retroactive Bootstrap (New!)**: When you install this secure version, it will **automatically scan your Home Assistant history** (Recorder) to learn your habits instantly. No more "Cold Start" week!
+*   **Schedule-Free Operation**: You no longer need a strict Schedule Helper. The system can now operate purely on **Learned Patterns** (Observer Mode) or manual Input Datetimes.
+*   **Smart Multi-Modal Planner**:
+    *   **Multiple Shifts**: Supports complex days (Lunch breaks, Split shifts).
+    *   **Smart Departure**: Logic uses "Clustering" to predict when you will leave, even if your schedule varies.
+*   **Anti-Flapping**: Short absences (bathroom breaks, trash runs < 15min) are no longer recorded as "New Arrivals", significantly improving data quality.
+
+### ⚡ Performance
+*   **Adaptive Polling**: The integration now "sleeps" (5min updates) when idle and "sprint" (1min updates) when active, reducing database writes and CPU load by ~80%.
+
+### 🩹 Major Bugfixes
+*   **Weather Fallback**: Significantly improved compatibility with weather providers (PirateWeather, etc.) by implementing smart fallback (Hourly -> Daily) and interpolation.
+*   **Timezone Logic**: Fixed multiple edge cases with Midnight Wrapping and Timezone handling.
+
+
+
 
 ---
-
-## v2.9.0-beta23 (2026-01-09) - Config Flow Simplification 🧹✨
-**UX & Usability Update (Response to Review)**
-*   **Massive UX Clean-up**: Removed ~70% of "Expert Mode" configuration options. The integration now behaves more like a smart appliance and less like a development tool.
-*   **Auto-Configuration**: Tuning parameters like `Physics Mode`, `Initial Gain`, `Alpha`, and `Coast Duration` are now automatically determined based on your selected **Heating Profile** and system context (e.g., presence of weather data).
-*   **Simplified Interface**: The configuration flow is now streamlined to just the essentials: Profile, Buffer, and Thermostat.
-*   **Backward Compatibility**: Existing installations retain their settings, but hidden expert options are now managed internally.
-
----
-
-## v2.9.0-beta22 (2026-01-09) - Physics Validation & Safety Net 🛡️🧪
-**Quality & Stability Update (Response to Review)**
-*   **Physics Validation**: Added ISO 12831 compliant validation suite to ensure thermal models behave according to physical laws (Standard Radiators vs. Floor Heating).
-*   **Model Safety Net**: Implemented "Model Instability Protection" (Action 1.2).
-    *   Parameters (`mass`, `loss`, `tau`) are now clamped if they attempt to jump >20% in a single update.
-    *   Unstable updates are logged as warnings and *rejected* from contributing to confidence scores.
-    *   Refined internal gradient clipping to allow faster learning while relying on the new safety net.
-
----
-
-## v2.9.0-beta21 (2026-01-09) - Hotfix: NameError Cleanup 🧹
-**Bug Fix**
-*   Fixed another `NameError name 'opt_config' is not defined` by removing redundant legacy code that was accidentally left in during the multi-modal refactor.
-
----
-
-## v2.9.0-beta20 (2026-01-09) - Hotfix: NameError 🚑
-**Bug Fix**
-*   Fixed a critical `NameError: name 'forecast_temp_at' is not defined` that caused the integration to crash during update cycles. (Regression from beta19).
-
----
-
-## v2.9.0-beta19 (2026-01-09) - Smart Arrival & Anti-Flapping 🚽✨
-**Feature & Data Quality Update**
-
-*   **Anti-Flapping (Re-Arrival Debounce)**:
-    *   **Problem**: Short absences (e.g. bathroom breaks, taking out trash) were previously logged as "New Arrivals", polluting the data and ignoring the rest of the day.
-    *   **Solution**: A new "Arrival" is now only recorded if you were absent (Sensor OFF) for **> 15 minutes** (configurable via Debounce). Short gaps are ignored, maintaining the current session.
-*   **Multi-Modal Arrival**:
-    *   We now support **multiple valid arrivals per day**!
-    *   Example: Start work at 08:00, go to lunch, return at 14:00. Both 08:00 and 14:00 are now learned as distinct patterns, provided they are > 2 hours apart.
-
----
-
-## v2.9.0-beta18 (2026-01-09) - Multi-Modal Departure 🚉
-**Feature Update**
-
-*   **Smart Multi-Modal Prediction**: The "Schedule-Free" logic has been significantly upgraded.
-    *   **Multiple Shifts**: It now detects multiple departures per day (e.g., coming home for lunch and leaving again).
-    *   **Logic**: Uses Clustering (K-Means) to find distinct departure times (debounced by 2 hours) instead of just averaging them.
-    *   **Precision**: Optimal Stop now targets the *next* likely departure time in your daily pattern.
-
----
-
-## v2.9.0-beta17 (2026-01-08) - Schedule-Free & UX Polish 🏃✨
-**Feature & UX Update**
-
-*   **Schedule-Free Optimal Stop**: The "Optimal Stop" (Coasting) feature now works even without a configured Schedule Helper!
-    *   **AI Fallback**: If no schedule is present (or the schedule is empty), the system automatically uses the **Learned Departure Prediction** to calculate the optimal stop time.
-    *   **Input Datetime**: You can also use manual `input_datetime` entities for one-off departures.
-*   **UX Polish (Repair Issues)**: All Repair Issues (e.g., "Max Duration Exceeded", "Stale Sensor") now include the **Zone Name** in the title. This makes it much easier to identify which room needs attention in multi-zone setups.
-
----
-
-## v2.9.0-beta16 (2026-01-07) - Hotfix (CoreState) 🩹
-**Bugfix**
-*   Fixed a runtime error (`AttributeError: type object 'CoreState' ...`) caused by varying Home Assistant versions. Switched to safe string comparison.
-
----
-
-## v2.9.0-beta15 (2026-01-07) - Smart Defaults & Quick Fixes 🧠🚀
-**Improvements**
-
-*   **Intelligent Defaults (New Installations)**: The setup wizard now automatically selects the best 'Max Coast Duration' based on your heating profile:
-    *   **Radiators / IR**: 2.0 Hours (Prevents "Max Coast High" warning).
-    *   **Floor Heating**: 4.0 Hours (Ensures sufficient overlap).
-*   **Reactive Diagnostics**: Repair Issues (like warnings) now clear automatically ~60 seconds after you fix the configuration.
-    *   *Previously, you had to wait 30 minutes or restart HA.*
-    *   This makes fixing "Max Coast" or "Sensor" errors much less frustrating.
-
----
-
-## v2.9.0-beta14 (2026-01-07) - Diagnostics & Logging 🩺
-**Improvements**
-
-*   **Enhanced Logging**: Added success messages for weather forecast retrieval ("Cached X points...").
-*   **Startup Diagnostics**: Added explicit debugging for the "Startup Grace Period" (30 min).
-*   **Bugfix**: Fixed `AttributeError` by initializing `_forecast_type_used`.
-*   **Bugfix**: Fixed "No Forecast" issue by correctly handling Naive Datetimes (missing timezone) from providers like PirateWeather using `dt_util.as_utc()`.
-
----
-
-## v2.9.0-beta13 (2026-01-07) - Critical Logic Fix 🩹
-**Bugfix**
-
-*   **Fixed Comparison Error**: Resolved `TypeError: '<=' not supported between instances of 'datetime.datetime' and 'str'` in diagnostics. This occured because the fallback logic was returning strings instead of proper datetime objects.
-*   **Fixed Interpolation Crash**: Resolved an internal crash where the interpolation engine tried to re-parse already-parsed datetime objects.
-
----
-
-## v2.9.0-beta12 (2026-01-07) - Translation Hotfix 🩹
-**Bugfix**
-
-*   **Fixed Translation Errors**: Removed invalid quotes around placeholders in translation files that caused validation failures in Home Assistant CI (`hassfest`).
-
----
-
-## v2.9.0-beta11 (2026-01-07) - Hotfix for Syntax Error 🩹
-**Bugfix**
-
-*   **Fixed Syntax Error**: Removed accidental characters in `const.py` that caused startup failures in some environments (and CI).
-
----
-
-## v2.9.0-beta10 (2026-01-07) - Weather Fallback & Stability ☁️
-**Bugfix & Improvement**
-
-This release significantly improves compatibility with Weather Integrations (like PirateWeather) and fixes crashes introduced in beta9.
-
-*   **Weather Forecast Fallback**:
-    *   **Fallback Logic**: If your weather integration doesn't provide `hourly` data, the system now automatically tries `twice_daily` and then `daily`.
-    *   **Interpolation**: If fallback data is used, the system intelligently interpolates temperature curves to provide smooth hourly data for the physics engine (instead of rough "steps").
-    *   **Low Quality Warning**: If fallback data is used in **Advanced Mode**, a new Repair Issue ("Low Quality Forecast Data") informs you that precision might be reduced.
-
-*   **Bugfixes**:
-    *   **Fixed Crashes**: Resolved `AttributeError: get_cached_forecast` and `AttributeError: _external_inhibit` which caused the integration to crash during diagnostics checks.
-
----
-
-## v2.9.0-beta9 (2026-01-06) - Setup Repairs & Diagnostics 🛠️
-**Feature Release**
-
-This release focuses on **System Health** and **Diagnostics**. It introduces 15 new "Repair Issues" that will appear in your Home Assistant Settings -> Repairs dashboard if something is wrong with your configuration or sensors.
-
-*   **Repair Issues System**:
-    *   **Stale Sensors**: Helper warnings if Temperature or Occupancy sensors stop updating (>6h or >14d).
-    *   **Physics Railing**: Alert if thermal mass/loss factors hit limits (indicating sensor placement issues or windows open permanently).
-    *   **Zombie Schedule**: Error if a Schedule helper exists but has no events.
-    *   **Valve Saturation**: Warning if valve stays at 100% for >3h (undersized heating or open window).
-    *   **Temperature Sanity**: Checks for "Swapped Indoor/Outdoor Sensors" (identical values) or implausible readings (< -10°C).
-    *   **Forecast Checks**: Warnings if Weather data is missing or stale in Advanced Mode.
-
-*   **Logic Refinements**:
-    *   **Startup Grace Period**: Repairs and Checks are now suppressed for the first 30 minutes of uptime to allow sensors to initialize.
-    *   **Rate Limiting**: Diagnostic checks run max once per hour to save resources.
-
----
-
-## v2.9.0-beta8 (2026-01-05) - Critical Start Logic Fix 🚨
-**High Priority Fix**
-
-*   **Fixed Silent Non-Start**: Resolved a critical regression where the "Start Decision" was accidentally reset to `None` internally, causing the preheating to *never start* even when calculations were correct and no blockers were active. This explains why `binary_sensor.active` remained off despite `Next Start Time` being reached.
-
----
-
-## v2.9.0-beta7 (2026-01-05) - Multi-Event Fix 📅
-**Bugfix**
-
-*   **Fixed Scheduled Events**: Resolved a bug where the planner would skip all remaining heating events for the day if the *first* scheduled event (e.g., early morning shift) had already passed. The system now correctly scans for *all* valid events in the day (e.g., afternoon shifts) and targets the next upcoming one.
-
----
-
-## v2.9.0-beta6 (2026-01-05) - Forecast Logic Fix 🩺
-**Bugfix (Regression)**
-
-*   **Fixed "Max Duration" Warning**: Fixed a regression in the Forecast Logic (introduced in v2.5) where the predicted duration was capped *before* checking if it exceeded the limit. The system now correctly detects if the required time exceeds your "Maximum Preheat Duration" and raises a Repair Issue warning as intended (while still capping the actual start time for safety).
-
----
-
-## v2.9.0-beta5 (2026-01-04) - Button Fix 🖱️
-**Bugfix**
-
-*   **Fixed Action**: The "Analyze History" button now correctly triggers the history report (it was previously silent).
-
----
-
-## v2.9.0-beta4 (2026-01-03) - Hotfix 🔥
-**CI Stability Fix**
-
-*   **Fixed Indentation Error**: Corrected a syntax error in `config_flow.py` that caused CI checks (`hassfest`) to fail.
-
----
-
-## v2.9.0-beta3 (2026-01-03) - Schedule-Free Fixes 🚑
-**Bugfix & Polish for Beta 2**
-
-*   **Fixed Critical Crash**: Resolved an `ImportError` that caused the new Schedule-Free logic to crash on startup.
-*   **Fixed Config Flow**: You can now properly select `input_datetime` entities during initial setup (previously blocked).
-*   **Logic Safety**: Added protection against "Instant Stop" if the predicted departure time is in the past (e.g. late night override).
-
----
-
-## v2.9.0-beta2 (2026-01-03) - Schedule-Free Optimal Stop 🏃
-**Feature Update: Flexible Optimal Stop**
-
-This release removes the strict requirement for a Schedule Entity to use "Optimal Stop" (Coasting).
-
-### 🆕 Schedule-Free Operation
-You can now enable Optimal Stop (Coasting) without configuring a Home Assistant Schedule Helper!
-*   **Observer Fallback**: If no schedule is provided, the system uses the new "Departure Prediction" AI (from v2.8) to determine when you likely leave.
-*   **Input Datetime**: The `schedule_entity` field now accepts `input_datetime` (timestamp) entities if you want to set a manual one-off departure time.
-*   **Migration**: The "Missing Schedule" warning has been removed for users who want to rely on the AI or manual events.
-
----
-
-## v2.9.0-beta1 (2026-01-03) - Heat Demand & UX Polish 🛠️
-**Feature Update: Heat Demand Sensor & External Control**
-
-This release introduces a powerful new signal for central heating control and significantly improves the "Lock Switch" user experience.
-
-### 🔥 New: Heat Demand Sensor
-A dedicated binary sensor (`binary_sensor.<zone>_heat_demand`) that tells you exactly when a zone needs active heat supply.
-*   **Logic**: 3-Stage Smart Check (HVAC Action -> Valve Position -> Delta T).
-*   **Hysteresis**: Prevents short-cycling with min. 5 min ON / 3 min OFF timers.
-*   **Thresholds**: ON if Valve > 15% or Target - Temp > 0.4°C.
-*   **Safety**: Automatically OFF if Window Open, Optimal Stop Active, or Externally Blocked.
-*   *Note: Opt-In (Disabled by default). Enable via entity settings.*
-
-### ✨ UX Improvements
-*   **Refined "Lock Switch"**: Renamed to "External Inhibit / Window Sensor" and moved to the main configuration page.
-*   **Expanded Compatibility**: The External Inhibit selector now accepts `binary_sensor` and `switch` entities, supporting direct integration of window contacts.
-*   **Traceability**: "External Inhibit" is now a distinct blocking reason in the decision trace, separate from manual "Hold".
 
 ---
 
