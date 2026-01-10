@@ -1061,6 +1061,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if not occupancy_entity: return
 
         _LOGGER.info("Starting historical analysis for %s...", occupancy_entity)
+        _LOGGER.debug("DEBUG: Analyzing past 90 days for %s", occupancy_entity)
         try:
             from homeassistant.components.recorder import history, get_instance
             # Analyze up to 90 days (approx 3 months) to capture long-term parity patterns
@@ -1086,6 +1087,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
             count_arrival = 0
             count_departure = 0
+            _LOGGER.debug("DEBUG: Found %d raw states. Processing...", len(states))
             for state in states:
                 local_dt = dt_util.as_local(state.last_changed)
                 current_minutes = local_dt.hour * 60 + local_dt.minute
@@ -1104,6 +1106,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             if count_arrival > 0 or count_departure > 0:
                 _LOGGER.info("Identified %d arrival and %d departure events from history.", count_arrival, count_departure)
                 await self._async_save_data()
+            else:
+                 _LOGGER.warning("DEBUG: Scan complete but found 0 events (Arrivals: %d, Departures: %d)", count_arrival, count_departure)
                 
         except Exception as e:
             _LOGGER.error("Error analyzing history: %s", e)
