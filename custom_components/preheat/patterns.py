@@ -10,8 +10,8 @@ from typing import Literal
 _LOGGER = logging.getLogger(__name__)
 
 # v2.6.0 Constants
-MIN_CLUSTER_POINTS = 3
-MERGE_THRESHOLD_MINUTES = 45
+MIN_CLUSTER_POINTS = 2
+MERGE_THRESHOLD_MINUTES = 60
 
 @dataclass
 class ArrivalCluster:
