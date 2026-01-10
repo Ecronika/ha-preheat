@@ -214,12 +214,11 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 # Save
                 update_data = {**self._config_entry.options, **user_input}
                 
-                # Clean up: Remove keys with None or empty string values
-                # This ensures that if a user clears an optional field (like Schedule Entity),
-                # it is actually removed from the configuration instead of persisting the old value.
-                new_options = {k: v for k, v in update_data.items() if v not in (None, "")}
+                # v2.9.2: Do NOT filter None values!
+                # If we remove the key, _get_val falls back to self._config_entry.data (Legacy).
+                # We need to store None explicitly to mask the legacy value.
                 
-                return self.async_create_entry(title="", data=new_options)
+                return self.async_create_entry(title="", data=update_data)
         
         # Build Schema (Action 2.3: Simplified "Details" page)
         
