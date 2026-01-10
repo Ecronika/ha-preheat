@@ -569,6 +569,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # Load Enable State (Default True)
             self.enable_active = data.get("enable_active", True)
             self.bootstrap_done = data.get("bootstrap_done", False)
+
+            # v2.9.0 Fix: If bootstrap claimed done, but departures missing (e.g. key counting bug), reset it.
+            if self.bootstrap_done:
+                 has_departures = any(len(entries) > 0 for entries in self.planner.history_departure.values())
+                 if not has_departures:
+                      _LOGGER.info("Bootstrap claimed done, but departures missing (Legacy Bug). Resetting flag to force retry.")
+                      self.bootstrap_done = False
                 
         except Exception:
             _LOGGER.exception("Failed loading data")
