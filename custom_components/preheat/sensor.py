@@ -285,6 +285,15 @@ class PreheatNextArrivalSensor(PreheatBaseSensor):
     def native_value(self) -> datetime | None:
         return self.coordinator.data.next_arrival
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return learned arrival patterns."""
+        attrs = {}
+        data = self.coordinator.data
+        if data.schedule_summary:
+            attrs["learned_arrivals"] = data.schedule_summary
+        return attrs
+
 class PreheatNextSessionEndSensor(PreheatBaseSensor):
     """Next scheduled session end time (e.g. for Optimal Stop)."""
     _attr_has_entity_name = True
@@ -300,3 +309,12 @@ class PreheatNextSessionEndSensor(PreheatBaseSensor):
     def native_value(self) -> datetime | None:
         # We need to expose next_departure from data
         return self.coordinator.data.next_departure
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return learned departure patterns."""
+        attrs = {}
+        data = self.coordinator.data
+        if data.departure_summary:
+            attrs["learned_departures"] = data.departure_summary
+        return attrs

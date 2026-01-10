@@ -465,6 +465,33 @@ class PreheatPlanner:
                 summary[weekdays[i]] = ", ".join(times)
         return summary
 
+    def get_departure_schedule_summary(self) -> dict[str, str]:
+        """Get a human readable summary of learned departure times per weekday."""
+        summary = {}
+        weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        for i in range(7):
+            raw_entries = self.history_departure.get(i, [])
+            if not raw_entries:
+                summary[weekdays[i]] = "-"
+                continue
+                
+            # Extract minutes list
+            minutes_list = [x["minutes"] for x in raw_entries]
+            
+            # Use PatternDetector to find clusters
+            clusters = self.detector.find_clusters_v2(minutes_list)
+            
+            if not clusters:
+                summary[weekdays[i]] = "-"
+            else:
+                times = []
+                for c in clusters:
+                    h = c.time_minutes // 60
+                    m = c.time_minutes % 60
+                    times.append(f"{h:02d}:{m:02d}")
+                summary[weekdays[i]] = ", ".join(times)
+        return summary
+
     def to_dict(self) -> dict:
         """Export history (Persistence)."""
         export = {}

@@ -219,6 +219,7 @@ class PreheatData:
     loss_factor: float
     learning_active: bool
     schedule_summary: dict[str, str] | None = None
+    departure_summary: dict[str, str] | None = None
     valve_signal: float | None = None
     window_open: bool = False
     outdoor_temp: float | None = None
@@ -2049,6 +2050,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 loss_factor=self.physics.loss_factor,
                 learning_active=self._preheat_active and not self._window_open_detected,
                 schedule_summary=self.planner.get_schedule_summary(),
+                departure_summary=self.planner.get_departure_schedule_summary(),
                 valve_signal=self._get_valve_position(),
                 window_open=self._window_open_detected,
                 outdoor_temp=outdoor_temp,
