@@ -211,9 +211,15 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                  errors[CONF_BUFFER_MIN] = "buffer_too_high"
             
             if not errors:
-                 # Save
-                 new_options = {**self._config_entry.options, **user_input}
-                 return self.async_create_entry(title="", data=new_options)
+                # Save
+                update_data = {**self._config_entry.options, **user_input}
+                
+                # Clean up: Remove keys with None or empty string values
+                # This ensures that if a user clears an optional field (like Schedule Entity),
+                # it is actually removed from the configuration instead of persisting the old value.
+                new_options = {k: v for k, v in update_data.items() if v not in (None, "")}
+                
+                return self.async_create_entry(title="", data=new_options)
         
         # Build Schema (Action 2.3: Simplified "Details" page)
         
