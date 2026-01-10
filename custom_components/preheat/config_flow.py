@@ -223,16 +223,23 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         # Build Schema (Action 2.3: Simplified "Details" page)
         
         # Profile Options (Needed if user wants to change profile)
+        # Build Schema (Action 2.3: Simplified "Details" page)
+        
+        # Profile Options (Needed if user wants to change profile)
         profile_options = list(HEATING_PROFILES.keys())
         
-        # Load Defaults from Profile
+        # Load Defaults for Logic
         current_profile = self._get_val(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
         profile_data = HEATING_PROFILES.get(current_profile, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
         default_buffer = profile_data.get("buffer", DEFAULT_BUFFER_MIN)
 
+        # v2.9.2: Usage of `suggested_values` instead of `default` for Optional fields.
+        # This is critical to allow users to CLEAR a field (sending None/Empty).
+        # If we use `default=...`, Voluptuous re-injects the old value if the input is missing/empty.
+        
         schema = vol.Schema({
             # primary settings
-            vol.Required(CONF_HEATING_PROFILE, default=current_profile): selector.SelectSelector(
+            vol.Required(CONF_HEATING_PROFILE): selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=profile_options,
                     mode=selector.SelectSelectorMode.DROPDOWN,
@@ -241,34 +248,54 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             ),
             
             # Timing & Comfort
-            vol.Optional(CONF_BUFFER_MIN, default=self._get_val(CONF_BUFFER_MIN, default_buffer)): selector.NumberSelector(
+            vol.Optional(CONF_BUFFER_MIN): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=0, max=60, mode="box", unit_of_measurement="min")
             ),
-            vol.Optional(CONF_EARLIEST_START, default=self._get_val(CONF_EARLIEST_START, 180)): selector.NumberSelector(
+            vol.Optional(CONF_EARLIEST_START): selector.NumberSelector(
                  selector.NumberSelectorConfig(min=0, max=1440, step=15, unit_of_measurement="min", mode="box")
             ),
-            vol.Optional(CONF_ARRIVAL_WINDOW_START, default=self._get_val(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START)): selector.TimeSelector(),
-            vol.Optional(CONF_ARRIVAL_WINDOW_END, default=self._get_val(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END)): selector.TimeSelector(),
+            # Windows
+            vol.Optional(CONF_ARRIVAL_WINDOW_START): selector.TimeSelector(),
+            vol.Optional(CONF_ARRIVAL_WINDOW_END): selector.TimeSelector(),
             
-            vol.Optional(CONF_COMFORT_FALLBACK, default=self._get_val(CONF_COMFORT_FALLBACK, DEFAULT_COMFORT_FALLBACK)): selector.NumberSelector(
+            vol.Optional(CONF_COMFORT_FALLBACK): selector.NumberSelector(
                  selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="°C", mode="box")
             ),
             
             # Feature Toggles
-            vol.Optional(CONF_ENABLE_OPTIMAL_STOP, default=self._get_val(CONF_ENABLE_OPTIMAL_STOP, False)): selector.BooleanSelector(),
+            vol.Optional(CONF_ENABLE_OPTIMAL_STOP): selector.BooleanSelector(),
             # Schedule (Only useful if Optimal Stop is on? Show always for simplicity)
-            vol.Optional(CONF_SCHEDULE_ENTITY, default=self._get_val(CONF_SCHEDULE_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
+            vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["schedule", "input_datetime", "sensor"])
             ),
 
             # External Control
-            vol.Optional(CONF_LOCK, default=self._get_val(CONF_LOCK, vol.UNDEFINED)): selector.EntitySelector(
+            vol.Optional(CONF_LOCK): selector.EntitySelector(
                  selector.EntitySelectorConfig(domain=["input_boolean", "binary_sensor", "switch"])
             ),
-            vol.Optional(CONF_WORKDAY, default=self._get_val(CONF_WORKDAY, vol.UNDEFINED)): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
-            vol.Optional(CONF_VALVE_POSITION, default=self._get_val(CONF_VALVE_POSITION, vol.UNDEFINED)): selector.EntitySelector(
+            vol.Optional(CONF_WORKDAY): selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor")),
+            vol.Optional(CONF_VALVE_POSITION): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["sensor", "input_number"]) 
             ),
         })
 
-        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+        # Define Suggestion Source
+        suggestions = {
+            CONF_HEATING_PROFILE: current_profile,
+            CONF_BUFFER_MIN: self._get_val(CONF_BUFFER_MIN, default_buffer),
+            CONF_EARLIEST_START: self._get_val(CONF_EARLIEST_START, 180),
+            CONF_ARRIVAL_WINDOW_START: self._get_val(CONF_ARRIVAL_WINDOW_START, DEFAULT_ARRIVAL_WINDOW_START),
+            CONF_ARRIVAL_WINDOW_END: self._get_val(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END),
+            CONF_COMFORT_FALLBACK: self._get_val(CONF_COMFORT_FALLBACK, DEFAULT_COMFORT_FALLBACK),
+            CONF_ENABLE_OPTIMAL_STOP: self._get_val(CONF_ENABLE_OPTIMAL_STOP, False),
+            CONF_SCHEDULE_ENTITY: self._get_val(CONF_SCHEDULE_ENTITY), # Returns None/Value
+            CONF_LOCK: self._get_val(CONF_LOCK),
+            CONF_WORKDAY: self._get_val(CONF_WORKDAY),
+            CONF_VALVE_POSITION: self._get_val(CONF_VALVE_POSITION),
+        }
+
+        return self.async_show_form(
+             step_id="init", 
+             data_schema=self.add_suggested_values_to_schema(schema, suggestions), 
+             errors=errors
+        )
