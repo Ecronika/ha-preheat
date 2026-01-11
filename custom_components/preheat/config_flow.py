@@ -99,6 +99,12 @@ OPTION_SETTINGS = {
         ),
         "default": None
     },
+    CONF_MAX_PREHEAT_HOURS: {
+        "selector": selector.NumberSelector(
+             selector.NumberSelectorConfig(min=0.5, max=12.0, step=0.5, unit_of_measurement="h", mode="box")
+        ),
+        "default": DEFAULT_MAX_HOURS # Overridden by Profile Check
+    },
 }
 
 class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -331,6 +337,8 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             default_val = settings["default"]
             if key == CONF_BUFFER_MIN:
                 default_val = profile_data.get("buffer", default_val)
+            elif key == CONF_MAX_PREHEAT_HOURS:
+                default_val = profile_data.get("max_duration", default_val)
             
             # Load current value or fallback
             suggestions[key] = self._get_val(key, default_val)
