@@ -1548,7 +1548,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             
             # Smart Diagnostic: Check if duration exceeds limit
             # We compare the UNCAPPED requirement vs the limit.
-            if uncapped_duration > (max_dur_minutes + 15):
+            # Only warn if we actually have a target event scheduled.
+            if next_event and uncapped_duration > (max_dur_minutes + 30):
                 # We need more time than allowed!
                 async_create_issue(
                     self.hass, DOMAIN, f"limit_exceeded_{self.entry.entry_id}",
