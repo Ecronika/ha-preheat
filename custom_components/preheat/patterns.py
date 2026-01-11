@@ -288,7 +288,8 @@ class PatternDetector:
         valid_minutes = [
             x["minutes"] 
             for x in history 
-            if not x.get("dst_flag", False)
+            # Relaxed Filter (v2.9.1): Allow DST flagged points if they are the only data we have.
+            # Ideally we would check quality, but for now we consume everything to avoid "Unknown" state.
         ]
         
         # 2. Gate based on shared constant

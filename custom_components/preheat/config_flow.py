@@ -168,7 +168,6 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_CLIMATE: user_input[CONF_CLIMATE],
                     CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
                     CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
-                    CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
                 },
                 # We do NOT touch options here, preserving them.
             )
@@ -293,7 +292,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(CONF_ARRIVAL_WINDOW_END): selector.TimeSelector(),
             
             vol.Optional(CONF_COMFORT_FALLBACK): selector.NumberSelector(
-                 selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="°C", mode="box")
+                 selector.NumberSelectorConfig(min=15.0, max=25.0, step=0.5, unit_of_measurement="\u00B0C", mode="box")
             ),
             
             # Feature Toggles
