@@ -1,3 +1,23 @@
+## v2.9.2 (2026-01-11) - The Clean Code Release 🧹
+**Maintenance & Stability Update**
+
+This release focuses on internal architecture, strictly following Home Assistant best practices for configuration handling, storage, and migration.
+
+### 🧹 Config Flow Refactor
+*   **Deep Cleaning**: Massive cleanup of the internal configuration logic. We've removed unused code, centralized settings, and simplified dependencies.
+*   **Climate Locking**: To prevent "Zombie Entities" (Unique ID collisions), the `Climate Entity` is now **locked** in the "Reconfigure" dialog. You can still change sensors/options freely, but changing the physical thermostat now correctly requires re-adding the integration.
+*   **Safe Merging**: The Options flow now safely merges new settings with existing overrides, preventing accidental resets of hidden options.
+
+### 🛡️ Migration V4
+*   **Storage Cleanup**: Includes a new migration (Version 4) that automatically cleans up "Legacy" data (null values) from your storage files during startup. This fixes potential conflicts with third-party tools or backups.
+*   **Unique ID Upgrade**: New installations will efficiently prefer the stable `Registry ID` over the mutable `Entity ID` for better long-term stability if you rename your devices.
+
+### 🐛 Fixes
+*   **Service Reliability**: Improved robustness when calling `recompute` services without explicit targets.
+*   **Encoding**: Fixed a minor encoding display issue (`°C`) in the config dialogs.
+
+---
+
 ## v2.9.0 (2026-01-10) - The Integration Release 🧠✨
 **Major Feature Release**
 

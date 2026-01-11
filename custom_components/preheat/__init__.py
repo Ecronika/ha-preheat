@@ -69,7 +69,11 @@ async def _get_target_entries(hass: HomeAssistant, call) -> list[str]:
                      entries.add(ent.config_entry_id)
                      
     # 3. Fallback: If NO target specified at all
-    if not entries and not referenced.referenced and not referenced.devices and not referenced.areas and "config_entry_id" not in call.data:
+    # We only check for referenced entities (resolved from devices/areas) to determine if target was provided.
+    # Accessing .devices/.areas directly on the result of async_extract_referenced_entity_ids is risky/incorrect.
+    has_targets = bool(entries or referenced.referenced)
+    
+    if not has_targets and "config_entry_id" not in call.data:
          for entry in hass.config_entries.async_entries(DOMAIN):
             entries.add(entry.entry_id)
 
@@ -143,5 +147,30 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: PreheatConfigEn
         )
         current_version = 3
         _LOGGER.info("Migration v2->v3 successful")
+
+    # v3 -> v4: Clean Storage (Remove None/Empty)
+    if current_version == 3:
+        _LOGGER.info("Migrating v3 -> v4 (Cleaning Storage)")
+        
+        # Clean Data
+        new_data = {}
+        for k, v in config_entry.data.items():
+            if v not in (None, "", []): # Strict cleaning (Removed "None" string check)
+                new_data[k] = v
+                
+        # Clean Options
+        new_options = {}
+        for k, v in config_entry.options.items():
+            if v not in (None, "", []):
+                new_options[k] = v
+                
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data=new_data,
+            options=new_options,
+            version=4
+        )
+        current_version = 4
+        _LOGGER.info("Migration v3->v4 successful")
 
     return True
