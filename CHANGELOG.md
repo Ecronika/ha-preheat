@@ -1,3 +1,13 @@
+## v2.9.1-beta2 (2026-01-11) - Bootstrap Fix 🔧
+
+### 🐛 Fixes
+*   **Fixed Bootstrap Order Bug**: The retroactive history scan timer was being scheduled *before* loading `bootstrap_done` from storage. This caused the timer to always be scheduled (even for existing zones where bootstrap was already done). Now the order is correct:
+    1. Load `bootstrap_done` from storage
+    2. Check for sparse data and reset flag if needed
+    3. Schedule timer only if `bootstrap_done` is still `False`
+
+---
+
 ## v2.9.1-beta1 (2026-01-11) - The Planner Refactor 🔧
 
 **Major Reliability & Robustness Update for the Planner Module**

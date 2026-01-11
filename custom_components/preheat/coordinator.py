@@ -555,20 +555,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     await self._async_save_data()
                 else:
                     self.extra_store_data["physics_version"] = physics_version
-            if not self.bootstrap_done:
-                 # v2.9.2: Retroactive Bootstrap (Auto-Scan)
-                 # We do NOT run this immediately to avoid startup slam.
-                 # We schedule it for 5 minutes later.
-                 self.hass.loop.call_later(300, lambda: self.hass.async_create_task(self._check_bootstrap()))
-                 
-                 # Fallback for very first install (empty data)
-                 if not data:
-                      # If absolutely no data, strictly speaking we are "done" with loading.
-                      pass
-
             
             # Load Enable State (Default True)
             self.enable_active = data.get("enable_active", True)
+            
+            # Load Bootstrap State FIRST (before scheduling timer)
             self.bootstrap_done = data.get("bootstrap_done", False)
 
             # v2.9.0 Fix: If bootstrap claimed done, but departures missing (e.g. key counting bug), reset it.
@@ -579,6 +570,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  if not has_departures:
                       _LOGGER.info("Bootstrap claimed done, but data sparse (< 3 points). Resetting flag to force retry.")
                       self.bootstrap_done = False
+
+            # v2.9.2: Retroactive Bootstrap (Auto-Scan)
+            # Schedule scan ONLY if bootstrap is not done (after loading from storage)
+            if not self.bootstrap_done:
+                 # We do NOT run this immediately to avoid startup slam.
+                 # We schedule it for 5 minutes later.
+                 self.hass.loop.call_later(300, lambda: self.hass.async_create_task(self._check_bootstrap()))
                 
         except Exception:
             _LOGGER.exception("Failed loading data")
