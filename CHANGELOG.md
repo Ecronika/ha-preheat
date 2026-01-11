@@ -1,24 +1,28 @@
-## v2.9.2 (2026-01-11) - The Clean Code Release 🧹
-**Maintenance & Stability Update**
+## v2.9.0 (2026-01-11) - The Clean Code Release 🧹
+**Major Maintenance & Feature Update**
 
-This release focuses on internal architecture, strictly following Home Assistant best practices for configuration handling, storage, and migration.
+This version combines the feature set of the planned v2.9.0 with immediate stability and architectural fixes.
 
-### 🧹 Config Flow Refactor
-*   **Deep Cleaning**: Massive cleanup of the internal configuration logic. We've removed unused code, centralized settings, and simplified dependencies.
-*   **Climate Locking**: To prevent "Zombie Entities" (Unique ID collisions), the `Climate Entity` is now **locked** in the "Reconfigure" dialog. You can still change sensors/options freely, but changing the physical thermostat now correctly requires re-adding the integration.
-*   **Safe Merging**: The Options flow now safely merges new settings with existing overrides, preventing accidental resets of hidden options.
-
-### 🛡️ Migration V4
-*   **Storage Cleanup**: Includes a new migration (Version 4) that automatically cleans up "Legacy" data (null values) from your storage files during startup. This fixes potential conflicts with third-party tools or backups.
-*   **Unique ID Upgrade**: New installations will efficiently prefer the stable `Registry ID` over the mutable `Entity ID` for better long-term stability if you rename your devices.
+### 🧹 Config Flow Refactor & Stability
+*   **Deep Cleaning**: Massive cleanup of the internal configuration logic. removed unused imports and centralized settings.
+*   **Climate Locking**: To prevent "Zombie Entities" (Unique ID collisions), the `Climate Entity` is now **locked** in the "Reconfigure" dialog.
+*   **Safe Merging**: The Options flow now safely merges new settings with existing overrides.
+*   **V4 Migration**: Automatically cleans up "Legacy" storage data (null values) during startup.
+*   **Unique ID Upgrade**: New installations prefer the stable `Registry ID`.
 
 ### 🐛 Fixes
-*   **Service Reliability**: Improved robustness when calling `recompute` services without explicit targets.
-*   **Encoding**: Fixed a minor encoding display issue (`°C`) in the config dialogs.
+*   **Service Reliability**: Improved robustness for `recompute` calls.
+*   **Encoding**: Fixed `°C` display issues.
+*   **Repair Issues**: Added missing zone names to repair issue titles for better context.
+
+### � Key Features (from original v2.9.0)
+*   **Simplified Configuration**: Smart defaults based on Heating Profile.
+*   **Reactive Diagnostics**: 15+ built-in health checks (Stale Sensors, Valve Saturation, etc.).
+*   **Multi-Modal Learning**: Different logic for Weekdays vs Weekends vs Holidays.
+*   **Anti-Flapping**: Better detection for short departures (e.g. taking out trash).
 
 ---
 
-## v2.9.0 (2026-01-10) - The Integration Release 🧠✨
 **Major Feature Release**
 
 This release transforms Intelligent Preheating from a "power user" tool into a polished, smart appliance-grade integration. It introduces massive improvements in usability, safety, and intelligence.
