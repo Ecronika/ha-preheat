@@ -1,3 +1,11 @@
+## v2.9.1-beta3 (2026-01-11) - Faster Bootstrap ⚡
+
+### ⚡ Improvements
+*   **Reduced Bootstrap Delay**: History scan now starts after 30 seconds (was 5 minutes).
+*   **User Feedback**: Added INFO log message: `[Zone Name] History scan will start in 30 seconds...`
+
+---
+
 ## v2.9.1-beta2 (2026-01-11) - Bootstrap Fix 🔧
 
 ### 🐛 Fixes

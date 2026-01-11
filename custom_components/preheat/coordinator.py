@@ -574,9 +574,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # v2.9.2: Retroactive Bootstrap (Auto-Scan)
             # Schedule scan ONLY if bootstrap is not done (after loading from storage)
             if not self.bootstrap_done:
-                 # We do NOT run this immediately to avoid startup slam.
-                 # We schedule it for 5 minutes later.
-                 self.hass.loop.call_later(300, lambda: self.hass.async_create_task(self._check_bootstrap()))
+                 # Short delay to let HA fully initialize before querying recorder
+                 _LOGGER.info("[%s] History scan will start in 30 seconds...", self.device_name)
+                 self.hass.loop.call_later(30, lambda: self.hass.async_create_task(self._check_bootstrap()))
                 
         except Exception:
             _LOGGER.exception("Failed loading data")
