@@ -1,9 +1,11 @@
-## v2.9.1-beta4 (2026-01-11) - Midnight Filter 🌙
+## v2.9.1-beta5 (2026-01-11) - AI Fallback after Midnight Filter 🌙
 
 ### 🐛 Fixes
-*   **Fixed "Next Session End" showing 00:00**: If a Schedule entity returned a date-only value (no time), it was interpreted as midnight. Now, any `effective_departure` at exactly 00:00:00 is filtered out and the sensor shows "Unknown" instead of a misleading midnight time.
+*   **Fixed "Next Session End" showing Unknown**: After filtering midnight dates, the system now falls back to the AI prediction (`learned_decision.session_end`) instead of showing "Unknown". This ensures the sensor shows the next learned departure (e.g., "Mittwoch 14:26") when the Schedule entity returns an invalid date-only value.
 
 ---
+
+## v2.9.1-beta4 (2026-01-11) - Midnight Filter 🌙
 
 ## v2.9.1-beta3 (2026-01-11) - Faster Bootstrap ⚡
 
