@@ -1,3 +1,10 @@
+## v2.9.1-beta4 (2026-01-11) - Midnight Filter 🌙
+
+### 🐛 Fixes
+*   **Fixed "Next Session End" showing 00:00**: If a Schedule entity returned a date-only value (no time), it was interpreted as midnight. Now, any `effective_departure` at exactly 00:00:00 is filtered out and the sensor shows "Unknown" instead of a misleading midnight time.
+
+---
+
 ## v2.9.1-beta3 (2026-01-11) - Faster Bootstrap ⚡
 
 ### ⚡ Improvements

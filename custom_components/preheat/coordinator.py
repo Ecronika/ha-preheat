@@ -1853,6 +1853,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  effective_departure = None
                  effective_departure_source = "none"
 
+            # v2.9.1: Midnight Filter
+            # If effective_departure is exactly at midnight (00:00:00), it's likely a parsing artifact
+            # from a Schedule entity that returns date-only. Set to None to avoid confusing sensor values.
+            if effective_departure is not None:
+                 local_dep = dt_util.as_local(effective_departure)
+                 if local_dep.hour == 0 and local_dep.minute == 0 and local_dep.second == 0:
+                      _LOGGER.debug("Effective departure at midnight (%s) - likely parsing artifact. Clearing.", effective_departure)
+                      effective_departure = None
+                      effective_departure_source = "midnight_filtered"
+
             # --- Provider Selection ---
             if self.hold_active:
                 selected_provider = PROVIDER_MANUAL
