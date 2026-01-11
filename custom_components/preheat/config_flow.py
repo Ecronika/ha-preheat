@@ -84,64 +84,66 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-             # V3: Split Core (Data) vs Behavior (Options)
-             return self.async_create_entry(
-                title=user_input[CONF_NAME],
-                data={
-                    CONF_OCCUPANCY: user_input[CONF_OCCUPANCY],
-                    CONF_CLIMATE: user_input[CONF_CLIMATE],
-                    CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
-                    CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
-                },
-                options={
-                    CONF_HEATING_PROFILE: user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW),
-                    CONF_VALVE_POSITION: user_input.get(CONF_VALVE_POSITION), # Now in Main Setup
-                    
-                    # Defaults for details
-                    CONF_ARRIVAL_WINDOW_START: DEFAULT_ARRIVAL_WINDOW_START,
-                    CONF_ARRIVAL_WINDOW_END: DEFAULT_ARRIVAL_WINDOW_END,
-                    CONF_EXPERT_MODE: False, # Deprecated
-                    
-                    # Auto-Derived Defaults (Will be handled by coordinator if missing, but setting here is safe)
-                    CONF_MAX_COAST_HOURS: HEATING_PROFILES.get(
-                        user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW), 
-                        HEATING_PROFILES[PROFILE_RADIATOR_NEW]
-                    ).get("default_coast", DEFAULT_MAX_COAST_HOURS)
-                }
-             )
+             # 1. Validate Entities
+             if not self.hass.states.get(user_input[CONF_OCCUPANCY]):
+                 errors[CONF_OCCUPANCY] = "entity_not_found"
+             if not self.hass.states.get(user_input[CONF_CLIMATE]):
+                 errors[CONF_CLIMATE] = "entity_not_found"
+             
+             # 2. Set Unique ID (Best Practice)
+             await self.async_set_unique_id(user_input[CONF_CLIMATE])
+             self._abort_if_unique_id_configured()
 
-        # Build Profile Options
-        profile_options = list(HEATING_PROFILES.keys())
+             if not errors:
+                 # V3: Split Core (Data) vs Behavior (Options)
+                 return self.async_create_entry(
+                    title=user_input.get(CONF_NAME, user_input[CONF_CLIMATE]),
+                    data={
+                        CONF_OCCUPANCY: user_input[CONF_OCCUPANCY],
+                        CONF_CLIMATE: user_input[CONF_CLIMATE],
+                        CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
+                        CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
+                    },
+                    options={
+                        CONF_HEATING_PROFILE: user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW),
+                        CONF_VALVE_POSITION: user_input.get(CONF_VALVE_POSITION), # Behavior Option
+                        
+                        # Apply Defaults Explicitly
+                        CONF_BUFFER_MIN: DEFAULT_BUFFER_MIN, 
+                    }
+                )
+
+        # Build Schema (User)
+        # We use explicit defaults or empty for new setup
         defaults = user_input or {}
-
-        data_schema = vol.Schema({
-            vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Office")): str,
-            vol.Required(CONF_OCCUPANCY, default=defaults.get(CONF_OCCUPANCY)): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="binary_sensor")
-            ),
-            vol.Required(CONF_CLIMATE, default=defaults.get(CONF_CLIMATE)): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="climate")
-            ),
-            vol.Required(CONF_HEATING_PROFILE, default=defaults.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)): selector.SelectSelector(
+        
+        schema = vol.Schema({
+             vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Intelligent Preheat")): str,
+             vol.Required(CONF_OCCUPANCY, default=defaults.get(CONF_OCCUPANCY)): selector.EntitySelector(
+                 selector.EntitySelectorConfig(domain="binary_sensor")
+             ),
+             vol.Required(CONF_CLIMATE, default=defaults.get(CONF_CLIMATE)): selector.EntitySelector(
+                 selector.EntitySelectorConfig(domain="climate")
+             ),
+             vol.Optional(CONF_TEMPERATURE, default=defaults.get(CONF_TEMPERATURE, vol.UNDEFINED)): selector.EntitySelector(
+                 selector.EntitySelectorConfig(domain=["sensor", "input_number"])
+             ),
+             vol.Optional(CONF_VALVE_POSITION, default=defaults.get(CONF_VALVE_POSITION, vol.UNDEFINED)): selector.EntitySelector(
+                 selector.EntitySelectorConfig(domain=["sensor", "input_number"])
+             ),
+             vol.Optional(CONF_WEATHER_ENTITY, default=defaults.get(CONF_WEATHER_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
+                 selector.EntitySelectorConfig(domain="weather")
+             ),
+             vol.Required(CONF_HEATING_PROFILE, default=defaults.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=profile_options,
+                    options=list(HEATING_PROFILES.keys()),
                     mode=selector.SelectSelectorMode.DROPDOWN,
                     translation_key="heating_profile"
                 )
-            ),
-            # Optional Sensors
-            vol.Optional(CONF_TEMPERATURE, default=defaults.get(CONF_TEMPERATURE, vol.UNDEFINED)): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["sensor", "input_number"])
-            ),
-            vol.Optional(CONF_VALVE_POSITION, default=defaults.get(CONF_VALVE_POSITION, vol.UNDEFINED)): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["sensor", "input_number"]) 
-            ),
-            vol.Optional(CONF_WEATHER_ENTITY, default=defaults.get(CONF_WEATHER_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="weather")
-            ),
+             ),
         })
 
-        return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
@@ -158,8 +160,14 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_CLIMATE: user_input[CONF_CLIMATE],
                     CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
                     CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
+                    # Valve Position is NOT in data anymore, strictly options?
+                    # Wait, if we move it to options, reconfigure shouldn't touch Data part?
+                    # Review said: "In async_step_reconfigure wird es nicht behandelt".
+                    # If it's behavior, it's in Options Flow, OR we expose it here?
+                    # Let's keep data clean for HARDWARE. Valve is hardware-ish.
+                    # But plan said "Move to Options". So we ignore it here.
                 },
-                options=entry.options 
+                # We do NOT touch options here, preserving them.
             )
 
         # Pre-fill
@@ -178,6 +186,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="weather")
             ),
+            # No Valve Here - Accessed via Options
         })
 
         return self.async_show_form(
@@ -191,6 +200,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> PreheatingOptionsFlow:
         return PreheatingOptionsFlow(config_entry)
 
+
 class PreheatingOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow."""
 
@@ -202,7 +212,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         return self._config_entry.options.get(key, self._config_entry.data.get(key, default))
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage options (Simplified - No Expert Mode)."""
+        """Manage options (Explicit Construction + Suggested Values)."""
         errors = {}
         
         if user_input is not None:
@@ -211,21 +221,42 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                  errors[CONF_BUFFER_MIN] = "buffer_too_high"
             
             if not errors:
-                # Save
-                update_data = {**self._config_entry.options, **user_input}
+                # EXPLICIT CONSTRUCTION (Fixes Persistence Bug)
+                # Instead of merging {**options, **user_input}, we define exactly what goes in.
+                # If a key is missing in user_input, we assume it was CLEARED by user (thanks to suggested_values).
+                # We explicitly store None to mask any legacy data values.
                 
-                # v2.9.2: Do NOT filter None values!
-                # If we remove the key, _get_val falls back to self._config_entry.data (Legacy).
-                # We need to store None explicitly to mask the legacy value.
+                update_data = {}
                 
+                # 1. Required/Preserved Fields
+                update_data[CONF_HEATING_PROFILE] = user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
+                
+                # 2. Optional Fields logic
+                optional_keys = [
+                    CONF_BUFFER_MIN, 
+                    CONF_EARLIEST_START,
+                    CONF_ARRIVAL_WINDOW_START, 
+                    CONF_ARRIVAL_WINDOW_END,
+                    CONF_COMFORT_FALLBACK, 
+                    CONF_ENABLE_OPTIMAL_STOP,
+                    CONF_SCHEDULE_ENTITY,   # The Troublesome Field
+                    CONF_LOCK, 
+                    CONF_WORKDAY, 
+                    CONF_VALVE_POSITION
+                ]
+                
+                for key in optional_keys:
+                    val = user_input.get(key)
+                    # Check for "Empty" markers from UI selectors
+                    if val in (None, "", [], vol.UNDEFINED):
+                        update_data[key] = None # Explicitly Store None (Masking)
+                    else:
+                        update_data[key] = val
+                        
                 return self.async_create_entry(title="", data=update_data)
         
-        # Build Schema (Action 2.3: Simplified "Details" page)
+        # Build Schema (No Defaults!)
         
-        # Profile Options (Needed if user wants to change profile)
-        # Build Schema (Action 2.3: Simplified "Details" page)
-        
-        # Profile Options (Needed if user wants to change profile)
         profile_options = list(HEATING_PROFILES.keys())
         
         # Load Defaults for Logic
@@ -233,10 +264,6 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         profile_data = HEATING_PROFILES.get(current_profile, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
         default_buffer = profile_data.get("buffer", DEFAULT_BUFFER_MIN)
 
-        # v2.9.2: Usage of `suggested_values` instead of `default` for Optional fields.
-        # This is critical to allow users to CLEAR a field (sending None/Empty).
-        # If we use `default=...`, Voluptuous re-injects the old value if the input is missing/empty.
-        
         schema = vol.Schema({
             # primary settings
             vol.Required(CONF_HEATING_PROFILE): selector.SelectSelector(
@@ -264,7 +291,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             
             # Feature Toggles
             vol.Optional(CONF_ENABLE_OPTIMAL_STOP): selector.BooleanSelector(),
-            # Schedule (Only useful if Optimal Stop is on? Show always for simplicity)
+            # Schedule
             vol.Optional(CONF_SCHEDULE_ENTITY): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain=["schedule", "input_datetime", "sensor"])
             ),
@@ -279,7 +306,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             ),
         })
 
-        # Define Suggestion Source
+        # Define Suggestions
         suggestions = {
             CONF_HEATING_PROFILE: current_profile,
             CONF_BUFFER_MIN: self._get_val(CONF_BUFFER_MIN, default_buffer),
@@ -288,7 +315,7 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
             CONF_ARRIVAL_WINDOW_END: self._get_val(CONF_ARRIVAL_WINDOW_END, DEFAULT_ARRIVAL_WINDOW_END),
             CONF_COMFORT_FALLBACK: self._get_val(CONF_COMFORT_FALLBACK, DEFAULT_COMFORT_FALLBACK),
             CONF_ENABLE_OPTIMAL_STOP: self._get_val(CONF_ENABLE_OPTIMAL_STOP, False),
-            CONF_SCHEDULE_ENTITY: self._get_val(CONF_SCHEDULE_ENTITY), # Returns None/Value
+            CONF_SCHEDULE_ENTITY: self._get_val(CONF_SCHEDULE_ENTITY),
             CONF_LOCK: self._get_val(CONF_LOCK),
             CONF_WORKDAY: self._get_val(CONF_WORKDAY),
             CONF_VALVE_POSITION: self._get_val(CONF_VALVE_POSITION),
