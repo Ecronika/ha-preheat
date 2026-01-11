@@ -1,3 +1,10 @@
+## v2.9.1-beta7 (2026-01-12) - Predicted Duration Stability 📉
+
+### 🐛 Fixes
+*   **Fixed "Predicted Duration" dropping to 0**: During transient sensor unavailability (e.g., sensor update glitches), the predicted duration would momentarily drop to 0, ruining statistics graphs. The system now persists the last known valid duration and uses it during these short outages.
+
+---
+
 ## v2.9.1-beta6 (2026-01-12) - Critical: Fix Optimal Stop Timing ⏰
 
 ### 🐛 Critical Fixes

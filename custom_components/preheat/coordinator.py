@@ -330,6 +330,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._external_inhibit: bool = False # Init to prevent AttributeError
         self._window_cooldown_counter: int = 0
         
+        # V2.9.1: Fix Zero Duration Glitch
+        self._last_predicted_duration: float = 0.0
+        
         # Caching
         self._cached_outdoor_temp: float = 10.0
         self._last_weather_check: datetime | None = None
@@ -1458,7 +1461,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             
             if operative_temp <= INVALID_TEMP:
                 # Sensor error, bail out safe
-                return PreheatData(False, None, None, target_setpoint, next_event, 0, 0, 0, False)
+                # v2.9.1: Return last known duration to prevent graph glitches
+                return PreheatData(False, None, None, target_setpoint, next_event, self._last_predicted_duration, 0, 0, False)
 
             # Delta Calculation
             delta_in = target_setpoint - operative_temp
@@ -1541,6 +1545,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 max_dur_minutes = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0) * 60
                 uncapped_duration = raw_duration
                 predicted_duration = min(raw_duration, max_dur_minutes)
+
+            # Persist for next error cycle
+            self._last_predicted_duration = predicted_duration
             
             # -----------------------------------
             
