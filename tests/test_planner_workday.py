@@ -55,14 +55,17 @@ def test_planner_all_days_allowed(planner):
     # Add events for Today + 1 (Tomorrow) at 08:00
     # Must add > MIN_CLUSTER_POINTS (3)
     # v3 record_arrival populates both history and history_v2
-    for _ in range(4):
-        planner.record_arrival(dt(1, 8, 0))
+    # Use distinct days (weekly) to pass duplicate check
+    with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
+        for i in range(4):
+            planner.record_arrival(dt(1 + i*7, 8, 0))
     
     # Expect Tomorrow 08:00
-    next_evt = planner.get_next_scheduled_event(now, allowed_weekdays=None)
-    assert next_evt is not None
-    assert next_evt.hour == 8
-    assert next_evt.day == dt(1, 8, 0).day
+    with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
+        next_evt = planner.get_next_scheduled_event(now, allowed_weekdays=None)
+        assert next_evt is not None
+        assert next_evt.hour == 8
+        assert next_evt.day == dt(1, 8, 0).day
     
 def test_planner_weekend_skip(planner):
     """Test skipping weekend (Sat/Sun) when restricted."""
@@ -80,15 +83,17 @@ def test_planner_weekend_skip(planner):
         planner.history_v2[0].append(8*60) # Mon 08:00
     
     # 1. Without restriction -> Sat 08:00
-    res = planner.get_next_scheduled_event(fixed_now, allowed_weekdays=None)
-    assert res is not None
-    assert res.weekday() == 5 # Sat
+    with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
+        res = planner.get_next_scheduled_event(fixed_now, allowed_weekdays=None)
+        assert res is not None
+        assert res.weekday() == 5 # Sat
     
     # 2. With Mon-Fri restriction ([0,1,2,3,4]) -> Expect Mon
-    res = planner.get_next_scheduled_event(fixed_now, allowed_weekdays=[0,1,2,3,4])
-    assert res is not None
-    assert res.weekday() == 0 # Mon
-    assert res.day == 16 # Dec 16
+    with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
+        res = planner.get_next_scheduled_event(fixed_now, allowed_weekdays=[0,1,2,3,4])
+        assert res is not None
+        assert res.weekday() == 0 # Mon
+        assert res.day == 16 # Dec 16
 
 def test_planner_custom_workdays(planner):
     """Test custom workday set (e.g. Fri + Sat active)."""
@@ -104,18 +109,21 @@ def test_planner_custom_workdays(planner):
     allowed = [4, 5]
     
     # Ask -> Expect Fri
-    res = planner.get_next_scheduled_event(fixed_now, allowed_weekdays=allowed)
-    assert res.weekday() == 4
+    with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
+        res = planner.get_next_scheduled_event(fixed_now, allowed_weekdays=allowed)
+        assert res.weekday() == 4
     
     # Ask from Fri Evening (20:00) -> Expect Sat
     friday_night = datetime(2024, 12, 13, 20, 0, 0, tzinfo=dt_util.UTC)
-    res = planner.get_next_scheduled_event(friday_night, allowed_weekdays=allowed)
-    assert res.weekday() == 5 # Sat
+    with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
+        res = planner.get_next_scheduled_event(friday_night, allowed_weekdays=allowed)
+        assert res.weekday() == 5 # Sat
     
     # Ask from Sat Evening (20:00) -> Expect Fri (Next week)?
     sat_night = datetime(2024, 12, 14, 20, 0, 0, tzinfo=dt_util.UTC)
-    res = planner.get_next_scheduled_event(sat_night, allowed_weekdays=allowed)
-    assert res is not None
+    with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
+        res = planner.get_next_scheduled_event(sat_night, allowed_weekdays=allowed)
+        assert res is not None
     assert res.weekday() == 4
     
 def test_no_events_found(planner):

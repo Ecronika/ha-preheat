@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.9.0"
+VERSION = "2.9.1-beta1"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -157,7 +157,15 @@ DEFAULT_DEBOUNCE_MIN: Final = 15
 DEFAULT_COMFORT_MIN: Final = 19.0
 DEFAULT_COMFORT_MAX: Final = 23.5
 DEFAULT_COMFORT_FALLBACK: Final = 21.0
-DEFAULT_AIR_TO_OPER_BIAS: Final = 0.0 
+DEFAULT_AIR_TO_OPER_BIAS: Final = 0.0
+
+# History / Planner Limits (Refactor v2.9.3)
+MAX_HISTORY_ENTRIES: Final = 20
+DEBOUNCE_THRESHOLD_MINUTES: Final = 120
+PRUNE_TARGET_ENTRIES: Final = 20
+SEARCH_LOOKAHEAD_DAYS: Final = 8 
+MIN_POINTS_FOR_V3: Final = 3  # Minimum v3 data points for prediction
+FULL_V3_POINTS: Final = 10   # Full confidence in v3 data (no v2 fallback)
 DEFAULT_INITIAL_GAIN: Final = 10.0
 DEFAULT_MAX_HOURS: Final = 3.0
 DEFAULT_ARRIVAL_WINDOW_START: Final = "04:00:00"

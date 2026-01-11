@@ -1,3 +1,29 @@
+## v2.9.1-beta1 (2026-01-11) - The Planner Refactor 🔧
+
+**Major Reliability & Robustness Update for the Planner Module**
+
+### 🔧 Planner Refactoring (9 Rounds of Polish)
+*   **Robust History Loading**: Complete overhaul with key normalization, container-key handling (`999`/`888`), per-item parsing with granular error handling, and type validation.
+*   **Legacy Phase-Out**: v2 history is now **read-only** (no longer written). Full migration to v3 format in progress.
+*   **TZ Safety**: All public methods now ensure `now` is timezone-aware via `dt_util.as_local()`.
+*   **Debounce Active**: Both Arrival and Departure recording now use debounce to prevent history noise.
+*   **Pruning Improvements**:
+    *   Global pruning (Age + Count) for all history types.
+    *   Sorting before FIFO prune ensures chronological order.
+    *   Empty keys are deleted to keep persistence clean.
+*   **Input Validation**:
+    *   v3 minutes range validated (0-1439).
+    *   Departure date validated as ISO format.
+    *   Departure minutes cast to int (no in-place mutation).
+*   **Pattern Result Consistency**: `last_pattern_result` now uses actual blended `prediction_minute` in Hybrid phase.
+*   **Centralized Constants**: `MIN_POINTS_FOR_V3` and `FULL_V3_POINTS` moved to `const.py`.
+
+### 🐛 Fixes
+*   Fixed DST detection logging (now `debug` level, marked as "Best Effort / Diagnostic Only").
+*   Fixed potential `last_pattern_result` inconsistency when no candidates are generated.
+
+---
+
 ## v2.9.0 (2026-01-11) - The Clean Code Release 🧹
 **Major Maintenance & Feature Update**
 
