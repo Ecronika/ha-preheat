@@ -631,49 +631,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if uptime < 1800: # 30 min
              return
              
-    async def _check_bootstrap(self) -> None:
-        """Run retroactive history scan if needed (bootstrap)."""
-        # v2.9.0 Fix: Force check for missing departures even if bootstrap was done before
-        # This ensures users upgrading from v2.8 (or broken v2.9) get the retroactive scan.
-        has_departures = any(len(entries) >= MIN_CLUSTER_POINTS for entries in self.planner.history_departure.values())
-        if self.bootstrap_done and has_departures:
-            return
-            
-        _LOGGER.debug("Checking Retroactive Bootstrap status...")
-        
-        # 1. Migration Safety Check
-        # If we have ANY existing data, we assume the user has been running the system
-        # and doesn't need a full history rescan (which takes time).
-        # We just mark it as done.
-        has_v2 = len(self.planner.history_v2) > 0
-        has_v3 = len(self.planner.history) > 0
-        
-        if has_v2 or has_v3:
-             # v2.9.0 Fix: If we have Arrivals but NO Departures, force a scan anyway.
-             # This populates the new "Learned Departures" feature for existing users.
-             has_departures = any(len(entries) >= MIN_CLUSTER_POINTS for entries in self.planner.history_departure.values())
-             if not has_departures:
-                 _LOGGER.info("Existing Arrivals found, but sparse/missing Departures. Forcing Retroactive Scan...")
-                 # Detect if we should proceed (Fallthrough to scan)
-             else:
-                 _LOGGER.info("Existing learning data detected. Marking Bootstrap as DONE (Skipping scan).")
-                 self.bootstrap_done = True
-                 await self._async_save_data()
-                 return
-
-        # 2. Fresh Install - Run Scan
-        _LOGGER.info("First Run Detected (No History). Starting automatic history scan...")
-        try:
-             await self.scan_history_from_recorder()
-             self.bootstrap_done = True
-             await self._async_save_data()
-             _LOGGER.info("Bootstrap Complete.")
-        except Exception as e:
-             _LOGGER.error("Bootstrap Scan failed (will retry next reboot): %s", e)
-
-             # _LOGGER.debug("Diagnostics skipped: Rate Limit (Last: %s)", last_check)
-             return
-
 
         _LOGGER.debug("Running Diagnostics Check (Uptime: %.1f min)", uptime/60)
         self.diagnostics_data["last_check_ts"] = now
@@ -1037,6 +994,48 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              raise_issue("tolerance_sanity", "tolerance_sanity", IssueSeverity.WARNING)
         else:
              clear_issue("tolerance_sanity")
+
+
+    async def _check_bootstrap(self) -> None:
+        """Run retroactive history scan if needed (bootstrap)."""
+        # v2.9.0 Fix: Force check for missing departures even if bootstrap was done before
+        # This ensures users upgrading from v2.8 (or broken v2.9) get the retroactive scan.
+        has_departures = any(len(entries) >= MIN_CLUSTER_POINTS for entries in self.planner.history_departure.values())
+        if self.bootstrap_done and has_departures:
+            return
+            
+        _LOGGER.debug("Checking Retroactive Bootstrap status...")
+        
+        # 1. Migration Safety Check
+        # If we have ANY existing data, we assume the user has been running the system
+        # and doesn't need a full history rescan (which takes time).
+        # We just mark it as done.
+        has_v2 = len(self.planner.history_v2) > 0
+        has_v3 = len(self.planner.history) > 0
+        
+        if has_v2 or has_v3:
+             # v2.9.0 Fix: If we have Arrivals but NO Departures, force a scan anyway.
+             # This populates the new "Learned Departures" feature for existing users.
+             has_departures = any(len(entries) >= MIN_CLUSTER_POINTS for entries in self.planner.history_departure.values())
+             if not has_departures:
+                 _LOGGER.info("Existing Arrivals found, but sparse/missing Departures. Forcing Retroactive Scan...")
+                 # Detect if we should proceed (Fallthrough to scan)
+             else:
+                 _LOGGER.info("Existing learning data detected. Marking Bootstrap as DONE (Skipping scan).")
+                 self.bootstrap_done = True
+                 await self._async_save_data()
+                 return
+
+        # 2. Fresh Install - Run Scan
+        _LOGGER.info("First Run Detected (No History). Starting automatic history scan...")
+        try:
+             await self.scan_history_from_recorder()
+             self.bootstrap_done = True
+             await self._async_save_data()
+             _LOGGER.info("Bootstrap Complete.")
+        except Exception as e:
+             _LOGGER.error("Bootstrap Scan failed (will retry next reboot): %s", e)
+             return
 
 
     def _parse_time_to_minutes(self, time_str: str, default_str: str) -> int:
