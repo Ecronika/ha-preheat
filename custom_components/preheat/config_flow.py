@@ -89,12 +89,21 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                  errors[CONF_OCCUPANCY] = "entity_not_found"
              if not self.hass.states.get(user_input[CONF_CLIMATE]):
                  errors[CONF_CLIMATE] = "entity_not_found"
+                 
+             # Validate Optional Entities
+             if user_input.get(CONF_TEMPERATURE):
+                  if not self.hass.states.get(user_input[CONF_TEMPERATURE]):
+                       errors[CONF_TEMPERATURE] = "entity_not_found"
+                       
+             if user_input.get(CONF_WEATHER_ENTITY):
+                  if not self.hass.states.get(user_input[CONF_WEATHER_ENTITY]):
+                       errors[CONF_WEATHER_ENTITY] = "entity_not_found"
              
-             # 2. Set Unique ID (Best Practice)
-             await self.async_set_unique_id(user_input[CONF_CLIMATE])
-             self._abort_if_unique_id_configured()
-
              if not errors:
+                 # 2. Set Unique ID (Best Practice) - ONLY if validation passed
+                 await self.async_set_unique_id(user_input[CONF_CLIMATE])
+                 self._abort_if_unique_id_configured()
+
                  # V3: Split Core (Data) vs Behavior (Options)
                  return self.async_create_entry(
                     title=user_input.get(CONF_NAME, user_input[CONF_CLIMATE]),
@@ -103,13 +112,14 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_CLIMATE: user_input[CONF_CLIMATE],
                         CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
                         CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
+                        # Valve Position removed (Behavior Option)
                     },
                     options={
                         CONF_HEATING_PROFILE: user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW),
-                        CONF_VALVE_POSITION: user_input.get(CONF_VALVE_POSITION), # Behavior Option
-                        
                         # Apply Defaults Explicitly
                         CONF_BUFFER_MIN: DEFAULT_BUFFER_MIN, 
+                        CONF_ARRIVAL_WINDOW_START: DEFAULT_ARRIVAL_WINDOW_START,
+                        CONF_ARRIVAL_WINDOW_END: DEFAULT_ARRIVAL_WINDOW_END,
                     }
                 )
 
@@ -128,9 +138,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
              vol.Optional(CONF_TEMPERATURE, default=defaults.get(CONF_TEMPERATURE, vol.UNDEFINED)): selector.EntitySelector(
                  selector.EntitySelectorConfig(domain=["sensor", "input_number"])
              ),
-             vol.Optional(CONF_VALVE_POSITION, default=defaults.get(CONF_VALVE_POSITION, vol.UNDEFINED)): selector.EntitySelector(
-                 selector.EntitySelectorConfig(domain=["sensor", "input_number"])
-             ),
+             # Valve Position Removed (Strictly Option)
              vol.Optional(CONF_WEATHER_ENTITY, default=defaults.get(CONF_WEATHER_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
                  selector.EntitySelectorConfig(domain="weather")
              ),
@@ -160,12 +168,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_CLIMATE: user_input[CONF_CLIMATE],
                     CONF_TEMPERATURE: user_input.get(CONF_TEMPERATURE),
                     CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
-                    # Valve Position is NOT in data anymore, strictly options?
-                    # Wait, if we move it to options, reconfigure shouldn't touch Data part?
-                    # Review said: "In async_step_reconfigure wird es nicht behandelt".
-                    # If it's behavior, it's in Options Flow, OR we expose it here?
-                    # Let's keep data clean for HARDWARE. Valve is hardware-ish.
-                    # But plan said "Move to Options". So we ignore it here.
+                    CONF_WEATHER_ENTITY: user_input.get(CONF_WEATHER_ENTITY),
                 },
                 # We do NOT touch options here, preserving them.
             )
@@ -246,12 +249,16 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                 ]
                 
                 for key in optional_keys:
-                    val = user_input.get(key)
-                    # Check for "Empty" markers from UI selectors
-                    if val in (None, "", [], vol.UNDEFINED):
-                        update_data[key] = None # Explicitly Store None (Masking)
+                    if key in user_input:
+                        val = user_input[key]
+                        # Check for "Empty" markers from UI selectors (but allow False/0)
+                        if val in ("", [], vol.UNDEFINED): 
+                            update_data[key] = None # Explicitly Store None (Masking)
+                        else:
+                            update_data[key] = val
                     else:
-                        update_data[key] = val
+                        # Missing from input -> Cleared
+                        update_data[key] = None
                         
                 return self.async_create_entry(title="", data=update_data)
         
