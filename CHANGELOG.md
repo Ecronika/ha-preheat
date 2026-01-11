@@ -13,7 +13,11 @@ This version combines the feature set of the planned v2.9.0 with immediate stabi
 ### 🐛 Fixes
 *   **Service Reliability**: Improved robustness for `recompute` calls.
 *   **Encoding**: Fixed `°C` display issues.
-*   **Repair Issues**: Added missing zone names to repair issue titles for better context.
+*   **Repair Issues**: 
+    *   Added missing zone names to titles.
+    *   Fixed "Stale Sensor" false positives for Climate entities (now uses `last_updated`).
+    *   Relaxed "Max Duration" warning (added 30m buffer & schedule check).
+*   **Config Flow**: Restored "Max Preheat Duration" setting to allow user overrides.
 
 ### � Key Features (from original v2.9.0)
 *   **Simplified Configuration**: Smart defaults based on Heating Profile.
