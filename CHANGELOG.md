@@ -1,3 +1,10 @@
+## v2.9.1-beta6 (2026-01-12) - Critical: Fix Optimal Stop Timing ⏰
+
+### 🐛 Critical Fixes
+*   **Fixed Optimal Stop using wrong session end**: The `OptimalStopManager` was receiving `next_event` (the next **ARRIVAL** time, e.g., 17:00) instead of `effective_departure` (the **DEPARTURE** time, e.g., 07:30). This caused the "Optimaler Abschaltzeitpunkt" sensor to show times that made no sense relative to the actual session end.
+
+---
+
 ## v2.9.1-beta5 (2026-01-11) - AI Fallback after Midnight Filter 🌙
 
 ### 🐛 Fixes

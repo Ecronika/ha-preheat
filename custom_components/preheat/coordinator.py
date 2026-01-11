@@ -1900,7 +1900,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             self.optimal_stop_manager.update(
                 current_temp=operative_temp,
                 target_temp=target_setpoint,
-                schedule_end=next_event,
+                # v2.9.1: Use effective_departure (Session END), not next_event (Session START/Arrival)
+                schedule_end=effective_departure,
                 predicted_end=predicted_departure, # v2.9 Multi-Modal Prediction
                 forecast_provider=forecast_temp_at,
                 tau_hours=self.cooling_analyzer.learned_tau,
