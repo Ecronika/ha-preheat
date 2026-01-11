@@ -17,6 +17,7 @@ This version combines the feature set of the planned v2.9.0 with immediate stabi
     *   Added missing zone names to titles.
     *   Fixed "Stale Sensor" false positives for Climate entities (now uses `last_updated`).
     *   Relaxed "Max Duration" warning (added 30m buffer & schedule check).
+    *   Fixed "Unknown" state for Next Session End sensor (improved day rollover logic).
 *   **Config Flow**: Restored "Max Preheat Duration" setting to allow user overrides.
 
 ### � Key Features (from original v2.9.0)

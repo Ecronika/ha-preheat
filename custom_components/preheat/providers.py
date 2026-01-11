@@ -211,89 +211,48 @@ class LearnedDepartureProvider(SessionEndProvider):
         # But our recorder uses 'departure time' weekday. So Tue 02:00 is recorded as Tue (1).
         # So we should look up Tue (1) history.
         
-        scheduled_end = context.get("scheduled_end")
         if scheduled_end:
-            # Use Schedule as Anchor
+            # A. Anchored Mode (Schedule Active)
+            # Use Schedule's End Date as the anchor day to find history.
             sched_local = dt_util.as_local(scheduled_end)
             weekday = sched_local.weekday()
-            # print(f"DEBUG: Anchored Weekday: {weekday}")
             
-            # Anchor Date for reconstruction
-            anchor_date = sched_local.date()
+            # Look up history for this specific weekday
+            sessions = self.planner.history_departure.get(weekday, [])
+            
+            # Predict
+            detector = getattr(self.planner, "detector", None)
+            predict_method = getattr(detector, "predict_departure", None)
+            
+            if callable(predict_method):
+                 pred_result = predict_method(sessions)
+                 if isinstance(pred_result, (tuple, list)) and len(pred_result) == 2:
+                     predicted_minutes, predicted_conf = pred_result
+                     
+            if predicted_minutes is not None:
+                 # Reconstruct on the Anchor Date
+                 base_dt = sched_local.replace(hour=0, minute=0, second=0, microsecond=0)
+                 predicted_end = base_dt + timedelta(minutes=predicted_minutes)
+
         else:
-            # Autonomous / Fallback
-            weekday = local_now.weekday()
-            anchor_date = local_now.date()
+            # B. Autonomous Mode (Pure AI / Observer)
+            # Use the Planner's robust lookahead logic (Handle rollover, multi-day scan)
+            predicted_end = self.planner.get_next_predicted_departure(context["now"])
             
-        # History is {weekday: [{"date": iso, "minutes": int, "dst_flag": bool}]}
-        sessions = self.planner.history_departure.get(weekday, [])
-        # Count only valid (non-DST) sessions for maturity check
-        valid_sessions = [s for s in sessions if not s.get("dst_flag", False)]
-        session_count = len(valid_sessions)
-        
-        gate_inputs = {
-            "savings": savings,
-            "tau_conf": tau_conf,
-            "pattern_conf": pattern_conf,
-            "session_count": session_count
-        }
-        
-        # Only check savings gate if savings data serves as a strict requirement (future).
-        # For now, allow Pure AI if savings is 0.0 or None (disable gate).
-        if savings is not None and savings > 0.0:
-            if savings < GATE_MIN_SAVINGS_MIN:
-                gates_failed.append(GATE_FAIL_SAVINGS)
-            
-        if tau_conf < GATE_MIN_TAU_CONF:
-            gates_failed.append(GATE_FAIL_TAU)
-            
-        if pattern_conf < GATE_MIN_PATTERN_CONF:
-             gates_failed.append(GATE_FAIL_PATTERN)
-             
-        # If we had a prediction...
-        predicted_minutes = None
-        predicted_conf = 0.0
-        
-        # Call Pattern Logic (v2.8)
-        # Call Pattern Logic (v2.8) - Robust Guard
-        detector = getattr(self.planner, "detector", None)
-        predict_method = getattr(detector, "predict_departure", None)
-        
-        if callable(predict_method):
-            pred_result = predict_method(sessions)
-            # Ensure result is valid tuple (minutes, conf)
-            if isinstance(pred_result, (tuple, list)) and len(pred_result) == 2:
-                predicted_minutes, predicted_conf = pred_result
-        
-        predicted_end = None
-        if predicted_minutes is not None:
-             # Reconstruct Datetime from Minutes
-             # Use determined Anchor Date (Schedule Day or Today)
-             # Construct candidate using the timezone from the base source (local_now or sched_local)
-             if scheduled_end:
-                  # Use sched_local's TZ
-                  base_dt = sched_local.replace(hour=0, minute=0, second=0, microsecond=0)
-             else:
-                  base_dt = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-             
-             candidate = base_dt + timedelta(minutes=predicted_minutes)
-             
-             # Smart Rollover Logic
-             if not scheduled_end:
-                 # Only if NOT anchored to specific schedule event do we guess the day.
-                 # Heuristic: If candidate is > 12h in the past, it implies "Tomorrow" 
-                 # relative to the base date we picked (Today).
-                 # Example: Now 23:00. Pred 02:00. Base=Today. Cand=Today 02:00. Diff 21h. -> +1 Day.
-                 # Example: Now 17:30. Pred 17:00. Base=Today. Cand=Today 17:00. Diff 0.5h. -> No Change.
+            if predicted_end:
+                 # We need to back-calculate confidence for the gates
+                 # Find the weekday of the prediction
+                 pred_local = dt_util.as_local(predicted_end)
+                 weekday = pred_local.weekday()
+                 sessions = self.planner.history_departure.get(weekday, [])
                  
-                 diff_sec = (local_now - candidate).total_seconds()
-                 if diff_sec > 12 * 3600:
-                     candidate += timedelta(days=1)
-             
-             # If anchored to Schedule, we trust the Anchor Date derived from explicit Schedule End.
-             # (e.g. Schedule ends Tue 02:00. Anchor=Tue. Pred=02:00. Result=Tue 02:00. Correct).
-                 
-             predicted_end = candidate
+                 # Re-run detector just to get confidence metric
+                 detector = getattr(self.planner, "detector", None)
+                 predict_method = getattr(detector, "predict_departure", None)
+                 if callable(predict_method):
+                      pred_result = predict_method(sessions)
+                      if isinstance(pred_result, (tuple, list)) and len(pred_result) == 2:
+                          _, predicted_conf = pred_result
 
         # Validity Logic
         valid = (len(gates_failed) == 0) and (predicted_end is not None)
