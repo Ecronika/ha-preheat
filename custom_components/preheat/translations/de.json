@@ -355,59 +355,59 @@
       "description": "Optimal Stop ist aktiviert, aber der konfigurierte Zeitplan hat keine zuk\u00fcnftigen Ereignisse (next_event fehlt).\n\n**Auswirkung:** Das System wei\u00df nicht, wann Sie gehen, daher wird 'Optimal Stop' nie aktiv.\n\n**L\u00f6sung:** F\u00fcgen Sie Ereignisse zum Zeitplan-Helfer hinzu oder nutzen Sie Input Datetime Entit\u00e4ten."
     },
     "stale_sensor": {
-      "title": "Temperatursensor veraltet / inaktiv",
+      "title": "Temperatursensor veraltet / inaktiv ({name})",
       "description": "Der konfigurierte Raumtemperatur-Sensor hat sich seit \u00fcber 6 Stunden nicht aktualisiert oder ist nicht verf\u00fcgbar.\n\n**Auswirkung:** Vorheizen funktioniert ohne aktuelle Temperaturdaten nicht.\n\n**L\u00f6sung:** Pr\u00fcfen Sie Batterie, Zigbee-Verbindung oder Entit\u00e4tsnamen."
     },
     "weather_no_forecast": {
-      "title": "Wetter-Entit\u00e4t hat keine Vorhersage",
+      "title": "Wetter-Entit\u00e4t hat keine Vorhersage ({name})",
       "description": "Erweiterte Physik (Euler) ist aktiviert, aber die Wetter-Entit\u00e4t liefert keine Vorhersagedaten (Attribut `forecast` ist leer/fehlt).\n\n**Auswirkung:** Die Simulationsgenauigkeit f\u00e4llt auf Standard-Modus (konstante Au\u00dfentemp) zur\u00fcck.\n\n**L\u00f6sung:** Konfigurieren Sie eine Wetter-Integration mit st\u00fcndlicher Vorhersage (z.B. PirateWeather, Met.no)."
     },
     "adv_no_weather": {
-      "title": "Erweiterter Modus ben\u00f6tigt Wetter-Entit\u00e4t",
+      "title": "Erweiterter Modus ben\u00f6tigt Wetter-Entit\u00e4t ({name})",
       "description": "Sie haben 'Erweiterte Physik (Euler)' aktiviert, aber keine Wetter-Entit\u00e4t konfiguriert.\n\n**L\u00f6sung:** Bitte konfigurieren Sie eine Wetter-Entit\u00e4t in den Einstellungen oder wechseln Sie zur\u00fcck auf 'Standard'."
     },
     "forecast_short": {
-      "title": "Vorhersage-Horizont zu kurz",
+      "title": "Vorhersage-Horizont zu kurz ({name})",
       "description": "Die Wettervorhersage endet fr\u00fcher als Ihre 'Max. Coasting-Dauer'. Die Simulation kann nicht weit genug in die Zukunft blicken.\n\n**L\u00f6sung:** Reduzieren Sie die 'Max. Coasting-Dauer' oder nutzen Sie einen Wetterdienst mit l\u00e4ngerer st\u00fcndlicher Vorhersage (48h+)."
     },
     "occupancy_stale": {
-      "title": "Belegungssensor h\u00e4ngt",
+      "title": "Belegungssensor h\u00e4ngt ({name})",
       "description": "Der Belegungssensor hat seinen Status seit \u00fcber 14 Tagen nicht ge\u00e4ndert.\n\n**Auswirkung:** Falls dies unbeabsichtigt ist, kann das System Ihre Ankunftsmuster nicht korrekt lernen.\n\n**L\u00f6sung:** Pr\u00fcfen Sie den Sensor und die Zuordnung."
     },
     "hold_stuck": {
-      "title": "Vorheizen blockiert > 24h",
+      "title": "Vorheizen blockiert > 24h ({name})",
       "description": "Der Schalter 'Vorheizen tempor\u00e4r blockieren' (Hold) ist seit \u00fcber 24 Stunden AN. Das System ist effektiv deaktiviert.\n\n**L\u00f6sung:** Schalten Sie den 'Hold'-Schalter aus, um den Automatikbetrieb wiederaufzunehmen."
     },
     "inhibit_stuck": {
-      "title": "Externe Sperre / Fenster offen > 24h",
+      "title": "Externe Sperre / Fenster offen > 24h ({name})",
       "description": "Das System wird durch einen externen Sensor (Fensterkontakt oder Sperr-Schalter) seit \u00fcber 24 Stunden blockiert.\n\n**L\u00f6sung:** Pr\u00fcfen Sie Ihre Fenstersensoren oder die Externe Sperr-Entit\u00e4t."
     },
     "learning_stalled": {
-      "title": "Thermisches Lernen stagniert",
+      "title": "Thermisches Lernen stagniert ({name})",
       "description": "Das Modell hat seit \u00fcber 7 Tagen keine neuen Lern-Samples gesammelt, obwohl das System aktiv war.\n\n**M\u00f6gliche Ursachen:**\n- Temperaturdifferenz (Delta T) beim Heizen ist zu gering (< 0.5K).\n- Ventil meldet keine Position (falls konfiguriert).\n- System heizt real nicht, obwohl angefordert."
     },
     "sensor_unit_mismatch": {
-      "title": "Sensor-Einheit ung\u00fcltig",
+      "title": "Sensor-Einheit ung\u00fcltig ({name})",
       "description": "Der konfigurierte Temperatursensor scheint kein g\u00fcltiger Celsius-Sensor zu sein (Einheit nicht '°C' oder falsche Device Class).\n\n**L\u00f6sung:** Bitte \u00fcberpr\u00fcfen Sie die Sensorauswahl in den Einstellungen."
     },
     "sanity_temp": {
-      "title": "Unplausible Temperaturwerte",
+      "title": "Unplausible Temperaturwerte ({name})",
       "description": "Die Temperaturwerte wirken unrealistisch. Entweder ist die Innentemperatur extrem (< -10°C / > 45°C) oder sie folgt exakt der Au\u00dfentemperatur (Vertauschte Sensoren?).\n\n**L\u00f6sung:** Bitte pr\u00fcfen Sie die Zuordnung von Innen- und Au\u00dfensensoren."
     },
     "no_outdoor_source": {
-      "title": "Keine Au\u00dfentemperatur-Quelle",
+      "title": "Keine Au\u00dfentemperatur-Quelle ({name})",
       "description": "Weder ein dedizierter Au\u00dfensensor noch eine Wetter-Entit\u00e4t ist konfiguriert.\n\n**Auswirkung:** Das Physik-Modell kann den Isolationsverlust nicht berechnen, die Genauigkeit sinkt massiv."
     },
     "coast_capped": {
-      "title": "Optimal Stop h\u00e4ufig begrenzt",
+      "title": "Optimal Stop h\u00e4ufig begrenzt ({name})",
       "description": "In den letzten 10 Sitzungen wurde 'Optimal Stop' h\u00e4ufig durch das Limit 'Max. Coasting-Dauer' begrenzt.\n\n**Empfehlung:** Erh\u00f6hen Sie die 'Max. Coasting-Dauer', um fr\u00fcheres Abschalten und mehr Einsparung zu erlauben."
     },
     "max_coast_high": {
-      "title": "Max Coast zu hoch f\u00fcr Heizk\u00f6rper",
+      "title": "Max Coast zu hoch f\u00fcr Heizk\u00f6rper ({name})",
       "description": "Eine 'Max. Coasting-Dauer' von > 3 Stunden ist konfiguriert, obwohl das System nach Heizk\u00f6rpern aussieht (Schnelle Reaktion).\n\n**Risiko:** Der Raum k\u00f6nnte vor Ihrer Abreise zu stark ausk\u00fchlen. Empfohlen: 1.0 - 2.0 Stunden f\u00fcr Heizk\u00f6rper."
     },
     "tolerance_sanity": {
-      "title": "Abschalt-Toleranz ungew\u00f6hnlich",
+      "title": "Abschalt-Toleranz ungew\u00f6hnlich ({name})",
       "description": "Die 'Abschalt-Toleranz' ist auf einen un\u00fcblichen Wert eingestellt (< 0.1K oder > 1.5K).\n\n**Risiko:**\n- Zu niedrig: System k\u00f6nnte takten (An/Aus).\n- Zu hoch: Komfort k\u00f6nnte vor Ende der Sitzung sp\u00fcrbar sinken."
     }
   }
