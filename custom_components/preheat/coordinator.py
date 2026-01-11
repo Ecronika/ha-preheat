@@ -716,8 +716,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
             if not state or state.state in ("unavailable", "unknown"):
                 is_stale = True
-            elif state.last_changed:
-                 age = (dt_util.utcnow() - state.last_changed).total_seconds()
+            elif state.last_updated:
+                 age = (dt_util.utcnow() - state.last_updated).total_seconds()
 
                  if age > 21600: # 6h
                      is_stale = True
