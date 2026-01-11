@@ -33,6 +33,8 @@ from .const import (
     DEFAULT_COMFORT_FALLBACK,
     CONF_ENABLE_OPTIMAL_STOP,
     CONF_SCHEDULE_ENTITY,
+    CONF_MAX_PREHEAT_HOURS,
+    DEFAULT_MAX_HOURS,
 )
 
 # Centralized Option Definitions (Key -> {selector, default})
