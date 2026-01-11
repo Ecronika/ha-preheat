@@ -291,8 +291,8 @@ class PatternDetector:
             if not x.get("dst_flag", False)
         ]
         
-        # 2. Gate
-        if len(valid_minutes) < 3:
+        # 2. Gate based on shared constant
+        if len(valid_minutes) < MIN_CLUSTER_POINTS:
             return None # Insufficient Data
             
         # 3. Sort
