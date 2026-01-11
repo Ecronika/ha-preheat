@@ -211,6 +211,10 @@ class LearnedDepartureProvider(SessionEndProvider):
         # But our recorder uses 'departure time' weekday. So Tue 02:00 is recorded as Tue (1).
         # So we should look up Tue (1) history.
         
+        # If we had a prediction...
+        predicted_minutes = None
+        predicted_conf = 0.0
+        
         scheduled_end = context.get("scheduled_end")
         if scheduled_end:
             # A. Anchored Mode (Schedule Active)
