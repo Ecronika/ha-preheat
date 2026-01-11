@@ -79,6 +79,42 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 3
 
+    def _build_entity_schema(self, include_name=False, include_profile=False, defaults=None):
+        """Build reusable entity selection schema."""
+        defaults = defaults or {}
+        schema_dict = {}
+        
+        if include_name:
+            schema_dict[vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Intelligent Preheat"))] = str
+        
+        # Core Entities
+        schema_dict.update({
+            vol.Required(CONF_OCCUPANCY, default=defaults.get(CONF_OCCUPANCY)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="binary_sensor")
+            ),
+            vol.Required(CONF_CLIMATE, default=defaults.get(CONF_CLIMATE)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="climate")
+            ),
+            vol.Optional(CONF_TEMPERATURE, default=defaults.get(CONF_TEMPERATURE, vol.UNDEFINED)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "input_number"])
+            ),
+            vol.Optional(CONF_WEATHER_ENTITY, default=defaults.get(CONF_WEATHER_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="weather")
+            ),
+        })
+        
+        # Profile Selection (Setup only)
+        if include_profile:
+            schema_dict[vol.Required(CONF_HEATING_PROFILE, default=defaults.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW))] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=list(HEATING_PROFILES.keys()),
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    translation_key="heating_profile"
+                )
+            )
+        
+        return vol.Schema(schema_dict)
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         errors = {}
@@ -127,29 +163,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # We use explicit defaults or empty for new setup
         defaults = user_input or {}
         
-        schema = vol.Schema({
-             vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Intelligent Preheat")): str,
-             vol.Required(CONF_OCCUPANCY, default=defaults.get(CONF_OCCUPANCY)): selector.EntitySelector(
-                 selector.EntitySelectorConfig(domain="binary_sensor")
-             ),
-             vol.Required(CONF_CLIMATE, default=defaults.get(CONF_CLIMATE)): selector.EntitySelector(
-                 selector.EntitySelectorConfig(domain="climate")
-             ),
-             vol.Optional(CONF_TEMPERATURE, default=defaults.get(CONF_TEMPERATURE, vol.UNDEFINED)): selector.EntitySelector(
-                 selector.EntitySelectorConfig(domain=["sensor", "input_number"])
-             ),
-             # Valve Position Removed (Strictly Option)
-             vol.Optional(CONF_WEATHER_ENTITY, default=defaults.get(CONF_WEATHER_ENTITY, vol.UNDEFINED)): selector.EntitySelector(
-                 selector.EntitySelectorConfig(domain="weather")
-             ),
-             vol.Required(CONF_HEATING_PROFILE, default=defaults.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=list(HEATING_PROFILES.keys()),
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                    translation_key="heating_profile"
-                )
-             ),
-        })
+        schema = self._build_entity_schema(include_name=True, include_profile=True, defaults=defaults)
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
@@ -175,21 +189,8 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Pre-fill
         data = {**entry.data, **entry.options}
         
-        data_schema = vol.Schema({
-            vol.Required(CONF_OCCUPANCY): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="binary_sensor")
-            ),
-            vol.Required(CONF_CLIMATE): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="climate")
-            ),
-            vol.Optional(CONF_TEMPERATURE): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["sensor", "input_number"])
-            ),
-            vol.Optional(CONF_WEATHER_ENTITY): selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="weather")
-            ),
-            # No Valve Here - Accessed via Options
-        })
+        # Reconfigure Schema (No Name, No Profile)
+        data_schema = self._build_entity_schema(include_name=False, include_profile=False, defaults=data)
 
         return self.async_show_form(
             step_id="reconfigure", 
