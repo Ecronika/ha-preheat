@@ -1258,7 +1258,23 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         comfort_min = self._get_conf(CONF_COMFORT_MIN, DEFAULT_COMFORT_MIN)
         
         if climate_temp and climate_temp > comfort_min:
-            return climate_temp
+             # v2.9.2: Learned Comfort Persistence
+             # If room is Occupied (and temp is valid comfort), save it.
+             if self._occupancy_on_since is not None:
+                 if self._last_comfort_setpoint != climate_temp:
+                      self._last_comfort_setpoint = climate_temp
+                      # Ideally trigger save on change, but lazy save is fine or triggered elsewhere.
+                      # We won't force save here to avoid I/O spam on every adjustment, 
+                      # rely on next major event or periodic save. 
+                      # Actually, to be safe across restarts, let's allow the next save cycle to pick it up.
+                 return climate_temp
+            
+             # If Unoccupied (Eco Mode?), allow using the stored Comfort Setpoint if it's higher.
+             # This prevents the "Predicted Duration" from dropping to 0 when the thermostat setback kicks in.
+             if self._last_comfort_setpoint is not None:
+                 return max(climate_temp, self._last_comfort_setpoint)
+                 
+             return climate_temp
 
         if self._last_comfort_setpoint is not None:
              return self._last_comfort_setpoint

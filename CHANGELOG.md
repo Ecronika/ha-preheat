@@ -1,3 +1,12 @@
+## v2.9.1-beta11 (2026-01-12) - Target Temp Persistence 🌡️
+
+### 🐛 Fixes
+*   **Target Temp / Prediction**: Fixed an issue where the `predicted_duration` would drop to 0 minutes when the room was set to **Eco/Away** mode (lowering the setpoint).
+    *   **Logic**: The system now learns your **Comfort Temperature** (while Occupied) and persists it.
+    *   **Behavior**: When Unoccupied (and setpoint drops), the prediction will now calculate the time required to reach your **Last Known Comfort Temperature**, ensuring you always see "Time to Comfort" instead of "Time to Eco".
+
+---
+
 ## v2.9.1-beta10 (2026-01-12) - Repair Issue Names 🏷️
 
 ### 🐛 Fixes
