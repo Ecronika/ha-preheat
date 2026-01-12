@@ -214,6 +214,7 @@ class LearnedDepartureProvider(SessionEndProvider):
         # If we had a prediction...
         predicted_minutes = None
         predicted_conf = 0.0
+        predicted_end = None
         
         scheduled_end = context.get("scheduled_end")
         if scheduled_end:

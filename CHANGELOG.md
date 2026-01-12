@@ -1,3 +1,10 @@
+## v2.9.1-beta8 (2026-01-12) - Bugfix: Unbound Variable 🐛
+
+### 🐛 Fixes
+*   **Fixed UnboundLocalError 'predicted_end'**: Fixed a crash that occurred when the system tried to predict a session end in "Anchored Mode" (when a Schedule is active) but had no historical data for that day.
+
+---
+
 ## v2.9.1-beta7 (2026-01-12) - Predicted Duration Stability 📉
 
 ### 🐛 Fixes
