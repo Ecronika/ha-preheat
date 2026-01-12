@@ -311,7 +311,7 @@
       "description": "Historische Daten der v1 wurden konvertiert. Die Genauigkeit kann anfangs reduziert sein. Nutze 'Historie analysieren', um die Daten aus dem Recorder neu aufzubauen."
     },
     "weather_setup_failed": {
-      "title": "Wetter-Entit\u00e4t nicht verf\u00fcgbar",
+      "title": "Wetter-Entit\u00e4t nicht verf\u00fcgbar ({name})",
       "description": "Die konfigurierte Wetter-Entit\u00e4t `{weather_entity}` f\u00fcr die Zone `{zone_name}` antwortet nicht oder existiert nicht. Bitte \u00fcberpr\u00fcfe deine Konfiguration."
     },
     "duration_limit_exceeded": {
@@ -327,31 +327,31 @@
       "description": "Die Physik-Engine wurde in v2.7.1 aktualisiert. Ihre Heizhistorie ({samples} Sitzungen) wurde beibehalten, aber Isolationsdaten wurden auf Profil-Standardwerte zur\u00fcckgesetzt. Das System lernt Au\u00dfeneinfl\u00fcsse \u00fcber die n\u00e4chsten 5-10 Heizzyklen neu.\n\nKeine Handlung erforderlich. [Mehr erfahren]({learn_more_url})"
     },
     "forecast_stale": {
-      "title": "Wetterdaten veraltet (>2 Std.)",
+      "title": "Wetterdaten veraltet in {name}",
       "description": "Der Cache der Wettervorhersage hat sich seit \u00fcber 2 Stunden nicht aktualisiert. Die Simulation nutzt veraltete Daten.\n\n**H\u00e4ufige Ursachen:**\n- API-Limit des Wetteranbieters erreicht.\n- Internet-Verbindungsprobleme."
     },
     "weather_quality": {
       "description": "Die Wetter-Integration liefert keine stündlichen Vorhersagen. Das System greift auf {type}-Daten zurück, die interpoliert werden. Dies verringert die Präzision der Physik-Simulation. Bitte beachten Sie, dass die Vorheizzeiten ungenauer sein können.",
-      "title": "Geringe Vorhersage-Qualität ({type})"
+      "title": "Geringe Vorhersage-Qualität ({type}) in {name}"
     },
     "valve_saturation": {
-      "title": "Ventil ges\u00e4ttigt (>95% f\u00fcr 3 Std.)",
+      "title": "Ventil ges\u00e4ttigt in {name}",
       "description": "Das Ventil ist seit \u00fcber 3 Stunden zu >95% ge\u00f6ffnet. Der Raum erreicht die Zieltemperatur nur schwer.\n\n**M\u00f6gliche Ursachen:**\n- Fenster offen (W\u00e4rmeverlust).\n- Heizk\u00f6rper unterdimensioniert oder Vorlauf zu kalt.\n- Sensor falsch platziert."
     },
     "physics_limit_mass_min": {
-      "title": "Thermische Masse am Minimum (1.0)",
+      "title": "Thermische Masse am Minimum in {name}",
       "description": "Das Modell hat das Minimum (1.0) erreicht. Der Raum heizt sich viel schneller auf als physikalisch erwartet.\n\n**M\u00f6gliche Ursachen:**\n- Temperatursensor ist zu nah an der Heizquelle (misst lokale W\u00e4rme, nicht den Raum).\n- Raum ist extrem klein oder extrem gut isoliert.\n- 'Standard Thermische Masse' im Profil ist zu niedrig eingestellt.\n\n**Aktueller Wert:** {current}"
     },
     "physics_limit_mass_max": {
-      "title": "Thermische Masse am Maximum",
+      "title": "Thermische Masse am Maximum in {name}",
       "description": "Das Modell hat das Maximum erreicht. Der Raum heizt sich viel langsamer auf als erwartet.\n\n**M\u00f6gliche Ursachen:**\n- Ventil \u00f6ffnet nicht vollst\u00e4ndig (Defekt oder blockiert).\n- Temperatursensor ist verdeckt oder isoliert.\n- Heizleistung reicht nicht f\u00fcr die Raumgr\u00f6\u00dfe.\n\n**Aktueller Wert:** {current}"
     },
     "physics_limit_loss_max": {
-      "title": "Thermischer Verlust extrem hoch",
+      "title": "Thermischer Verlust extrem hoch in {name}",
       "description": "Das Modell erkennt extremen W\u00e4rmeverlust. Der Raum k\u00fchlt sehr schnell aus.\n\n**M\u00f6gliche Ursachen:**\n- Fenster ist dauerhaft offen oder undicht.\n- Au\u00dfentemperatur-Sensor zeigt viel w\u00e4rmere Werte als die Realit\u00e4t (Delta wird untersch\u00e4tzt).\n- Isolation ist extrem schlecht.\n\n**Aktueller Wert:** {current}"
     },
     "zombie_schedule": {
-      "title": "Zeitplan hat keine Ereignisse",
+      "title": "Zeitplan hat keine Ereignisse ({name})",
       "description": "Optimal Stop ist aktiviert, aber der konfigurierte Zeitplan hat keine zuk\u00fcnftigen Ereignisse (next_event fehlt).\n\n**Auswirkung:** Das System wei\u00df nicht, wann Sie gehen, daher wird 'Optimal Stop' nie aktiv.\n\n**L\u00f6sung:** F\u00fcgen Sie Ereignisse zum Zeitplan-Helfer hinzu oder nutzen Sie Input Datetime Entit\u00e4ten."
     },
     "stale_sensor": {

@@ -1,3 +1,10 @@
+## v2.9.1-beta10 (2026-01-12) - Repair Issue Names 🏷️
+
+### 🐛 Fixes
+*   **Repair Issues**: Added missing **Device Name** to repair issue titles (e.g., "Valve Saturated in Office", "Thermal Mass Limit in Living Room"). This makes it much easier to identify which zone is affected when multiple issues are reported.
+
+---
+
 ## v2.9.1-beta9 (2026-01-12) - Zero Duration Glitch Fix 2 📉
 
 ### 🐛 Fixes
