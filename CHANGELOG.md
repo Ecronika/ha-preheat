@@ -1,3 +1,10 @@
+## v2.9.1-beta9 (2026-01-12) - Zero Duration Glitch Fix 2 📉
+
+### 🐛 Fixes
+*   **Imoroved "Zero Duration" Fix**: Added a plausibility check. If the room is clearly too cold (> 0.5°C difference), the system will refuse to accept a "0 minutes" heating duration (which usually indicates a calculation error or data glitch) and instead hold the last valid value.
+
+---
+
 ## v2.9.1-beta8 (2026-01-12) - Bugfix: Unbound Variable 🐛
 
 ### 🐛 Fixes

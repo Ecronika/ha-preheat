@@ -1546,6 +1546,13 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 uncapped_duration = raw_duration
                 predicted_duration = min(raw_duration, max_dur_minutes)
 
+            # Sanity Check (v2.9.1): If we clearly need heat (Delta > 0.5K), duration shouldn't be zero.
+            # This catches glitches in Forecast/Physics that result in transient 0 values.
+            if predicted_duration == 0 and delta_in > 0.5:
+                 if self._last_predicted_duration > 0:
+                      _LOGGER.debug("Implausible zero duration (Delta %.1f). Holding last value %.1f", delta_in, self._last_predicted_duration)
+                      predicted_duration = self._last_predicted_duration
+
             # Persist for next error cycle
             self._last_predicted_duration = predicted_duration
             
