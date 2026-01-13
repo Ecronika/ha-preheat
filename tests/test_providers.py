@@ -139,7 +139,7 @@ class TestLearnedProvider(unittest.TestCase):
     def test_gates_blocking(self):
         """Test gates block the decision."""
         # Fix: Mock predict_departure to return None (no prediction) so unpacking is skipped
-        self.planner.patterns.predict_departure.return_value = None
+        self.planner.detector.predict_departure.return_value = None
         
         # Context has 10 min savings (Limit 15) and 0.5 Tau (Limit 0.6)
         # Assuming constants in providers.py are: MIN_SAVINGS=15, MIN_TAU=0.6
@@ -153,7 +153,8 @@ class TestLearnedProvider(unittest.TestCase):
         
     def test_gates_passing(self):
         """Test gates pass."""
-        self.planner.patterns.predict_departure.return_value = None
+        # Fix: Return valid prediction (minutes, confidence) checks against Thresholds
+        self.planner.detector.predict_departure.return_value = (100, 1.0)
         
         self.context["potential_savings"] = 30.0
         self.context["tau_confidence"] = 0.9

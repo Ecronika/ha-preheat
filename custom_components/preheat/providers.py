@@ -260,6 +260,19 @@ class LearnedDepartureProvider(SessionEndProvider):
                       if isinstance(pred_result, (tuple, list)) and len(pred_result) == 2:
                           _, predicted_conf = pred_result
 
+        # Gate Checks (v2.7 Shadow Logic)
+        if savings < GATE_MIN_SAVINGS_MIN:
+            gates_failed.append(GATE_FAIL_SAVINGS)
+            gate_inputs["savings"] = savings
+            
+        if tau_conf < GATE_MIN_TAU_CONF:
+            gates_failed.append(GATE_FAIL_TAU)
+            gate_inputs["tau_confidence"] = tau_conf
+            
+        if predicted_conf < GATE_MIN_PATTERN_CONF:
+            gates_failed.append(GATE_FAIL_PATTERN)
+            gate_inputs["pattern_confidence"] = predicted_conf
+
         # Validity Logic
         valid = (len(gates_failed) == 0) and (predicted_end is not None)
         

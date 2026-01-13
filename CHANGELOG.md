@@ -1,3 +1,9 @@
+## v2.9.1-beta12
+- **Fix (Critical):** Resolved `LearnedDepartureProvider` crash when Schedule is missing (fallback for `potential_savings`).
+- **Fix (Logic):** Restored Gate Check logic (Savings & Confidence) in Learned Provider.
+- **Fix (Pattern):** Relaxed filtering to allow DST-flagged departures if they are the only data available (prevents "Unknown setpoint" errors).
+- **Internal:** Comprehensive unit test fixes for Rollover, Safety, and Migration modules.
+
 ## v2.9.1-beta11 (2026-01-12) - Target Temp Persistence 🌡️
 
 ### 🐛 Fixes

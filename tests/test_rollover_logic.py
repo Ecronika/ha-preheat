@@ -21,6 +21,10 @@ class TestRolloverLogic(unittest.TestCase):
         self.mock_dt = self.patcher.start()
         self.mock_dt.as_local.side_effect = lambda x: x 
         
+        # Patch Planner dt_util too
+        self.patcher_planner = patch("custom_components.preheat.planner.dt_util", self.mock_dt)
+        self.patcher_planner.start() 
+        
         self.planner = PreheatPlanner()
         # Mock Detector
         self.planner.detector = MagicMock()
@@ -29,6 +33,7 @@ class TestRolloverLogic(unittest.TestCase):
         
     def tearDown(self):
         self.patcher.stop()
+        self.patcher_planner.stop()
 
     def test_autonomous_overnight_rollover(self):
         """
@@ -38,10 +43,15 @@ class TestRolloverLogic(unittest.TestCase):
         """
         now = datetime(2025, 1, 1, 23, 0, 0, tzinfo=timezone.utc)
         # Prediction: 120 minutes (02:00)
-        self.planner.detector.predict_departure.return_value = (120, 1.0)
+        # Fix: Mock find_clusters_v2 for Autonomous Mode (get_next_predicted_departure)
+        mock_cluster = MagicMock()
+        mock_cluster.time_minutes = 120
+        self.planner.detector.find_clusters_v2.return_value = [mock_cluster]
         
         # History setup (dummy)
-        self.planner.history_departure[now.weekday()] = [{"minutes": 120}]
+        # We need history for TOMORROW (rollover day) for the planner to find the event
+        next_day_weekday = (now.weekday() + 1) % 7
+        self.planner.history_departure[next_day_weekday] = [{"minutes": 120}]
         
         context = {
             "now": now,
@@ -64,8 +74,14 @@ class TestRolloverLogic(unittest.TestCase):
         """
         now = datetime(2025, 1, 1, 17, 30, 0, tzinfo=timezone.utc)
         # Prediction: 17*60 = 1020 minutes
-        self.planner.detector.predict_departure.return_value = (1020, 1.0)
-        self.planner.history_departure[now.weekday()] = [{"minutes": 1020}]
+        # Fix: Mock find_clusters_v2
+        mock_cluster = MagicMock()
+        mock_cluster.time_minutes = 1020
+        self.planner.detector.find_clusters_v2.return_value = [mock_cluster]
+        
+        # Determine next day weekday
+        next_day_weekday = (now.weekday() + 1) % 7
+        self.planner.history_departure[next_day_weekday] = [{"minutes": 1020}]
         
         context = {
             "now": now,
@@ -76,9 +92,8 @@ class TestRolloverLogic(unittest.TestCase):
         
         decision = self.provider.get_decision(context)
         
-        # Expected: Jan 1st 17:00 (Today)
-        # 17:30 - 17:00 = 30min < 12h -> No Rollover
-        expected = datetime(2025, 1, 1, 17, 0, 0, tzinfo=timezone.utc)
+        # Expected: Next valid departure is Tomorrow 17:00 (since Today 17:00 is past)
+        expected = datetime(2025, 1, 2, 17, 0, 0, tzinfo=timezone.utc)
         self.assertEqual(decision.session_end, expected)
 
     def test_anchored_schedule(self):

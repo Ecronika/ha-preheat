@@ -285,12 +285,12 @@ class PatternDetector:
         """
         # 1. Filter
         # Exclude DST flagged entries (unreliable transitions)
-        valid_minutes = [
-            x["minutes"] 
-            for x in history 
-            # Relaxed Filter (v2.9.1): Allow DST flagged points if they are the only data we have.
-            # Ideally we would check quality, but for now we consume everything to avoid "Unknown" state.
-        ]
+        # v2.9.1: Allow DST flagged points if they are the only data we have.
+        valid_minutes = [x["minutes"] for x in history if not x.get("dst_flag")]
+        
+        if not valid_minutes:
+             # Fallback: Consume everything to avoid "Unknown" state (Relaxed Filter)
+             valid_minutes = [x["minutes"] for x in history]
         
         # 2. Gate based on shared constant
         if len(valid_minutes) < MIN_CLUSTER_POINTS:

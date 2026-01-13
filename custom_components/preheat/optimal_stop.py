@@ -154,6 +154,17 @@ class OptimalStopManager:
             if effective_end.hour == 0 and effective_end.minute == 0 and effective_end.second == 0:
                  _LOGGER.debug("Session ends at Midnight. Disabling Optimal Stop to ensure continuity.")
                  effective_end = None # Disable
+
+        # Detect if the target session jumped significantly into the future
+        # while we are still active (Zombie State prevention).
+        if self._active and self.session_end and effective_end:
+            # If the new target is > 90 minutes later than the old target
+            delta = (effective_end - self.session_end).total_seconds()
+            if delta > 5400: # 90 Minutes
+                 _LOGGER.info("Optimal Stop RESET: Session End jumped forward by %.1fh. New session detected.", delta / 3600)
+                 self._active = False
+                 self._reason = "session_changed"
+                 # We continue processing to allow re-latching on the new session if applicable
         
         if effective_end is None:
             # Schedule is OFF, Prediction invalid, or Midnight Wrap

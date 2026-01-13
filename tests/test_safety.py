@@ -160,6 +160,10 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
              patch("custom_components.preheat.coordinator.OptimalStopManager"), \
              patch("custom_components.preheat.coordinator.async_track_state_change_event"):
              
+            # Manually inject dt_util to ensure coordinator uses our mock
+            import custom_components.preheat.coordinator
+            custom_components.preheat.coordinator.dt_util = mock_dt
+            
             self.coordinator = PreheatingCoordinator(self.hass, self.entry)
             
             # Configure Planner Mock deeply
@@ -182,6 +186,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
             self.coordinator.physics.mass_factor = 20.0
             self.coordinator.physics.get_confidence.return_value = 50.0
             self.coordinator.physics.calculate_duration.return_value = 30.0 # 30 mins
+            self.coordinator.physics.calculate_energy_savings.return_value = 0.0 # Fix NoneType error
 
 
         self.coordinator._startup_time = dt_util.utcnow() - timedelta(hours=2)
@@ -192,6 +197,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
             m.state = "unknown"
             m.attributes = {}
             m.last_changed = dt_util.utcnow() # Default to now (mocked)
+            m.last_updated = m.last_changed # Fix for AttributeError in stale checks
             
             if entity_id == "sensor.temp":
                  m.state = "20.0"
@@ -211,6 +217,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         self.coordinator._stop_preheat = AsyncMock()
         # Removed: self.coordinator._check_diagnostics = AsyncMock() - Need this to run!
         self.coordinator.planner.get_next_scheduled_event = MagicMock(return_value=None)
+        self.coordinator.planner.get_next_predicted_departure = MagicMock(return_value=None)
         
     async def test_frost_protection_triggers_when_disabled(self):
         """Test that frost protection overrides disabled state."""
@@ -223,6 +230,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         mock_temp_state = MagicMock()
         mock_temp_state.state = "4.0"
         mock_temp_state.last_changed = dt_util.utcnow()
+        mock_temp_state.last_updated = mock_temp_state.last_changed
         self.hass.states.get.return_value = mock_temp_state
         
         # Mock other dependencies
@@ -247,6 +255,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         mock_temp_state = MagicMock()
         mock_temp_state.state = "6.0"
         mock_temp_state.last_changed = dt_util.utcnow()
+        mock_temp_state.last_updated = mock_temp_state.last_changed
         self.hass.states.get.return_value = mock_temp_state
 
         # Mock Safe Temp (6.0 C)
@@ -271,14 +280,14 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         # Call: self.coordinator._get_conf(key, default)
         # args: (key, default)
         
-        def side_effect_class_get_conf(self, key, default=None):
+        test_self = self
+        def side_effect_class_get_conf(key, default=None):
              if key == CONF_TEMPERATURE:
-
                   return None
              if key == CONF_CLIMATE:
                   return "climate.test_stale"
-             # Use self.coordinator from closer context
-             return self.coordinator.entry.options.get(key, self.coordinator.entry.data.get(key, default))
+             # Use test_self.coordinator
+             return test_self.coordinator.entry.options.get(key, test_self.coordinator.entry.data.get(key, default))
         
         with patch.object(PreheatingCoordinator, '_get_conf', side_effect=side_effect_class_get_conf):
              # Clear Side Effect so return_value works
@@ -295,6 +304,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
              stale_state = MagicMock(spec=State)
              stale_state.state = "heat"
              stale_state.last_changed = stale_ts
+             stale_state.last_updated = stale_ts
              stale_state.attributes = {"current_temperature": 20}
              self.hass.states.get.return_value = stale_state
              

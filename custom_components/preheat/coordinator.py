@@ -1839,9 +1839,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             
             
             # Forward Schedule Data to Shadow (Proxy for v2.7)
-            # Pass None if 0.0 to allow LearnedProvider to skip 'savings gate'
+            # Pass 0.0 if None to allow LearnedProvider to run (will fail savings gate)
             s_savings = sched_decision.predicted_savings
-            context["potential_savings"] = s_savings if s_savings and s_savings > 0 else None
+            context["potential_savings"] = s_savings if s_savings and s_savings > 0 else 0.0
             context["scheduled_end"] = sched_decision.session_end
             learned_decision = self.learned_provider.get_decision(context)
             
