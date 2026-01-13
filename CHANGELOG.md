@@ -1,3 +1,7 @@
+## v2.9.1-beta13
+- **Fix (Critical):** Enabled Deadtime Learning by correctly populating the history buffer during preheat cycles.
+  - Previously, the buffer remained empty, causing Deadtime to stick to default values (0 or 15).
+
 ## v2.9.1-beta12
 - **Fix (Critical):** Resolved `LearnedDepartureProvider` crash when Schedule is missing (fallback for `potential_savings`).
 - **Fix (Logic):** Restored Gate Check logic (Savings & Confidence) in Learned Provider.

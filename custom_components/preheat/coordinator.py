@@ -1765,6 +1765,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 now, operative_temp, outdoor_temp, is_heating_now,
                 window_open=self._window_open_detected
             )
+            
+            # Fix V2.9.1: Populate History Buffer for Deadtime Learning
+            # We must record continuously to capture the start event (Inactive -> Active)
+            self.history_buffer.append(HistoryPoint(
+                timestamp=now.timestamp(),
+                temp=operative_temp,
+                valve=v_pos if v_pos is not None else (1.0 if is_heating_now else 0.0),
+                is_active=self._preheat_active or is_heating_now
+            ))
+            
             if now.minute % 30 == 0:
                  self.cooling_analyzer.analyze()
 
