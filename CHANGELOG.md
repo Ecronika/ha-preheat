@@ -1,3 +1,28 @@
+## v2.9.1 (2026-01-14) - The Reliability Update 🛡️
+**Stable Release**
+
+This release marks the completion of the "Autonomous Engine" overhaul. It consolidates 13 beta iterations focusing on **Physics Accuracy**, **Planner Robustness**, and **Bootstrap Speed**.
+
+### 🌟 Key Highlights
+*   **Physics Fixed**: **Deadtime Learning** is now fully active. The system correctly populates its history buffer during heating, allowing it to learn the exact "Totzeit" (deadtime) of your radiators/floor heating.
+*   **Planner V3**: A complete rewrite of the history management logic ("The Planner"). It is now timezone-safe, strictly typed, and self-healing (auto-prunes corrupt data).
+*   **Instant Bootstrap**: Installing this version triggers a **Retroactive History Scan**. It reads your Home Assistant Recorder history to learn your habits *immediately*, eliminating the week-long "Cold Start" phase.
+*   **Eco-Mode Compatible**: The prediction logic now persists your "Comfort Temperature". If you switch your thermostat to Eco/Away, the system still calculates the correct preheat time to reach *Comfort* (instead of dropping to 0 minutes).
+
+### 🐛 Critical Fixes
+*   **Optimal Stop**: Fixed a timing bug where the "Coast-to-Vacancy" stop time was calculated relative to *Arrival* instead of *Departure*.
+*   **Zero Glitch**: Fixed an issue where transient sensor errors caused predicted duration to flash "0 minutes".
+*   **Midnight Filter**: Solved "Unknown" sensor states by implementing smart fallbacks when the Schedule entity returns ambiguous midnight dates.
+
+### 🧹 Beta History (Merged)
+*   **beta13**: Fix Deadtime Learning (Buffer Population).
+*   **beta12**: Restore Logic Gates & Fix Crash on Missing Schedule.
+*   **beta11**: Target Temperature Persistence.
+*   **beta6-10**: Optimal Stop Timing & Glitch Fixes.
+*   **beta1-5**: Planner Refactor & Bootstrap Logic.
+
+---
+
 ## v2.9.1-beta13
 - **Fix (Critical):** Enabled Deadtime Learning by correctly populating the history buffer during preheat cycles.
   - Previously, the buffer remained empty, causing Deadtime to stick to default values (0 or 15).
