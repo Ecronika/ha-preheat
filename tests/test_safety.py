@@ -123,7 +123,7 @@ from homeassistant.util import dt as dt_util
 
 # System Under Test
 from custom_components.preheat.coordinator import PreheatingCoordinator, PreheatData
-from custom_components.preheat.const import CONF_OCCUPANCY, CONF_CLIMATE, CONF_TEMPERATURE, DOMAIN
+from custom_components.preheat.const import CONF_OCCUPANCY, CONF_CLIMATE, CONF_TEMPERATURE, DOMAIN, CONF_OUTDOOR_TEMP, CONF_MAX_COAST_HOURS
 
 class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -142,9 +142,15 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         self.entry.data = {
             CONF_CLIMATE: "climate.test",
             CONF_TEMPERATURE: "sensor.temp",
-            CONF_OCCUPANCY: "binary_sensor.occ"
+            CONF_OCCUPANCY: "binary_sensor.occ",
+            CONF_OUTDOOR_TEMP: "sensor.outside"
         }
-        self.entry.options = {}
+        self.entry.options = {
+            CONF_CLIMATE: "climate.test",
+            CONF_TEMPERATURE: "sensor.temp",
+            CONF_OCCUPANCY: "binary_sensor.occ",
+            CONF_MAX_COAST_HOURS: 2.0
+        }
         
         self.hass.state = "RUNNING" # Mock State as String for simple check
         
@@ -158,12 +164,19 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         with patch("custom_components.preheat.coordinator.PreheatPlanner") as MockPlanner, \
              patch("custom_components.preheat.coordinator.Store"), \
              patch("custom_components.preheat.coordinator.OptimalStopManager"), \
-             patch("custom_components.preheat.coordinator.async_track_state_change_event"):
+             patch("custom_components.preheat.coordinator.OptimalStopManager"), \
+             patch("custom_components.preheat.coordinator.async_track_state_change_event"), \
+             patch("custom_components.preheat.diagnostics.async_create_issue"), \
+             patch("custom_components.preheat.diagnostics.async_delete_issue"):
              
             # Manually inject dt_util to ensure coordinator uses our mock
             import custom_components.preheat.coordinator
             custom_components.preheat.coordinator.dt_util = mock_dt
             
+            # Also inject for diagnostics to fix module-level import issues in 'discover'
+            import custom_components.preheat.diagnostics
+            custom_components.preheat.diagnostics.dt_util = mock_dt
+
             self.coordinator = PreheatingCoordinator(self.hass, self.entry)
             
             # Configure Planner Mock deeply
@@ -179,13 +192,13 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
             planner_instance.last_pattern_result = p_res
             self.coordinator.planner = planner_instance
             
-            # Physics Mock
+            # Mock Physics
             self.coordinator.physics = MagicMock()
-            self.coordinator.physics.sample_count = 10
-            self.coordinator.physics.avg_error = 2.0
+            self.coordinator.physics.calculate_duration.return_value = 60.0 # 1 hour
             self.coordinator.physics.mass_factor = 20.0
+            self.coordinator.physics.loss_factor = 5.0
+            self.coordinator.physics.deadtime = 10.0
             self.coordinator.physics.get_confidence.return_value = 50.0
-            self.coordinator.physics.calculate_duration.return_value = 30.0 # 30 mins
             self.coordinator.physics.calculate_energy_savings.return_value = 0.0 # Fix NoneType error
 
 
@@ -309,30 +322,42 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
              self.hass.states.get.return_value = stale_state
              
              # Ensure diagnostics dict is ready
-             self.coordinator.diagnostics_data["stale_sensor_counter"] = 0
+             self.coordinator.diagnostics.data["stale_sensor_counter"] = 0
              
-             with patch("custom_components.preheat.coordinator.async_create_issue") as mock_issue:
+             with patch("custom_components.preheat.diagnostics.async_create_issue") as mock_issue:
                   # Ensure outdoor temp is mocked so we don't trip 'no_outdoor_source'
                   self.coordinator._get_outdoor_temp_current = AsyncMock(return_value=10.0)
                   
                   # First Pass (Counter -> 1)
-                  await self.coordinator._check_diagnostics()
+                  # Mock Context & Prediction
+                  ctx = {
+                      "operative_temp": 18.0, 
+                      "target_setpoint": 20.0, 
+                      "forecasts": [], 
+                      "is_occupied": True,
+                      "outdoor_temp": 10.0,
+                      "valve_position": 0.0,
+                      "preheat_active": False
+                  }
+                  pred = {"limit_exceeded": False, "predicted_duration": 60}
+                  
+                  await self.coordinator.diagnostics.check_all(ctx, self.coordinator.physics, None, pred)
                   mock_issue.assert_not_called()
-                  self.assertEqual(self.coordinator.diagnostics_data["stale_sensor_counter"], 1)
+                  self.assertEqual(self.coordinator.diagnostics.data["stale_sensor_counter"], 1)
                   
                   # Advance time to bypass Rate Limit (3600s)
                   # Advance by 1 hr + 1 sec
                   mock_dt.utcnow.return_value += timedelta(seconds=3660)
                   
                   # Second Pass (Counter -> 2 -> Error)
-                  await self.coordinator._check_diagnostics()
+                  await self.coordinator.diagnostics.check_all(ctx, self.coordinator.physics, None, pred)
                   
-                  self.assertEqual(self.coordinator.diagnostics_data["stale_sensor_counter"], 2)
+                  self.assertEqual(self.coordinator.diagnostics.data["stale_sensor_counter"], 2)
                   
                   from unittest.mock import ANY
                   from homeassistant.helpers.issue_registry import async_create_issue
                   
-                  async_create_issue.assert_any_call(
+                  mock_issue.assert_any_call(
                       self.hass, DOMAIN, f"stale_sensor_{self.entry.entry_id}",
                       is_fixable=False, is_persistent=True, severity=ANY, 
                       translation_key="stale_sensor", translation_placeholders=ANY

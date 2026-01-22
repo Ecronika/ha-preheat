@@ -160,8 +160,14 @@ class TestCoordinatorArbitration(unittest.TestCase):
         self.coord.cooling_analyzer.learned_tau = 3.0
         self.coord.cooling_analyzer.confidence = 0.5
         self.coord.physics = MagicMock()
-        self.coord.physics.deadtime = 15.0
+        self.coord.physics.deadtime = 10.0
+        
+        # Mock Weather
+        self.coord.weather_service = MagicMock()
+        self.coord.weather_service.get_average_temp.return_value = 10.0
+        self.coord.weather_service.get_forecasts = AsyncMock(return_value=[])
         self.coord.physics.mass_factor = 20.0
+        self.coord.physics.loss_factor = 5.0
         self.coord.physics.sample_count = 10
         self.coord.physics.avg_error = 2.0
         self.coord.physics.get_confidence.return_value = 20
@@ -263,7 +269,7 @@ class TestCoordinatorArbitration(unittest.TestCase):
         
         self.assertEqual(trace["schema_version"], 1)
         self.assertIn("evaluated_at", trace)
-        self.assertIn("providers", trace)
+        self.assertIn("provider_candidates", trace)
 
     def test_shadow_safety_metrics(self):
         """Test that safety violations are counted in Shadow Mode."""

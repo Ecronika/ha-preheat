@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.9.1"
+VERSION = "2.9.2-beta1"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -237,3 +237,13 @@ GATE_FAIL_TAU: Final = "low_tau_conf"
 GATE_FAIL_PATTERN: Final = "low_pattern_conf"
 GATE_FAIL_LATCH: Final = "setpoint_latch"
 GATE_FAIL_MANUAL: Final = "manual_hold"
+
+# --- Architecture Constants (Professionalization) ---
+DIAG_STALE_SENSOR_SEC: Final = 21600 # 6 hours
+DIAG_MAX_VALVE_POS: Final = 95.0
+FROST_PROTECTION_TEMP: Final = 5.0
+FROST_HYSTERESIS: Final = 0.5
+WINDOW_OPEN_GRADIENT: Final = -0.4 # K
+WINDOW_OPEN_TIME: Final = 4.5 # Minutes
+WINDOW_COOLDOWN_MIN: Final = 30
+STARTUP_GRACE_SEC: Final = 1800

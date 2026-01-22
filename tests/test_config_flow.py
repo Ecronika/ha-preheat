@@ -47,6 +47,12 @@ class MockConfigFlow:
     def __init_subclass__(cls, **kwargs):
         pass
 
+    async def async_set_unique_id(self, unique_id: str | None = None, raise_on_progress: bool = True) -> None:
+        pass
+
+    def _abort_if_unique_id_configured(self, updates: dict | None = None) -> None:
+        pass
+
 class MockOptionsFlow:
     """Shim for OptionsFlow."""
     def __init__(self, config_entry):

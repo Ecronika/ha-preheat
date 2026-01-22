@@ -98,7 +98,7 @@ class TestAdaptivePolling(unittest.IsolatedAsyncioTestCase):
         if not hasattr(self.coord, "_update_polling_interval"):
             self.skipTest("_update_polling_interval not implemented yet")
 
-        self.coord._update_polling_interval(self.coord.data)
+        self.coord._update_polling_interval(self.coord.data.next_start_time, self.coord.data.is_occupied)
         self.assertEqual(self.coord.update_interval, timedelta(minutes=5))
         
         # 2. Occupied: User Present
@@ -109,7 +109,7 @@ class TestAdaptivePolling(unittest.IsolatedAsyncioTestCase):
             next_arrival=None, predicted_duration=0, mass_factor=20, loss_factor=5, learning_active=True,
             is_occupied=True, window_open=False
         )
-        self.coord._update_polling_interval(data_occ)
+        self.coord._update_polling_interval(data_occ.next_start_time, data_occ.is_occupied)
         self.assertEqual(self.coord.update_interval, timedelta(minutes=1))
         
         # 3. Preheat Active
@@ -118,8 +118,10 @@ class TestAdaptivePolling(unittest.IsolatedAsyncioTestCase):
             next_arrival=None, predicted_duration=0, mass_factor=20, loss_factor=5, learning_active=True,
             is_occupied=False, window_open=False
         )
-        self.coord._update_polling_interval(data_active)
+        self.coord._preheat_active = True # Sync internal state
+        self.coord._update_polling_interval(data_active.next_start_time, data_active.is_occupied)
         self.assertEqual(self.coord.update_interval, timedelta(minutes=1))
+        self.coord._preheat_active = False # Reset
 
         # 4. Window Open
         data_win = PreheatData(
@@ -127,8 +129,10 @@ class TestAdaptivePolling(unittest.IsolatedAsyncioTestCase):
             next_arrival=None, predicted_duration=0, mass_factor=20, loss_factor=5, learning_active=True,
             is_occupied=False, window_open=True
         )
-        self.coord._update_polling_interval(data_win)
+        self.coord._window_open_detected = True # Sync internal state
+        self.coord._update_polling_interval(data_win.next_start_time, data_win.is_occupied)
         self.assertEqual(self.coord.update_interval, timedelta(minutes=1))
+        self.coord._window_open_detected = False # Reset
         
         # 5. Approaching Start (< 2 hours)
         # 1 hour away
@@ -141,7 +145,7 @@ class TestAdaptivePolling(unittest.IsolatedAsyncioTestCase):
                 next_arrival=None, predicted_duration=0, mass_factor=20, loss_factor=5, learning_active=True,
                 is_occupied=False, window_open=False
             )
-            self.coord._update_polling_interval(data_soon)
+            self.coord._update_polling_interval(data_soon.next_start_time, data_soon.is_occupied)
             self.assertEqual(self.coord.update_interval, timedelta(minutes=1))
             
             # 3 hours away -> Idle (5 min)
@@ -151,7 +155,7 @@ class TestAdaptivePolling(unittest.IsolatedAsyncioTestCase):
                 next_arrival=None, predicted_duration=0, mass_factor=20, loss_factor=5, learning_active=True,
                 is_occupied=False, window_open=False
             )
-            self.coord._update_polling_interval(data_far)
+            self.coord._update_polling_interval(data_far.next_start_time, data_far.is_occupied)
             self.assertEqual(self.coord.update_interval, timedelta(minutes=5))
 
 if __name__ == '__main__':

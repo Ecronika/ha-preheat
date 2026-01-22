@@ -1,6 +1,6 @@
 """Tests for planner.py refactoring (Robustness & Golden Tests)."""
 import pytest
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, date, time, timezone
 from unittest.mock import MagicMock, patch
 
 
@@ -136,7 +136,7 @@ def test_history_pruning_limits(planner):
     
     # Call Prune (TARGET behavior)
     # Patch now to ensure deterministic age calculation (though we test count here)
-    fixed_now = datetime(2023, 1, 26, 12, 0, 0, tzinfo=dt_util.UTC)
+    fixed_now = datetime(2023, 1, 26, 12, 0, 0, tzinfo=timezone.utc)
     with patch("custom_components.preheat.planner.dt_util.now", return_value=fixed_now):
         planner.prune_all_history() 
     
@@ -169,7 +169,7 @@ def test_lookahead_regression(planner):
     
     # Now is Monday (2023-10-02)
     # Next Friday is 2023-10-06 (4 days away)
-    now = datetime(2023, 10, 2, 8, 0, 0, tzinfo=dt_util.UTC)
+    now = datetime(2023, 10, 2, 8, 0, 0, tzinfo=timezone.utc)
     
     with patch("custom_components.preheat.planner.dt_util.now", return_value=now):
         with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
@@ -207,7 +207,7 @@ def test_get_next_scheduled_event_golden(planner):
     }
     
     # Case 1: Sunday Night (2023-10-01 20:00). Next is Mon 08:00.
-    now = datetime(2023, 10, 1, 20, 0, 0, tzinfo=dt_util.UTC) # Sunday
+    now = datetime(2023, 10, 1, 20, 0, 0, tzinfo=timezone.utc) # Sunday
     
     # Expected: Mon Oct 2nd, 08:00 LOCAL.
     # Note: Planner uses local time for matching.
@@ -228,7 +228,7 @@ def test_get_next_scheduled_event_golden(planner):
             assert result.minute == 0
     
     # Case 2: Mon Morning (07:00). Next is Mon 08:00 (Today).
-    now_mon = datetime(2023, 10, 2, 7, 0, 0, tzinfo=dt_util.UTC)
+    now_mon = datetime(2023, 10, 2, 7, 0, 0, tzinfo=timezone.utc)
     with patch("custom_components.preheat.planner.dt_util.now", return_value=now_mon):
         with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
             result = planner.get_next_scheduled_event(now_mon)
@@ -236,7 +236,7 @@ def test_get_next_scheduled_event_golden(planner):
             assert result.hour == 8
 
     # Case 3: Mon Afternoon (09:00). Next is Tue 09:00.
-    now_mon_late = datetime(2023, 10, 2, 9, 0, 0, tzinfo=dt_util.UTC)
+    now_mon_late = datetime(2023, 10, 2, 9, 0, 0, tzinfo=timezone.utc)
     with patch("custom_components.preheat.planner.dt_util.now", return_value=now_mon_late):
         with patch("custom_components.preheat.planner.dt_util.as_local", side_effect=lambda x: x):
             result = planner.get_next_scheduled_event(now_mon_late)

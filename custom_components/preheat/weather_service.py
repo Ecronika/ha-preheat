@@ -4,12 +4,14 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 import logging
-import sys # Added for debug
+
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import event as event_helper
 from homeassistant.util import dt as dt_util
+
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,6 +71,8 @@ class WeatherService:
             
             # 2. Fetch Fresh
             return await self._fetch_fresh_forecast()
+
+
 
     async def _fetch_fresh_forecast(self) -> list[dict] | None:
         """Call API with fallback strategy."""

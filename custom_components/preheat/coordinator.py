@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, date, time, timezone
 import logging
 from typing import Any, TYPE_CHECKING
 import math
-import random
+
 
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import storage
@@ -22,6 +22,13 @@ from homeassistant.const import STATE_ON, STATE_OFF
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
+
+from .math_preheat import root_find_duration
+from .weather_service import WeatherService
+from .planner import PreheatPlanner
+from .physics import ThermalPhysics
+from .optimal_stop import OptimalStopManager
+from .types import Context, Prediction, Decision
 
 from .const import (
     DOMAIN,
@@ -65,6 +72,7 @@ from .const import (
     DEFAULT_MAX_COAST_HOURS,
     DEFAULT_ARRIVAL_WINDOW_END,
     DEFAULT_DEBOUNCE_MIN,
+    DEFAULT_MAX_HOURS,
 
     ATTR_MODEL_MASS,
     ATTR_MODEL_LOSS,
@@ -108,7 +116,17 @@ from .const import (
     REASON_LOW_CONFIDENCE,
     REASON_BLOCKED_BY_GATES,
     REASON_INSUFFICIENT_DATA,
-    REASON_EXTERNAL_INHIBIT
+    REASON_BLOCKED_BY_GATES,
+    REASON_INSUFFICIENT_DATA,
+    REASON_EXTERNAL_INHIBIT,
+    # Architecture Constants
+    DIAG_STALE_SENSOR_SEC,
+    FROST_PROTECTION_TEMP,
+    FROST_HYSTERESIS,
+    STARTUP_GRACE_SEC,
+    WINDOW_OPEN_GRADIENT,
+    WINDOW_OPEN_TIME,
+    WINDOW_COOLDOWN_MIN
 )
 
 from .planner import PreheatPlanner
@@ -124,81 +142,9 @@ from .providers import (
     LearnedDepartureProvider,
     ProviderDecision
 )
+from .diagnostics import DiagnosticsManager
+from .session_manager import SessionManager
 
-class OccupancyDebouncer:
-    """
-    Session State Machine (v2.8).
-    Filters short 'flapping' (OFF->ON) to determine true session end.
-    """
-    def __init__(self, debounce_min: float, parent_coordinator: "PreheatingCoordinator"):
-        self._debounce_limit_sec = debounce_min * 60.0
-        self._coordinator = parent_coordinator
-        
-        # State
-        self._off_start_time: datetime | None = None
-        self._is_debouncing = False
-        self._last_committed_time: datetime | None = None
-        
-    def handle_change(self, new_state_on: bool, now: datetime) -> None:
-        """Called when occupancy sensor changes state."""
-        if not new_state_on:
-            # ON -> OFF (Potential Session End)
-            if not self._is_debouncing:
-                _LOGGER.debug("[Debounce] Session End Candidate? Starting timer (%.1f min). Off at: %s", 
-                              self._debounce_limit_sec/60, now)
-                self._off_start_time = now
-                self._is_debouncing = True
-        else:
-            # OFF -> ON (Flapping / Return)
-            if self._is_debouncing and self._off_start_time:
-                # RACE CONDITION CHECK:
-                # If OFF duration > Limit, but check() missed it (jitter), we MUST commit now before resetting!
-                elapsed = (now - self._off_start_time).total_seconds()
-                if elapsed >= self._debounce_limit_sec:
-                    _LOGGER.info("[Debounce] Race Condition Caught! Session actually ended before return. Committing.")
-                    self._commit_departure(self._off_start_time)
-                else:
-                    _LOGGER.debug("[Debounce] False Alarm (Flapping). Session continues. (Off duration: %.1fs)", elapsed)
-                
-                # Reset
-                self._is_debouncing = False
-                self._off_start_time = None
-
-    def _commit_departure(self, departure_time: datetime) -> None:
-        """Helper to commit and save."""
-        # Double-Commit Guard
-        if self._last_committed_time == departure_time:
-            _LOGGER.debug("[Debounce] Skipped duplicate commit for %s", departure_time)
-            return
-
-        self._coordinator.planner.record_departure(departure_time)
-        self._last_committed_time = departure_time
-        
-        # Throttled Save (Write Coalescing) - 10s delay to protect SD cards
-        if hasattr(self._coordinator._store, "async_delay_save"):
-             self._coordinator._store.async_delay_save(self._coordinator._get_data_for_storage, 10.0)
-        else:
-             # Fallback (should not happen on modern HA)
-             self._coordinator.hass.async_create_task(self._coordinator._async_save_data())
-                
-    async def check(self, now: datetime) -> None:
-        """Called periodically to check if debounce timer expired."""
-        if not self._is_debouncing or self._off_start_time is None:
-            return
-
-        elapsed = (now - self._off_start_time).total_seconds()
-        if elapsed >= self._debounce_limit_sec:
-            # TIMEOUT! It's a real departure.
-            final_departure_time = self._off_start_time
-            _LOGGER.info("[Debounce] Session End CONFIRMED. Departed at: %s (Latency: %.1fs)", 
-                         final_departure_time, elapsed)
-            
-            # Commit
-            self._commit_departure(final_departure_time)
-            
-            # Reset
-            self._is_debouncing = False
-            self._off_start_time = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -294,7 +240,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # V2.8: Session State Machine
         debounce_min = self._get_conf(CONF_DEBOUNCE_MIN, DEFAULT_DEBOUNCE_MIN)
-        self.occupancy_debouncer = OccupancyDebouncer(debounce_min, self)
+        self.session_manager = SessionManager(debounce_min, self)
         
         self.schedule_provider = ScheduleProvider(hass, entry, self.optimal_stop_manager)
         
@@ -316,7 +262,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # State
         self._preheat_started_at: datetime | None = None
         self._start_temp: float | None = None
-        self._occupancy_on_since: datetime | None = None
+        # self._occupancy_on_since: datetime | None = None # Moved to SessionManager
         self._preheat_active: bool = False
         self._frost_active: bool = False # Safety override (v2.9.1)
         self._last_opt_active: bool = False # Track edge for events
@@ -336,7 +282,15 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # Caching
         self._cached_outdoor_temp: float = 10.0
         self._last_weather_check: datetime | None = None
+        self._last_weather_check: datetime | None = None
         self.weather_service: WeatherService | None = None
+        weather_entity = self._get_conf(CONF_WEATHER_ENTITY)
+        if weather_entity:
+            from .weather_service import WeatherService
+            # Get Risk Mode for Forecast
+            # risk_mode = self._get_conf(CONF_RISK_MODE, RISK_BALANCED)
+            # WeatherService does not accept risk_mode currently.
+            self.weather_service = WeatherService(hass, weather_entity)
         
         # Shadow Metrics (In-Memory)
         self._shadow_metrics = {
@@ -351,21 +305,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._startup_time = dt_util.utcnow()
         
         # Diagnostics Persistence (v2.9.1)
-        self.diagnostics_data: dict[str, Any] = {
-            "last_sample_count": 0,
-            "last_sample_change": 0.0,
-            "hold_started_ts": None,
-            "inhibit_started_ts": None,
-            "occupancy_last_change_ts": 0.0,
-            "capped_events": [], # Rolling list of bools
-            "last_check_ts": 0.0,
-        }
+        # Moved to DiagnosticsManager, but we need to load it.
+        # Temp store for migration if needed, but Manager handles it.
+        self.diagnostics = DiagnosticsManager(hass, entry, self)
+        
+        self.decision_trace = {}
+        self._consecutive_failures = 0
         
         self.bootstrap_done = False
 
         
-        # v2.9.0-beta19: Anti-Flapping State
-        self._last_occupancy_off_time: datetime | None = None
+
 
         self._setup_listeners()
         
@@ -418,6 +368,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # 3. Fallback to code defaults
         return default
 
+
     async def async_load_data(self) -> None:
         """Load learned data from storage."""
         try:
@@ -428,36 +379,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 # Load History
                 history = data.get(ATTR_ARRIVAL_HISTORY, {})
                 # Migration from v1 keys if v2 missing?
-                if not history and "learned_arrivals" in data:
-                    _LOGGER.info("Migrating legacy arrival data with variance injection...")
-                    
-                    # Create Repair Issue
-                    async_create_issue(
-                        self.hass,
-                        DOMAIN,
-                        f"migration_v2_{self.entry.entry_id}",
-                        is_fixable=False,
-                        severity=IssueSeverity.WARNING,
-                        translation_key="data_migrated",
-                        translation_placeholders={"name": self.device_name}
-                    )
-                    
-                    # Legacy data format {weekday: average_min} provides insufficient granularity for clustering.
-                    # We inject simulated variance to seed the new history model.
-                    legacy = data["learned_arrivals"]
-                    history = {}
-                    for k, v in legacy.items():
-                        # v is the average arrival minute (e.g. 420 for 07:00)
-                        # Create 5 fake events with Gaussian-like spread (+- 15 mins)
-                        # to allow clustering to pick it up as a valid cluster.
-                        fake_events = []
-                        base_time = int(v)
-                        for _ in range(5):
-                            # Random +/- 15 mins
-                            offset = random.randint(-15, 15)
-                            simulated = max(0, min(1439, base_time + offset))
-                            fake_events.append(simulated)
-                        history[int(k)] = fake_events
+                # Legacy v1 warning removed (Architecture Professionalization)
+
                 
                 # v2.9.0 Fix: Include departure data (key "888") in planner initialization
                 # The planner's _load_history() expects "888" key in the passed dict.
@@ -508,10 +431,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 self.cooling_analyzer.confidence = data.get("cooling_confidence", 0.0)
                 
                 # V2.9.1 Load Diagnostics Data
+                # V2.9.1 Load Diagnostics Data
                 loaded_diag = data.get("diagnostics", {})
                 if loaded_diag:
                      # Merge to preserve defaults/types
-                     self.diagnostics_data.update(loaded_diag)
+                     self.diagnostics.load_data(loaded_diag)
                 
                 self._last_comfort_setpoint = data.get("last_comfort_setpoint")
                 
@@ -604,7 +528,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "cooling_confidence": self.cooling_analyzer.confidence,
             "enable_active": self.enable_active,
             # V2.9.1
-            "diagnostics": self.diagnostics_data,
+            "diagnostics": self.diagnostics.data,
             # V2.9.2
             "bootstrap_done": self.bootstrap_done,
         }
@@ -617,384 +541,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         except Exception as err:
             _LOGGER.error("Failed to save preheat data: %s", err)
 
-    async def _check_diagnostics(self) -> None:
-        """Run periodic health checks and create repair issues."""
-        # Rate Limit: Run max once per hour
-        now = dt_util.utcnow().timestamp()
-        last_check = self.diagnostics_data.get("last_check_ts", 0)
-        
-        # Debounce: If run recently (< 3600s) and not startup
-        boot_time = self._startup_time.timestamp()
-        uptime = now - boot_time
-        
-        # Guard: Grace Period on Startup (30 min)
-        # Guard: Grace Period
-        if uptime < 1800: # 30 min
-             return
-             
+    # Diagnostics moved to bottom to be near post_update_tasks
 
-        _LOGGER.debug("Running Diagnostics Check (Uptime: %.1f min)", uptime/60)
-        self.diagnostics_data["last_check_ts"] = now
-        
-        from homeassistant.helpers.issue_registry import async_create_issue, async_delete_issue, IssueSeverity
-        
-        # --- Helper for managing issues ---
-        def raise_issue(issue_slug: str, msg_key: str, severity: IssueSeverity, params: dict | None = None):
-             if params is None: params = {}
-             # UX Polish: Always inject zone name
-             if "name" not in params: params["name"] = self.device_name
-             
-             async_create_issue(
-                self.hass, DOMAIN, f"{issue_slug}_{self.entry.entry_id}",
-                is_fixable=False, is_persistent=True, severity=severity,
-                translation_key=msg_key, translation_placeholders=params
-             )
 
-        def clear_issue(issue_slug: str):
-             async_delete_issue(self.hass, DOMAIN, f"{issue_slug}_{self.entry.entry_id}")
-        
-        # --- 1. Physics Railing (Refined) ---
-        # Logic: Early warning (>15 samples) if confidence is decent (>25) OR Error is huge (>10 min)
-        # Prevents "Silent Failure" for months.
-        p = self.physics
-        s_count = p.sample_count
-        conf = p.get_confidence()
-        avg_err = p.avg_error
-        
-        is_railing = False
-        msg_key = None
-        current_val = 0.0
-        
-        # Threshold: 15 samples (approx 2 weeks)
-        # Condition: High Error (>10min) OR (Confidence > 25 AND Limit Hit)
-        if s_count > 15 and (avg_err > 10.0 or conf > 25):
-             if p.mass_factor <= p.min_mass:
-                 is_railing = True
-                 msg_key = "physics_limit_mass_min"
-                 current_val = p.mass_factor
-             elif p.mass_factor >= p.max_mass:
-                 is_railing = True
-                 msg_key = "physics_limit_mass_max"
-                 current_val = p.mass_factor
-             elif p.loss_factor >= 50.0:
-                 is_railing = True
-                 msg_key = "physics_limit_loss_max"
-                 current_val = p.loss_factor
-        
-        if is_railing:
-            raise_issue("physics_limit", msg_key, IssueSeverity.WARNING, {"current": f"{current_val:.1f}"})
-        else:
-            clear_issue("physics_limit")
-
-        # --- 2. Zombie Schedule ---
-        # Logic: EnableOptStop=True AND Schedule has no events
-        if self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
-            sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
-            if sched_ent and sched_ent.startswith("schedule."):
-                state = self.hass.states.get(sched_ent)
-                # Check for empty attributes
-                if state and not state.attributes.get("next_event"):
-                     raise_issue("zombie_schedule", "zombie_schedule", IssueSeverity.ERROR)
-                else:
-                     clear_issue("zombie_schedule")
-            else:
-                clear_issue("zombie_schedule")
-        else:
-            clear_issue("zombie_schedule")
-
-        # --- 3. Stale Sensor ---
-        # Logic: Unavailable OR > 6h no change. Requires 2 hits (Debounce).
-        temp_ent = self._get_conf(CONF_TEMPERATURE)
-        check_ent = temp_ent
-        
-        # Action 3.3b: Fallback to Climate Entity Check
-        if not check_ent:
-             check_ent = self._get_conf(CONF_CLIMATE)
-             
-        is_stale = False
-        if check_ent:
-            state = self.hass.states.get(check_ent)
-
-            if not state or state.state in ("unavailable", "unknown"):
-                is_stale = True
-            elif state.last_updated:
-                 age = (dt_util.utcnow() - state.last_updated).total_seconds()
-
-                 if age > 21600: # 6h
-                     is_stale = True
-                     
-            # Special Case: Climate entities might report state, but 'current_temperature' is None/null
-            if not is_stale and not temp_ent and check_ent:
-                 # We are relying on climate attributes
-                 curr_temp = state.attributes.get("current_temperature") if state else None
-
-                 if state and curr_temp is None:
-                      is_stale = True
-        
-        print(f"DEBUG: is_stale={is_stale}, counter={self.diagnostics_data.get('stale_sensor_counter', 0)}") # DEBUG
-        
-        # Debounce Logic
-        stale_counter = self.diagnostics_data.get("stale_sensor_counter", 0)
-        if is_stale:
-            stale_counter += 1
-        else:
-            stale_counter = 0
-        self.diagnostics_data["stale_sensor_counter"] = stale_counter
-        
-        if stale_counter >= 2:
-             raise_issue("stale_sensor", "stale_sensor", IssueSeverity.ERROR)
-        else:
-             clear_issue("stale_sensor")
-
-        # --- 4. Weather No Forecast (Advanced) ---
-        # Logic: Advanced Mode AND Cache Invalid
-        if self._get_conf(CONF_PHYSICS_MODE) == PHYSICS_ADVANCED:
-             # Check Service Cache
-             has_data = False
-             cache = self.weather_service.get_cached_forecast() if self.weather_service else None
-             if cache:
-                  has_data = True
-                  
-             _LOGGER.debug("Diagnostics [Weather]: Advanced Mode=True, HasData=%s, CacheSize=%s", has_data, len(cache) if cache else 0)
-              
-             if not has_data:
-                  raise_issue("weather_no_forecast", "weather_no_forecast", IssueSeverity.WARNING)
-             else:
-                  clear_issue("weather_no_forecast")
-             
-             # Check 11: No Weather Entity Configured
-             if not self._get_conf(CONF_WEATHER_ENTITY):
-                  raise_issue("adv_no_weather", "adv_no_weather", IssueSeverity.ERROR)
-             else:
-                  clear_issue("adv_no_weather")
-
-             # Check 8: Forecast Horizon Short
-             # We need to know if forecast covers now + max_coast
-             if has_data:
-                 cache = self.weather_service.get_cached_forecast()
-                 if cache:
-                     last_pt = cache[-1]["datetime"]
-                     max_coast = self._get_conf(CONF_MAX_COAST_HOURS, 4.0)
-                     needed = dt_util.utcnow() + timedelta(hours=max_coast)
-                     if last_pt < needed:
-                         raise_issue("forecast_short", "forecast_short", IssueSeverity.WARNING)
-                     else:
-                         clear_issue("forecast_short")
-                         
-             # Check 8.1: Forecast Quality (Fallback Used)
-             # Logic: If using interpolated data (daily/twice_daily), warn user about precision.
-             if has_data and self.weather_service.forecast_type_used != "hourly":
-                 f_type = self.weather_service.forecast_type_used
-                 if f_type != "none":
-                     raise_issue(
-                         "weather_quality", 
-                         "weather_quality", 
-                         IssueSeverity.WARNING, 
-                         {"type": f_type}
-                     )
-                 else:
-                     clear_issue("weather_quality")
-             else:
-                 clear_issue("weather_quality")
-
-        else:
-             clear_issue("weather_no_forecast")
-             clear_issue("adv_no_weather")
-             clear_issue("forecast_short")
-             clear_issue("weather_quality")
-
-        # --- 5. Occupancy Zombie (Refined) ---
-        # Logic: Adaptive Threshold. ON -> 7d (Homeoffice), OFF -> 3d (Suspicious)
-        occ_ent = self._get_conf(CONF_OCCUPANCY)
-        if occ_ent:
-            state = self.hass.states.get(occ_ent)
-            current_state_str = state.state if state else "unknown"
-            
-            # Update Timestamp if state changed
-            saved_state = self.diagnostics_data.get("last_occ_state")
-            if saved_state != current_state_str:
-                self.diagnostics_data["last_occ_state"] = current_state_str
-                self.diagnostics_data["occupancy_last_change_ts"] = now
-            
-            diff = now - self.diagnostics_data.get("occupancy_last_change_ts", now)
-            
-            # Adaptive Limit
-            limit = 604800 # Default 7 days
-            if current_state_str == STATE_OFF:
-                 limit = 259200 # 3 days if OFF (sensor dead?)
-            
-            if diff > limit:
-                # Differentiate message? Using generic for now.
-                raise_issue("occupancy_stale", "occupancy_stale", IssueSeverity.WARNING)
-            else:
-                clear_issue("occupancy_stale")
-
-        # --- 6. Hold/Inhibit Stuck ---
-        # Logic: > 24h
-        # Check Hold
-        is_hold = self.hold_active
-        if is_hold:
-            if not self.diagnostics_data.get("hold_started_ts"):
-                self.diagnostics_data["hold_started_ts"] = now
-            elif (now - self.diagnostics_data["hold_started_ts"]) > 86400:
-                raise_issue("hold_stuck", "hold_stuck", IssueSeverity.WARNING)
-        else:
-            self.diagnostics_data["hold_started_ts"] = None
-            clear_issue("hold_stuck")
-            
-        # Check Inhibit
-        is_inhib = self._external_inhibit or self._window_open_detected
-        if is_inhib:
-            if not self.diagnostics_data.get("inhibit_started_ts"):
-                self.diagnostics_data["inhibit_started_ts"] = now
-            elif (now - self.diagnostics_data["inhibit_started_ts"]) > 86400:
-                 raise_issue("inhibit_stuck", "inhibit_stuck", IssueSeverity.WARNING)
-        else:
-             self.diagnostics_data["inhibit_started_ts"] = None
-             clear_issue("inhibit_stuck")
-
-        # --- 7. Learning Stalled ---
-        # Logic: No samples > 7 days AND preheat was active
-        # We need to know if preheat WAS active. Best proxy: sample_count increased?
-        # If preheat runs, sample count increases. 
-        # So "Learning Stalled" = "Sample Count Static"
-        # User condition: "AND preheat_active occurred". We can't easily track that in history.
-        # Simplified: If sample count static > 7 days AND sample_count > 0 (it worked once).
-        curr_samp = p.sample_count
-        last_samp = self.diagnostics_data.get("last_sample_count", 0)
-        last_samp_ts = self.diagnostics_data.get("last_sample_change", now)
-        
-        if curr_samp != last_samp:
-            self.diagnostics_data["last_sample_count"] = curr_samp
-            self.diagnostics_data["last_sample_change"] = now
-            clear_issue("learning_stalled")
-        else:
-            if (now - last_samp_ts) > 604800 and curr_samp > 0:
-                raise_issue("learning_stalled", "learning_stalled", IssueSeverity.WARNING)
-            else:
-                clear_issue("learning_stalled")
-
-        # --- 9. Unit Mismatch ---
-        if temp_ent:
-            st = self.hass.states.get(temp_ent)
-            if st:
-                uorn = st.attributes.get("unit_of_measurement")
-                dc = st.attributes.get("device_class")
-                if uorn not in ("°C", "C", "c", "C°"):
-                    raise_issue("sensor_unit", "sensor_unit_mismatch", IssueSeverity.ERROR)
-                elif dc and dc != "temperature":
-                     raise_issue("sensor_unit", "sensor_unit_mismatch", IssueSeverity.ERROR)
-                else:
-                    clear_issue("sensor_unit")
-
-        # --- 10. Unrealistic Temps / Swapped (Refined) ---
-        # Check 1: Extreme values
-        # Check 2: Identical values (Swapped) - ONLY if Heating is OFF (otherwise divergence is expected)
-        outdoor_ent = self._get_conf(CONF_OUTDOOR_TEMP)
-        sanity_fail = False
-        msg_sanity = None
-        
-        if temp_ent:
-             ts = self.hass.states.get(temp_ent)
-             if ts and ts.state not in ("unavailable", "unknown"):
-                 try:
-                     val = float(ts.state)
-                     if val < -10 or val > 45:
-                         sanity_fail = True
-                         msg_sanity = "sanity_temp_extreme"
-                 except ValueError:
-                     pass # handled by stale check
-        
-        # Only start correlation check if heating is NOT active (prevent false positive)
-        # Note: We check _preheat_active and heat_demand
-        if not sanity_fail and outdoor_ent and temp_ent and not self._preheat_active:
-             ts_in = self.hass.states.get(temp_ent)
-             ts_out = self.hass.states.get(outdoor_ent)
-             if ts_in and ts_out:
-                  try:
-                      v_in = float(ts_in.state)
-                      v_out = float(ts_out.state)
-                      if abs(v_in - v_out) < 0.5: # Tighter threshold, 0.5K
-                          # Potential Swap. Requires persistence to be sure (12h).
-                          # We check 'sanity_swap_counter'
-                          ctr = self.diagnostics_data.get("sanity_swap_counter", 0)
-                          ctr += 1
-                          self.diagnostics_data["sanity_swap_counter"] = ctr
-                          if ctr > 12: # 12 checks = 12 hours
-                              sanity_fail = True
-                              msg_sanity = "sanity_temp_swap"
-                      else:
-                          self.diagnostics_data["sanity_swap_counter"] = 0
-                  except ValueError:
-                      pass
-        else:
-             # Reset counter if heating runs or diff is healthy
-             self.diagnostics_data["sanity_swap_counter"] = 0
-
-        if sanity_fail:
-             raise_issue("sanity_temp", msg_sanity, IssueSeverity.WARNING)
-        else:
-             clear_issue("sanity_temp")
-
-        # --- 12. No Outdoor Source ---
-        # If no weather and no outdoor sensor -> Error
-        if not self._get_conf(CONF_WEATHER_ENTITY) and not self._get_conf(CONF_OUTDOOR_TEMP):
-             raise_issue("no_outdoor_source", "no_outdoor_source", IssueSeverity.ERROR)
-        else:
-             clear_issue("no_outdoor_source")
-
-        # --- 13. Max Coast Capping ---
-        # Check rolling list
-        capped_evts = self.diagnostics_data.get("capped_events", [])
-        # Count True in last 10
-        if capped_evts and sum(1 for x in capped_evts if x) > 3:
-             # TODO: Differentiate reason if possible. For now generic.
-             raise_issue("coast_capped", "coast_capped", IssueSeverity.WARNING)
-        else:
-             clear_issue("coast_capped")
-
-        # --- 14. Forecast Data Stale (NEW) ---
-        # Logic: Forecast cache > 2 hours old?
-        if self.weather_service and self.weather_service._cache_ts:
-             age = now - self.weather_service._cache_ts.timestamp()
-             if age > 7200: # 2 hours
-                 raise_issue("forecast_stale", "forecast_stale", IssueSeverity.WARNING)
-             else:
-                 clear_issue("forecast_stale")
-        
-        # --- 15. Valve Saturation (NEW) ---
-        # Logic: Valve > 95% for > 3 hours
-        # Detects: Undersized heater or open window
-        valve_pos = self._get_valve_position()
-        is_saturated = False
-        if valve_pos is not None and valve_pos > 95:
-             ts_sat = self.diagnostics_data.get("valve_saturation_ts")
-             if not ts_sat:
-                 self.diagnostics_data["valve_saturation_ts"] = now
-             elif (now - ts_sat) > 10800: # 3h
-                 is_saturated = True
-        else:
-             self.diagnostics_data["valve_saturation_ts"] = None
-        
-        if is_saturated:
-             raise_issue("valve_saturation", "valve_saturation", IssueSeverity.WARNING)
-        else:
-             clear_issue("valve_saturation")
-
-        # --- 16. Max Coast High (TRV) ---
-        max_c = self._get_conf(CONF_MAX_COAST_HOURS, 4.0)
-        # Heuristic: Fast response system (Mass < 30) with long coast (>3h)
-        if max_c >= 3.0 and p.mass_factor < 30.0:
-             raise_issue("max_coast_high", "max_coast_high", IssueSeverity.WARNING)
-        else:
-             clear_issue("max_coast_high")
-
-        # --- 17. Tolerance Sanity ---
-        tol = self._get_conf(CONF_STOP_TOLERANCE, 0.5)
-        if tol < 0.1 or tol > 1.5:
-             raise_issue("tolerance_sanity", "tolerance_sanity", IssueSeverity.WARNING)
-        else:
-             clear_issue("tolerance_sanity")
 
 
     async def _check_bootstrap(self) -> None:
@@ -1007,20 +556,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             
         _LOGGER.debug("Checking Retroactive Bootstrap status...")
         
-        # 1. Migration Safety Check
+        # 1. Migration Safety Check (Legacy V1/V2 Logic Removed)
         # If we have ANY existing data, we assume the user has been running the system
         # and doesn't need a full history rescan (which takes time).
-        # We just mark it as done.
-        has_v2 = len(self.planner.history_v2) > 0
         has_v3 = len(self.planner.history) > 0
         
-        if has_v2 or has_v3:
+        if has_v3:
              # v2.9.0 Fix: If we have Arrivals but NO Departures, force a scan anyway.
-             # This populates the new "Learned Departures" feature for existing users.
              has_departures = any(len(entries) >= MIN_CLUSTER_POINTS for entries in self.planner.history_departure.values())
              if not has_departures:
                  _LOGGER.info("Existing Arrivals found, but sparse/missing Departures. Forcing Retroactive Scan...")
-                 # Detect if we should proceed (Fallthrough to scan)
              else:
                  _LOGGER.info("Existing learning data detected. Marking Bootstrap as DONE (Skipping scan).")
                  self.bootstrap_done = True
@@ -1152,33 +697,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         if old_state.state != STATE_ON and new_state.state == STATE_ON:
             # ARRIVAL (ON)
-            
-            # v2.9 Anti-Flapping: Check if we were gone long enough
-            # Logic: If off_duration < debounce_min, it's just a short break (e.g. Toilet).
-            debounce_min = self._get_conf(CONF_DEBOUNCE_MIN, DEFAULT_DEBOUNCE_MIN)
-            is_valid_new_session = True
-            
-            if self._last_occupancy_off_time:
-                off_duration = (now - self._last_occupancy_off_time).total_seconds() / 60.0
-                if off_duration < debounce_min:
-                    is_valid_new_session = False
-                    _LOGGER.debug("[Anti-Flapping] Ignored Arrival (Gap %.1f min < %.1f min). Maintaining previous session.", 
-                                  off_duration, debounce_min)
-            
-            self._occupancy_on_since = now
-            
-            if is_valid_new_session:
+            is_new_session = self.session_manager.update(True, now)
+            if is_new_session:
                  # Feed planner (Learns this as a Start Time)
                  self.hass.async_create_task(self._learn_arrival_event())
-            
-            # Always notify debouncer (Cancel departure timer)
-            self.occupancy_debouncer.handle_change(True, now)
         
         if old_state.state == STATE_ON and new_state.state != STATE_ON:
             # DEPARTURE (OFF)
-            self._occupancy_on_since = None
-            self._last_occupancy_off_time = now # Track valid OFF time
-            self.occupancy_debouncer.handle_change(False, now)
+            self.session_manager.update(False, now)
 
     async def _learn_arrival_event(self) -> None:
         now = dt_util.now()
@@ -1260,7 +786,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if climate_temp and climate_temp > comfort_min:
              # v2.9.2: Learned Comfort Persistence
              # If room is Occupied (and temp is valid comfort), save it.
-             if self._occupancy_on_since is not None:
+             if self.session_manager.is_occupied:
                  if self._last_comfort_setpoint != climate_temp:
                       self._last_comfort_setpoint = climate_temp
                       # Ideally trigger save on change, but lazy save is fine or triggered elsewhere.
@@ -1290,7 +816,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             return
 
         dt = (now - self._prev_temp_time).total_seconds() / 60.0
-        if dt < 4.5: return # Need at least 5 mins roughly, or keep accumulating? 
+        if dt < WINDOW_OPEN_TIME: return # Need at least X mins roughly, or keep accumulating? 
         # Update every 5 mins approx if loop is 1 min?
         
         delta = current_temp - self._prev_temp
@@ -1298,10 +824,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # Check Gradient
         # Heuristic: Drop > 0.5K in 5 mins
         newly_detected = False
-        if delta < -0.4: # Slightly sensitive
+        if delta < WINDOW_OPEN_GRADIENT: # Slightly sensitive
              _LOGGER.info("[%s] Window Open Detected! Gradient: %.2fK in %.1f min", self.device_name, delta, dt)
              self._window_open_detected = True
-             self._window_cooldown_counter = 30 # Paused for 30 mins
+             self._window_cooldown_counter = WINDOW_COOLDOWN_MIN # Paused for 30 mins
              newly_detected = True
         
         # Reset if counter active
@@ -1387,770 +913,366 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             return default_entity
         return None
 
+    # --------------------------------------------------------------------------
+    # Resilience & Error Handling
+    # --------------------------------------------------------------------------
+    def _build_error_state(self, reason: str) -> PreheatData:
+        """Return safe fallback state."""
+        _LOGGER.error("Update Cycle Error: %s", reason)
+        return PreheatData(False, None, None, 20.0, None, self._last_predicted_duration, 0, 0, False)
+
+    def _handle_update_error(self, err: Exception) -> PreheatData:
+        """Handle exceptions."""
+        _LOGGER.exception("Unexpected error in update: %s", err)
+        return self._build_error_state(str(err))
+
+    def _get_valve_position_with_fallback(self, fallback_mode: str = "active") -> float | None:
+        """Get valve position with context-aware fallback."""
+        pos = self._get_valve_position()
+        if pos is not None: return pos
+        if fallback_mode == "active" and self._preheat_active: return 100.0
+        elif fallback_mode == "none": return None
+        return 0.0
+
+    # --------------------------------------------------------------------------
+    # Refactored Main Loop & Helpers
+    # --------------------------------------------------------------------------
+
     async def _async_update_data(self) -> PreheatData:
-        """Main Loop."""
+        """Main Loop (Refactored)."""
         try:
-            await self._check_entity_availability(self._get_conf(CONF_TEMPERATURE), "temperature")
-            
-            now = dt_util.now()
-            
-            # Feed History Buffer (V3)
-            op_temp_raw = await self._get_operative_temperature()
-            valve_pos_raw = self._get_valve_position()
-            
-            # V2.8: Check Session End (Debounce)
-            # Use UTC to match internal debouncer logic
-            await self.occupancy_debouncer.check(dt_util.utcnow())
-            
-            if op_temp_raw > INVALID_TEMP:
-                 v_val = valve_pos_raw if valve_pos_raw is not None else (100.0 if self._preheat_active else 0.0)
-                 self.history_buffer.append(HistoryPoint(
-                     timestamp=now.timestamp(), 
-                     temp=op_temp_raw, 
-                     valve=v_val, 
-                     is_active=self._preheat_active
-                 ))
 
-            # 1. Get Next Arrival
-            blocked_dates = await self._get_blocked_dates_from_calendar(now)
+            ctx: Context = await self._collect_context()
+            if not ctx["is_sensor_ready"]:
+                 return self._build_error_state("Sensor Timeout / Unavailable")
 
-            allowed_weekdays = None
-            if self._get_conf(CONF_ONLY_ON_WORKDAYS, False):
-                 workday_sensor = self._get_effective_workday_sensor()
-                 if workday_sensor:
-                     state = self.hass.states.get(workday_sensor)
-                     # Check if sensor provides 'workdays' attribute (list of allowed days)
-                     if state and state.state != "unavailable":
-                         w_attr = state.attributes.get("workdays")
-                         if isinstance(w_attr, list):
-                             # Map ['mon', 'tue'] -> [0, 1]
-                             week_map = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
-                             allowed_weekdays = []
-                             for day_str in w_attr:
-                                 if str(day_str).lower() in week_map:
-                                     allowed_weekdays.append(week_map[str(day_str).lower()])
-                         else:
-                             # Fallback: Default to Mon-Fri if attribute missing but sensor exists
-                             _LOGGER.warning("Workday sensor %s missing 'workdays' attribute. Fallback to Mon-Fri.", workday_sensor)
-                             allowed_weekdays = [0, 1, 2, 3, 4]
-                     else:
-                          # Sensor unavailable/missing -> Fallback Mon-Fri
-                          # Reduce log level to INFO to avoid startup noise
-                          _LOGGER.info("Workday sensor %s not ready yet (state: %s). Fallback to Mon-Fri.", 
-                                       workday_sensor, state.state if state else "None")
-                          allowed_weekdays = [0, 1, 2, 3, 4]
-                 else:
-                     # Helper enabled but no sensor configured?! Fallback Mon-Fri
-                     allowed_weekdays = [0, 1, 2, 3, 4]
-
-            # Holiday Detection: If today is a holiday (Sensor OFF), start searching from TOMORROW
-            search_start_date = now
-            if allowed_weekdays is not None:
-                 # Re-fetch state (safe, cached)
-                 ws_conf = self._get_effective_workday_sensor()
-                 if ws_conf:
-                     ws_state = self.hass.states.get(ws_conf)
-                     if ws_state and ws_state.state == "off":
-                         _LOGGER.debug("Workday Sensor is OFF (Holiday). Skipping today for Next Arrival search.")
-                         search_start_date = now + timedelta(days=1)
-
-            next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays, blocked_dates=blocked_dates)
-            
-            # v2.6 Pattern Meta Extraction
-            p_res = self.planner.last_pattern_result
-            pattern_type = p_res.pattern_type if p_res else "none"
-            pattern_conf = p_res.confidence if p_res else 0.0
-            pattern_stab = p_res.stability if p_res else 0.0
-            detected_modes = p_res.modes_found if p_res else None
-            fallback_used = p_res.fallback_used if p_res else False
-            
-            # 2. Calculate Physics
-            operative_temp = op_temp_raw # Reuse
-            
-            # Update Gradient / Window Detection (approx every 5 min)
-            if operative_temp > INVALID_TEMP:
-                # We call it every minute logic, but internal it waits for elapsed time
-                self._track_temperature_gradient(operative_temp, now)
-
-            target_setpoint = await self._get_target_setpoint()
-            outdoor_temp = await self._get_outdoor_temp_current()
-            
-            if operative_temp <= INVALID_TEMP:
-                # Sensor error, bail out safe
-                # v2.9.1: Return last known duration to prevent graph glitches
-                return PreheatData(False, None, None, target_setpoint, next_event, self._last_predicted_duration, 0, 0, False)
-
-            # Delta Calculation
-            delta_in = target_setpoint - operative_temp
-            # delta_out = target_setpoint - outdoor_temp # Logic moved below
-            
-            # --- Forecast Integration (V2.4) ---
-            predicted_duration = 0.0
-            use_forecast = self._get_conf(CONF_USE_FORECAST, False)
-            weather_entity = self._get_conf(CONF_WEATHER_ENTITY)
-            forecasts = None
-            
-            if use_forecast and weather_entity:
-                if not self.weather_service or self.weather_service.entity_id != weather_entity:
-                    self.weather_service = WeatherService(self.hass, weather_entity)
-                
-                # Fetch Weather Data
-                forecasts = await self.weather_service.get_forecasts()
-                
-                # Diagnostic: Check for persistent weather failure
-                if forecasts is None:
-                    # If we are up for > 5 minutes and still fail:
-                    if (dt_util.utcnow() - self._startup_time).total_seconds() > 300:
-                         async_create_issue(
-                            self.hass,
-                            DOMAIN,
-                            f"weather_setup_failed_{self.entry.entry_id}",
-                            is_fixable=False,
-                            is_persistent=False,
-                            severity=IssueSeverity.WARNING,
-                            translation_key="weather_setup_failed",
-                            translation_placeholders={
-                                "weather_entity": self.weather_service.entity_id,
-                                "zone_name": self.device_name
-                            }
-                        )
-                else:
-                    # Success -> Clear issue
-                    async_delete_issue(
-                        self.hass, DOMAIN, f"weather_setup_failed_{self.entry.entry_id}"
-                    )
-            
-            if forecasts:
-                # ROOT FINDING LOGIC
-                risk_mode = self._get_conf(CONF_RISK_MODE, RISK_BALANCED)
-                
-                def _duration_eval(test_dur_min: float) -> float:
-                    # g(d) = calculated - d
-                    # If d=0, calc > 0. g(0) > 0.
-                    # We look for g(d) <= 0.
-                    if test_dur_min < 0: return 100.0
-                    
-                    # Window: Now -> Now + d
-                    win_end = now + timedelta(minutes=test_dur_min)
-                    
-                    # Effective Outdoor Temp
-                    t_out = math_preheat.calculate_risk_metric(forecasts, now, win_end, risk_mode)
-                    
-                    d_out = target_setpoint - t_out
-                    req = self.physics.calculate_duration(delta_in, d_out)
-                    return req - test_dur_min
-
-                # Fix v2.9.0-beta6: Use wider horizon to detect if limit is exceeded
-                # We search up to 12 hours. If result > max_preheat_hours, we warn the user.
-                uncapped_duration = math_preheat.root_find_duration(_duration_eval, 720)
-                
-                # Extrapolation Warning (Check based on what we would need)
-                if forecasts and (now + timedelta(minutes=uncapped_duration)) > forecasts[-1]["datetime"]:
-                     if uncapped_duration > 15: # Ignore trivial
-                        _LOGGER.warning("Forecast extrapolation active (> 50% window). Prediction may be inaccurate.")
-                
-                # Assign explicitly for logic usage (Capped by User Limit)
-                max_dur_minutes = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0) * 60
-                predicted_duration = min(uncapped_duration, max_dur_minutes)
-            
-            else:
-                # Classic Logic
-                delta_out = target_setpoint - outdoor_temp 
-                raw_duration = self.physics.calculate_duration(delta_in, delta_out)
-                
-                max_dur_minutes = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0) * 60
-                uncapped_duration = raw_duration
-                predicted_duration = min(raw_duration, max_dur_minutes)
-
-            # Sanity Check (v2.9.1): If we clearly need heat (Delta > 0.5K), duration shouldn't be zero.
-            # This catches glitches in Forecast/Physics that result in transient 0 values.
-            if predicted_duration == 0 and delta_in > 0.5:
-                 if self._last_predicted_duration > 0:
-                      _LOGGER.debug("Implausible zero duration (Delta %.1f). Holding last value %.1f", delta_in, self._last_predicted_duration)
-                      predicted_duration = self._last_predicted_duration
-
-            # Persist for next error cycle
-            self._last_predicted_duration = predicted_duration
-            
-            # -----------------------------------
-            
-            # Smart Diagnostic: Check if duration exceeds limit
-            # We compare the UNCAPPED requirement vs the limit.
-            # Only warn if we actually have a target event scheduled.
-            if next_event and uncapped_duration > (max_dur_minutes + 30):
-                # We need more time than allowed!
-                async_create_issue(
-                    self.hass, DOMAIN, f"limit_exceeded_{self.entry.entry_id}",
-                    is_fixable=False, 
-                    severity=IssueSeverity.WARNING,
-                    translation_key="duration_limit_exceeded",
-                    translation_placeholders={
-                        "predicted": f"{uncapped_duration/60:.1f}",
-                        "limit": f"{max_dur_minutes/60:.1f}",
-                        "name": self.device_name
-                    },
-                )
-            else:
-                 # Clear if resolved
-                 async_delete_issue(self.hass, DOMAIN, f"limit_exceeded_{self.entry.entry_id}")
-            
-            # 3. Decision Logic
-            start_time = None
-            should_start = None # None=Idle/Evaluating, True=Start, False=Blocked
-            
-            if next_event:
-                # Add Buffer
-                buffer = self._get_conf(CONF_BUFFER_MIN, 10)
-                start_time = next_event - timedelta(minutes=predicted_duration + buffer)
-                
-                # Earliest Start Check
-                earliest_min = self._get_conf(CONF_EARLIEST_START, 180) # e.g. 03:00
-                earliest_dt = next_event.replace(hour=0, minute=0, second=0) + timedelta(minutes=earliest_min)
-                
-                if start_time < earliest_dt:
-                    start_time = earliest_dt
-                
-                # Check Triggers
-                # Trigger preheat if within the active window (Start Time <= Now < Arrival).
-                if start_time <= now < next_event:
-                     should_start = True
-            
-            # 4. Decison Logic (Should we start?)
-            # -----------------------------------
-            blocked_reasons = [] # Collect all blocking reasons
-            # should_start decision flows from Step 3. Do NOT reset it here.
-
-            # Master Switch
-            if not self.enable_active:
-                # ACTION 3.3 A: FROST PROTECTION Override
-                # If disabled, but temp < 5.0 °C, force ON for safety.
-                is_frost_danger = operative_temp < 5.0 and operative_temp > INVALID_TEMP
-                
-                if is_frost_danger:
-                    if not self._frost_active:
-                         _LOGGER.warning("FROST PROTECTION ACTIVATED! Temp %.1f < 5.0. Forcing Preheat.", operative_temp)
-                         self._frost_active = True
-                    
-                    # Force decision to start/continue
-                    should_start = True
-                    blocked_reasons = [] # Clear blocks
-                    print(f"DEBUG: Frost Protection Active! should_start=True") # DEBUG
-                    
-                else:
-                    self._frost_active = False
-                    blocked_reasons.append("disabled")
-                    should_start = False
-            else:
-                 self._frost_active = False # Reset if manually enabled
-            
-            # Occupancy (User is Home)
-            occ_sensor = self._get_conf(CONF_OCCUPANCY)
-            is_occupied = False
-            if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
-                is_occupied = True
-                should_start = False
-                print(f"DEBUG: Occupancy Block! should_start=False") # DEBUG
-            
-            # Window Open
-            if self._window_open_detected:
-                blocked_reasons.append("window_open")
-                should_start = False
-                print(f"DEBUG: Window Block! should_start=False") # DEBUG
-
-            # Don't start if warm (Comfort reached)
-            # This is "Control Logic", not "Blocking". 
-            if self._get_conf(CONF_DONT_START_IF_WARM, True):
-                if delta_in < 0.2: should_start = False
-                
-            # Internal Hold Switch
-            if self.hold_active:
-                 blocked_reasons.append("hold")
-                 should_start = False
-
-            # External Inhibit / Lock
-            lock = self._get_conf(CONF_LOCK)
-            if lock:
-                 if self.hass.states.is_state(lock, STATE_ON):
-                      blocked_reasons.append(REASON_EXTERNAL_INHIBIT)
-                      should_start = False
-                 
-            # Calendar / Holiday (Already checked in Step 1?)
-            # blocked_dates was fetched earlier.
-            if now.date() in blocked_dates:
-                 blocked_reasons.append("holiday")
-                 should_start = False
-
-            # Workday Sensor Override (Fix for Issue: Starting on Holidays)
-            if self._get_conf(CONF_ONLY_ON_WORKDAYS, False):
-                 wd_ent = self._get_conf(CONF_WORKDAY)
-                 if wd_ent:
-                      wd_state = self.hass.states.get(wd_ent)
-                      # If Workday Sensor is explicitly 'off', it is a holiday/weekend -> BLOCK.
-                      if wd_state and wd_state.state == "off":
-                           if should_start: # Log only if it WOULD have started
-                                _LOGGER.debug("Preheat BLOCKED by Workday Sensor (State: Off)")
-                           blocked_reasons.append("workday_sensor")
-                           should_start = False
-
-            # Missing Schedule (Logic Gap)
-            if next_event is None and not blocked_reasons and should_start is None:
-                # If we don't know when to start, and nothing else blocked us.
-                # Technically not "blocked", just "idle".
-                pass
-
-
-
-            # 5. Actuate
-            if should_start and not self._preheat_active:
-                await self._start_preheat(operative_temp)
-            
-            elif self._preheat_active:
-                # Stop conditions
-                # 1. Target reached
-                if delta_in <= 0.2: # Comfortable
-                    await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp)
-                # 2. User came home
-                elif is_occupied:
-                    # User came home. Stop preheat, but ALLOW learning (aborted=False).
-                    # If we generated some heat (DeltaT > 0.2), we want to account for it.
-                    # This fixes the "Preheat starts too late -> User arrives -> Data discarded -> Loop" issue.
-                    _LOGGER.info("User arrived during preheat. Stopping and attempting to learn from partial run.")
-                    await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=False)
-                # 3. Timeout
-                elif self._preheat_started_at:
-                    max_hours = self._get_conf(CONF_MAX_PREHEAT_HOURS, 3.0)
-                    runtime = (dt_util.utcnow() - self._preheat_started_at).total_seconds() / 3600
-                    if runtime > max_hours:
-                        _LOGGER.info("Preheat timed out (>%.1fh). Stopping (with learning).", max_hours)
-                        # We allow learning here! If we ran for Max Hours and got some rise, 
-                        # we want the model to know it was too slow (it will learn a higher Mass Factor).
-                        await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=False)
-                # 4. Window Open
-                elif self._window_open_detected:
-                     await self._stop_preheat(operative_temp, target_setpoint, outdoor_temp, aborted=True)
-
-            # V2.9.1 Diagnostics Check (Debounced inside)
-            await self._check_diagnostics()
-
-            # Comfort Learning (Update Setpoint preference)
-            await self._update_comfort_learning(target_setpoint, is_occupied)
-
-            # --- V2.5 Optimal Stop Logic ---
-            opt_active = False
-            opt_time = None
-            opt_reason = "disabled"
-            savings_total = 0.0
-            savings_remaining = 0.0
-            
-            # Helper to get HVAC Action
-            is_heating_now = False
-            climate_ent = self._get_conf(CONF_CLIMATE)
-            if climate_ent:
-                 c_state = self.hass.states.get(climate_ent)
-                 if c_state and c_state.attributes.get("hvac_action") == "heating":
-                      is_heating_now = True
-            v_pos = self._get_valve_position()
-            if v_pos is not None and v_pos > 0: is_heating_now = True
-            if self._preheat_active: is_heating_now = True
-
-            # --- V3.0 Provider Arbitration & Optimal Stop ---
-            
-            # 1. Update Cooling Analyzer (Always needed for logic/gates)
-            # Legacy: Was only inside Optimal Stop block. Safe to run always (passive).
-            session_end_legacy = None
-            if self.session_resolver:
-                 session_end_legacy = self.session_resolver.get_current_session_end()
-
-            self.cooling_analyzer.add_data_point(
-                now, operative_temp, outdoor_temp, is_heating_now,
-                window_open=self._window_open_detected
-            )
-            
-            # Fix V2.9.1: Populate History Buffer for Deadtime Learning
-            # We must record continuously to capture the start event (Inactive -> Active)
-            self.history_buffer.append(HistoryPoint(
-                timestamp=now.timestamp(),
-                temp=operative_temp,
-                valve=v_pos if v_pos is not None else (1.0 if is_heating_now else 0.0),
-                is_active=self._preheat_active or is_heating_now
-            ))
-            
-            if now.minute % 30 == 0:
-                 self.cooling_analyzer.analyze()
-
-            # 2. Prepare Context
-            context = {
-                "now": now,
-                "operative_temp": operative_temp,
-                "target_setpoint": target_setpoint,
-                "forecasts": forecasts, # Scope from above
-                "tau_hours": self.cooling_analyzer.learned_tau,
-                "physics_deadtime": self.physics.deadtime,
-                "outdoor_temp": outdoor_temp,
-                # Shadow Inputs
-                 "tau_confidence": self.cooling_analyzer.confidence,
-                 "pattern_confidence": pattern_conf
-            }
-
-            # 3. Provider Query
-            # 3. Provider Query (Schedule / Static Timestamp)
-            sched_ent = self._get_conf(CONF_SCHEDULE_ENTITY)
-            sched_decision = None
-            scheduled_end = None
-            
-            # Case A: Schedule Entity (Standard)
-            if sched_ent and sched_ent.startswith("schedule."):
-                sched_decision = self.schedule_provider.get_decision(context)
-                scheduled_end = sched_decision.session_end
-            
-            # Case B: Timestamp Entity (input_datetime or sensor)
-            elif sched_ent:
-                # We replicate a "Virtual Schedule" decision
-                state = self.hass.states.get(sched_ent)
-                if state and state.state not in ("unavailable", "unknown"):
-                    ts = None
-                    # Is it a timestamp?
-                    try:
-                        # input_datetime usually has timestamp attribute if full date, or we interpret time
-                        if "timestamp" in state.attributes and state.attributes["timestamp"]:
-                             ts = dt_util.utc_from_timestamp(state.attributes["timestamp"])
-                        else:
-                             ts = dt_util.parse_datetime(state.state)
-                        
-                        if ts:
-                            # If it's just time, assume today/tomorrow?
-                            # input_datetime with only time returns 1970-01-01 usually?
-                            # For simplicity, assume user provides full datetime or we handle naive time later.
-                            # Actually, parse_datetime handles ISO.
-                            
-                            # Valid Timestamp found. Check if it's in the future.
-                            if ts > now:
-                                 scheduled_end = ts
-                                 # Fake a decision
-                                 from .providers import ProviderDecision
-                                 sched_decision = ProviderDecision(
-                                     should_stop=False,
-                                     session_end=ts,
-                                     is_valid=True,
-                                     is_shadow=False,
-                                     confidence=1.0
-                                 )
-                    except Exception as e:
-                        _LOGGER.warning("Failed to parse timestamp from %s: %s", sched_ent, e)
-
-            # Case C: No Schedule (Fallback to None)
-            if not sched_decision:
-                 # Default empty decision using ProviderDecision directly if needed, or rely on defaults
-                 # Actually, calling schedule_provider.get_decision with empty context returns a safe default?
-                 # Better: Use the provider properly.
-                 sched_decision = self.schedule_provider.get_decision(context)
-            
-            scheduled_end = sched_decision.session_end
-            
-            
-            # Forward Schedule Data to Shadow (Proxy for v2.7)
-            # Pass 0.0 if None to allow LearnedProvider to run (will fail savings gate)
-            s_savings = sched_decision.predicted_savings
-            context["potential_savings"] = s_savings if s_savings and s_savings > 0 else 0.0
-            context["scheduled_end"] = sched_decision.session_end
-            learned_decision = self.learned_provider.get_decision(context)
-            
-            # 4. Arbitration & Effective Departure
-            selected_provider = PROVIDER_NONE
-            valid_providers = []
-            invalid_reasons = {}
-            gates_failed = learned_decision.gates_failed
-            
-            if sched_decision.is_valid: valid_providers.append(PROVIDER_SCHEDULE)
-            else: invalid_reasons[PROVIDER_SCHEDULE] = sched_decision.invalid_reason
-            
-            if learned_decision.is_valid: valid_providers.append(PROVIDER_LEARNED)
-            else: invalid_reasons[PROVIDER_LEARNED] = learned_decision.invalid_reason
-            
-            # --- Effective Departure Logic ---
-            effective_departure = None
-            effective_departure_source = "none"
-            
-            scheduled_end = sched_decision.session_end
-            ai_end = learned_decision.session_end
-            
-            if learned_decision.is_valid and not learned_decision.is_shadow:
-                 effective_departure = ai_end
-                 effective_departure_source = "ai"
-            elif scheduled_end is not None:
-                 effective_departure = scheduled_end
-                 effective_departure_source = "schedule"
-            elif learned_decision.session_end is not None:
-                 # Fallback to AI if no schedule is present (Observer Mode -> Active)
-                 # Guard: If AI prediction is in the Past (e.g. today 17:00, now 18:00), ignore it to prevent instant logic firing.
-                 if learned_decision.session_end > now:
-                      effective_departure = learned_decision.session_end
-                      effective_departure_source = "ai_fallback"
-                 else:
-                      effective_departure = None
-                      effective_departure_source = "ai_expired"
-            else:
-                 effective_departure = None
-                 effective_departure_source = "none"
-
-            # v2.9.1: Midnight Filter
-            # If effective_departure is exactly at midnight (00:00:00), it's likely a parsing artifact
-            # from a Schedule entity that returns date-only. Try AI fallback instead.
-            if effective_departure is not None:
-                 local_dep = dt_util.as_local(effective_departure)
-                 if local_dep.hour == 0 and local_dep.minute == 0 and local_dep.second == 0:
-                      _LOGGER.debug("Effective departure at midnight (%s) - likely parsing artifact. Trying AI fallback.", effective_departure)
-                      # Try AI fallback
-                      if learned_decision.session_end is not None and learned_decision.session_end > now:
-                           effective_departure = learned_decision.session_end
-                           effective_departure_source = "ai_midnight_fallback"
-                      else:
-                           effective_departure = None
-                           effective_departure_source = "midnight_filtered"
-
-            # --- Provider Selection ---
-            if self.hold_active:
-                selected_provider = PROVIDER_MANUAL
-                # Create copy before mutating
-                gates_failed = list(learned_decision.gates_failed or [])
-                gates_failed.append(GATE_FAIL_MANUAL)
-            elif sched_decision.is_valid:
-                selected_provider = PROVIDER_SCHEDULE
-            elif learned_decision.is_valid and not learned_decision.is_shadow:
-                selected_provider = PROVIDER_LEARNED
-            
-            # -----------------------------------
-            # Update Active Decision (Optimal Stop)
-            # -----------------------------------
-            
-            # v2.9 Schedule-Free Logic: Pass predicted departure (multi-modal) as fallback
-            predicted_departure = self.planner.get_next_predicted_departure(now)
-            
-            # Note: next_event might already be set from prediction if planner fallback used,
-            # but usually next_event here comes from Schedule Entity if present.
-            # We explicitly pass the prediction to let OptimalStopManager decide.
-            
-            # Helper for forecast callback
-            def _forecast_cb(s, e):
-                if forecasts:
-                    return math_preheat.calculate_risk_metric(forecasts, s, e, "balanced")
-                return context.get("outdoor_temp", 10.0)
-            forecast_temp_at = _forecast_cb
-
-            self.optimal_stop_manager.update(
-                current_temp=operative_temp,
-                target_temp=target_setpoint,
-                # v2.9.1: Use effective_departure (Session END), not next_event (Session START/Arrival)
-                schedule_end=effective_departure,
-                predicted_end=predicted_departure, # v2.9 Multi-Modal Prediction
-                forecast_provider=forecast_temp_at,
-                tau_hours=self.cooling_analyzer.learned_tau,
-                config={
-                    CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE),
-                    CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, DEFAULT_MAX_COAST_HOURS),
-                    CONF_PHYSICS_MODE: self._get_conf(CONF_PHYSICS_MODE, PHYSICS_STANDARD),
-                    "system_inertia": self.physics.deadtime, # Dynamic Inertia
-                    "forecasts": forecasts
-                }
-            )
-
-            # Determine Target Departure for Manager
-            # Only use real departure if:
-            # 1. Feature is enabled
-            # 2. Manual Hold is NOT active (Kill Switch)
-            # Otherwise None force-resets logic.
-            target_departure_for_manager = effective_departure
-            # 0. Master Enable Check
-            if not self.enable_active:
-                 return PreheatData(
-                    preheat_active=False,
-                    next_start_time=None,
-                    operative_temp=operative_temp,
-                    target_setpoint=target_setpoint,
-                    next_arrival=None,
-                    predicted_duration=0,
-                    mass_factor=self.physics.mass_factor,
-                    loss_factor=self.physics.loss_factor,
-                    learning_active=False,
-                    decision_trace={"blocked": True, "reason": "disabled"}
-                 )
-
-            # 0.1 Check for Hold
-            if self.hold_active or not self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False):
-                target_departure_for_manager = None
-            
-
-            
-            # Feature Migration/Warning UX (Preserved)
-            # v2.9.0-beta2: Schedule is optional, so we always remove the "missing_schedule" warning if it exists.
-            async_delete_issue(self.hass, DOMAIN, f"missing_schedule_{self.entry.entry_id}")
-            
-            # Read detailed state from manager (Always, to catch active/savings state)
-            opt_active = self.optimal_stop_manager.is_active
-            opt_time = self.optimal_stop_manager.stop_time
-            opt_reason = self.optimal_stop_manager.debug_info["reason"]
-            savings_total = self.optimal_stop_manager._savings_total
-            savings_remaining = self.optimal_stop_manager._savings_remaining
-            
-            # 6. Trace Building
-            # Polish: Only show global gates_failed if AI was the intended target or candidate.
-            # If we selected Schedule, the global "failed gates" might be confusing.
-            trace_gates_failed = gates_failed
-            if effective_departure_source == "schedule":
-                 trace_gates_failed = []
-
-            decision_trace = {
-                "schema_version": SCHEMA_VERSION,
-                KEY_EVALUATED_AT: now.isoformat(),
-                KEY_PROVIDER_SELECTED: selected_provider,
-                KEY_PROVIDER_CANDIDATES: valid_providers,
-                KEY_PROVIDERS_INVALID: invalid_reasons,
-                KEY_GATES_FAILED: trace_gates_failed,
-                KEY_GATE_INPUTS: learned_decision.gate_inputs or {},
-                "timeline": {
-                    "scheduled_departure": scheduled_end.isoformat() if scheduled_end else None,
-                    "ai_departure": ai_end.isoformat() if ai_end else None,
-                    "effective_departure": effective_departure.isoformat() if effective_departure else None,
-                    "effective_departure_source": effective_departure_source
-                },
-                "providers": {
-                    PROVIDER_SCHEDULE: {
-                        "should_stop": sched_decision.should_stop,
-                        "savings": sched_decision.predicted_savings,
-                        "session_end": sched_decision.session_end.isoformat() if sched_decision.session_end else None
-                    },
-                    PROVIDER_LEARNED: {
-                         "gates_failed": gates_failed, # Explicitly visible here
-                         "confidence": learned_decision.confidence,
-                         "savings": learned_decision.predicted_savings,
-                         "session_end": learned_decision.session_end.isoformat() if learned_decision.session_end else None,
-                         "should_stop": learned_decision.should_stop,
-                         "is_shadow": learned_decision.is_shadow
-                    }
-                },
-                "blocked": len(blocked_reasons) > 0,
-                "reason": blocked_reasons[0] if blocked_reasons else "none",
-                "blocked_reasons": blocked_reasons,
-                "is_active": self._preheat_active,
-                "is_occupied": is_occupied
-            }
-            
-            # 7. Shadow Logging & Metrics
-            # A. Check for Simulated Safety Violation
-            # If Learned Provider wanted to stop (is_shadow=True, should_stop=True)
-            # BUT we are currently ACTIVE (Schedule is ON)
-            # AND Temp drops below Safe Threshold (Target - Tolerance - Buffer)
-            # THEN -> Safety Violation
-            
-            # We need to know if the Learned Provider is *persistently* asking to stop, 
-            # or if this is just a transient frame.
-            # Assuming 'shadow_active' concept:
-            # If (Legacy=ON) AND (Learned=STOP), we are efficiently "In Shadow Coast".
-            
-            is_shadow_coasting = False
-            if selected_provider == PROVIDER_SCHEDULE and not learned_decision.is_shadow: 
-                 # If Learned was not "Shadow", it would have participated in arbitration.
-                 pass
-            
-            # Shadow Logic:
-            # We are in "Shadow Mocking" if the legacy system (Schedule) wants to HEAT,
-            # but the new AI (Learned) says STOP. This delta represents potential savings.
-            
-            in_shadow_zone = (
-                sched_decision.is_valid and not sched_decision.should_stop and
-                learned_decision.is_valid and learned_decision.should_stop
-            )
-            
-            if in_shadow_zone:
-                 # Check Safety
-                 # Allow 0.2 buffer (same as optimal stop)
-                 tol = self._get_conf(CONF_STOP_TOLERANCE, DEFAULT_STOP_TOLERANCE)
-                 safe_floor = target_setpoint - tol - 0.2
-                 
-                 if operative_temp < safe_floor:
-                      self._shadow_metrics["safety_violations"] += 1
-                      _LOGGER.warning("Shadow Mode Safety Violation! Temp %.1f < %.1f", operative_temp, safe_floor)
-            
-            # For now, just debug log if meaningful difference (Edge Triggered)
-            # We use 'in_shadow_zone' (Schedule=RUN, Learned=STOP) as the exact condition.
-            should_shadow_log = in_shadow_zone
-            
-            if should_shadow_log and not self._last_shadow_log_state:
-                 _LOGGER.debug("Shadow Mode: Learned Provider would STOP now. (Confidence: %.2f)", learned_decision.confidence if learned_decision.confidence else 0.0)
-            
-            self._last_shadow_log_state = should_shadow_log
-
-            # Add metrics to trace
-            decision_trace["metrics"] = self._shadow_metrics
-            
-            # Update output
-            # Fire Optimal Stop Start Event (Edge Trigger)
-            if opt_active and not self._last_opt_active:
-                 self.hass.bus.async_fire(f"{DOMAIN}_optimal_stop_start", {
-                    "zone": self.device_name,
-                    "reason": opt_reason,
-                    "savings_min": round(savings_total, 1),
-                    "session_end": effective_departure.isoformat() if effective_departure else None
-                })
-            self._last_opt_active = opt_active
-            
-            # V2.9: Fetch HVAC State for Heat Demand Sensor
-            hvac_action = None
-            hvac_mode = None
-            climate_key = self._get_conf(CONF_CLIMATE)
-            if climate_key:
-                 state = self.hass.states.get(climate_key)
-                 if state:
-                      hvac_mode = state.state
-                      hvac_action = state.attributes.get("hvac_action")
-
-            data = PreheatData(
-                preheat_active=self._preheat_active,
-                next_start_time=start_time,
-                operative_temp=operative_temp,
-                target_setpoint=target_setpoint,
-                next_arrival=next_event,
-                predicted_duration=predicted_duration,
-                mass_factor=self.physics.mass_factor,
-                loss_factor=self.physics.loss_factor,
-                learning_active=self._preheat_active and not self._window_open_detected,
-                schedule_summary=self.planner.get_schedule_summary(),
-                departure_summary=self.planner.get_departure_schedule_summary(),
-                valve_signal=self._get_valve_position(),
-                window_open=self._window_open_detected,
-                outdoor_temp=outdoor_temp,
-                last_comfort_setpoint=self._last_comfort_setpoint,
-                deadtime=self.physics.deadtime,
-                is_occupied=is_occupied, # V2.9
-                # V2.5
-                optimal_stop_active=opt_active,
-                optimal_stop_time=opt_time,
-                stop_reason=opt_reason,
-                savings_total=savings_total,
-                savings_remaining=savings_remaining,
-                coast_tau=self.cooling_analyzer.learned_tau,
-                tau_confidence=self.cooling_analyzer.confidence,
-                # V2.6
-                pattern_type=pattern_type,
-                pattern_confidence=pattern_conf,
-                pattern_stability=pattern_stab,
-                detected_modes=detected_modes,
-                fallback_used=fallback_used,
-                # v3.0
-                decision_trace=decision_trace,
-                next_departure=effective_departure,
-                # V2.9
-                hvac_action=hvac_action,
-                hvac_mode=hvac_mode
-            )
-            
-            # Action 3.2: Adaptive Polling
-            self._update_polling_interval(data)
-            
-            return data
-
+            prediction: Prediction = await self._run_physics_simulation(ctx)
+            decision: Decision = self._evaluate_start_decision(ctx, prediction)
+            await self._execute_control_actions(ctx, decision)
+            await self._post_update_tasks(ctx, decision, prediction)
+            return self._build_preheat_data(ctx, prediction, decision)
         except Exception as err:
-            raise UpdateFailed(f"Update failed: {err}") from err
+            return self._handle_update_error(err)
+
+    async def _collect_context(self) -> Context:
+        """Collect all necessary state for this cycle."""
+        now = dt_util.now()
+        op_temp = await self._get_operative_temperature()
+        valve_pos = self._get_valve_position_with_fallback("active")
+        
+        await self.session_manager.check_debounce(dt_util.utcnow())
+        
+        if op_temp > INVALID_TEMP:
+             # Window Detection (Re-enabled)
+             self._track_temperature_gradient(op_temp, now)
+
+             v_for_buffer = valve_pos if valve_pos is not None else 0.0
+             self.history_buffer.append(HistoryPoint(
+                 now.timestamp(), op_temp, v_for_buffer, self._preheat_active
+             ))
+
+        # Occupancy
+        occ_sensor = self._get_conf(CONF_OCCUPANCY)
+        is_occupied = False
+        if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
+            is_occupied = True
+            
+        # Window (Attribute based or internal status)
+        is_window = self._window_open_detected
+
+        # Calendar / Workday / Next Event
+        blocked_dates = await self._get_blocked_dates_from_calendar(now)
+        search_start_date = now
+        allowed_weekdays = self._get_allowed_weekdays()
+        
+        if allowed_weekdays is not None:
+             ws_conf = self._get_effective_workday_sensor()
+             if ws_conf:
+                 ws_state = self.hass.states.get(ws_conf)
+                 if ws_state and ws_state.state == "off":
+                    # Move to tomorrow, but RESET to 00:00:00 to catch morning events
+                    next_day = now + timedelta(days=1)
+                    search_start_date = datetime.combine(next_day.date(), datetime.min.time(), tzinfo=now.tzinfo)
+
+        next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays, blocked_dates=blocked_dates)
+        
+        outdoor_temp = await self._get_outdoor_temp_current()
+        target_setpoint = await self._get_target_setpoint()
+        is_ready = (op_temp > INVALID_TEMP)
+        
+
+        forecasts = None
+        if self.weather_service:
+            forecasts = await self.weather_service.get_forecasts()
+
+        return {
+            "now": now, "operative_temp": op_temp, "outdoor_temp": outdoor_temp,
+            "valve_position": valve_pos, "is_occupied": is_occupied, "is_window_open": is_window,
+            "target_setpoint": target_setpoint, "next_event": next_event, "blocked_dates": blocked_dates,
+            "is_sensor_ready": is_ready, "forecasts": forecasts, "preheat_active": self._preheat_active
+        }
+
+    async def _run_physics_simulation(self, ctx: Context) -> Prediction:
+        """Run thermal physics simulation."""
+        if self._last_comfort_setpoint is None: self._last_comfort_setpoint = ctx["target_setpoint"]
+        
+        # Define early for closure access
+        delta_in = ctx["target_setpoint"] - ctx["operative_temp"]
+        
+        outdoor_effective = ctx["outdoor_temp"] if ctx["outdoor_temp"] is not None else 10.0
+        weather_avail = False
+        
+        # Forecast Integration (Restored Iterative Logic v3)
+        if ctx["forecasts"] and self.weather_service:
+            weather_avail = True
+            
+            # Helper for Root Finding: func(d) = calculated_duration(d) - d
+            # We want func(d) <= 0.
+            def _eval_duration(guess_minutes: float) -> float:
+                hours = guess_minutes / 60.0
+                t_out = self.physics.calculate_effective_outdoor_temp(ctx["forecasts"], hours)
+                
+                delta_out_g = ctx["target_setpoint"] - t_out
+                calc_dur = self.physics.calculate_duration(delta_in, delta_out_g)
+                return calc_dur - guess_minutes
+
+            # Use Root Finding Algorithm
+            # Horizon: max_preheat_hours (default 3h = 180m) + buffer
+            max_h = self._get_conf(CONF_MAX_PREHEAT_HOURS, DEFAULT_MAX_HOURS)
+            uncapped_duration = root_find_duration(_eval_duration, int(max_h * 60) + 60)
+            
+            # Recalculate finals for trace
+            predicted_duration = uncapped_duration # It IS the converged duration
+            outdoor_effective = self.physics.calculate_effective_outdoor_temp(ctx["forecasts"], uncapped_duration / 60.0)
+            delta_out = ctx["target_setpoint"] - outdoor_effective
+
+        else:
+             # Standard Static Calc
+             # delta_in calculated above
+             delta_out = ctx["target_setpoint"] - outdoor_effective
+             predicted_duration = self.physics.calculate_duration(
+                 delta_in, delta_out, mode=self._get_conf(CONF_PHYSICS_MODE, PHYSICS_STANDARD)
+             )
+             uncapped_duration = predicted_duration
+
+        # Limit Check (v3 Fix)
+        max_preheat = self._get_conf(CONF_MAX_PREHEAT_HOURS, DEFAULT_MAX_HOURS) * 60.0
+        capped_duration = min(predicted_duration, max_preheat)
+        
+        self._last_predicted_duration = capped_duration
+        
+        return {
+            "predicted_duration": capped_duration, 
+            "uncapped_duration": uncapped_duration,
+            "delta_in": delta_in, "delta_out": delta_out, 
+            "prognosis": "ok", "weather_available": weather_avail,
+            "limit_exceeded": (uncapped_duration > max_preheat)
+        }
+
+    def _evaluate_start_decision(self, ctx: Context, pred: Prediction) -> Decision:
+        """Arbitrate between providers and make a decision."""
+        now = ctx["now"]
+        
+        # Prepare Provider Context
+        provider_ctx = dict(ctx)
+        provider_ctx.update({
+            "tau_hours": self.cooling_analyzer.learned_tau,
+            "physics_deadtime": self.physics.deadtime,
+            # Placeholders for metrics (Calculated later or in dedicated step)
+            "potential_savings": 0.0, 
+            "tau_confidence": 100.0, 
+            "pattern_confidence": 0.0, 
+        })
+        
+
+        
+        # 1. Schedule Provider
+        sched_decision = self.schedule_provider.get_decision(provider_ctx)
+        
+        # 2. Learned Provider (Anchor Mode if Schedule valid)
+        if sched_decision.session_end:
+             provider_ctx["scheduled_end"] = sched_decision.session_end
+             
+        learned_decision = self.learned_provider.get_decision(provider_ctx)
+        
+        selected_provider = PROVIDER_NONE
+        final_decision = None
+        gates_failed = []
+        is_shadow = False
+        
+        if self.hold_active:
+             selected_provider = PROVIDER_MANUAL
+             gates_failed.append(GATE_FAIL_MANUAL)
+        elif sched_decision.is_valid:
+             selected_provider = PROVIDER_SCHEDULE
+             final_decision = sched_decision
+        elif learned_decision.is_valid and not learned_decision.is_shadow:
+             selected_provider = PROVIDER_LEARNED
+             final_decision = learned_decision
+        elif learned_decision.is_valid and learned_decision.is_shadow:
+             # Shadow Mode
+             selected_provider = PROVIDER_NONE 
+             final_decision = learned_decision
+             is_shadow = True
+             gates_failed.append("shadow_mode")
+        else:
+             if not sched_decision.is_valid: gates_failed.append("schedule_invalid")
+             if not learned_decision.is_valid: gates_failed.append("learned_invalid")
+        
+        should_start = False
+        start_time = None
+        effective_departure = None
+        frost_override = False
+        
+        # Frost Protection
+        # Standard: Frost > Hold > Schedule
+        frost_temp = FROST_PROTECTION_TEMP 
+        hysteresis = FROST_HYSTERESIS
+        
+        if ctx["operative_temp"] < frost_temp:
+             self._frost_active = True
+        elif self._frost_active and ctx["operative_temp"] > (frost_temp + hysteresis):
+             self._frost_active = False
+             
+        if self._frost_active:
+             frost_override = True
+             should_start = True
+             # Do not set start_time to preserve original schedule intention for analytics?
+             # Or set it to now?
+             start_time = now
+        
+        # Start Logic (Normal)
+        if not frost_override and final_decision:
+             evt = ctx["next_event"]
+             dur = pred["predicted_duration"]
+             
+             if evt:
+                 # Check Lead Time
+                 minutes_to_start = (evt - now).total_seconds() / 60.0
+                 if minutes_to_start <= dur:
+                     should_start = True
+                     start_time = now # Start immediately
+                     
+             if final_decision.session_end:
+                 effective_departure = final_decision.session_end
+
+        # Manual Override (Hold can inhibit standard start, but does it inhibit Frost?)
+        # Standard: Frost > Hold > Schedule.
+        if selected_provider == PROVIDER_MANUAL and not frost_override:
+             should_start = False
+
+        # Shadow Metrics Logic
+        shadow_metrics = {"safety_violations": 0}
+        if learned_decision.is_valid and learned_decision.is_shadow and learned_decision.should_stop:
+             # Check Safety: If we STOPPED now, would it be uncomfortable?
+             stop_tolerance = self._get_conf(CONF_STOP_TOLERANCE, 0.5)
+             threshold = ctx["target_setpoint"] - stop_tolerance
+             if ctx["operative_temp"] < threshold:
+                 shadow_metrics["safety_violations"] = 1
+
+        self.decision_trace = {
+             "evaluated_at": now.isoformat(),
+             "schema_version": 1,
+             KEY_PROVIDER_SELECTED: selected_provider,
+             KEY_PROVIDER_CANDIDATES: {
+                 PROVIDER_SCHEDULE: asdict(sched_decision),
+                 PROVIDER_LEARNED: asdict(learned_decision)
+             },
+             KEY_GATES_FAILED: gates_failed,
+             "metrics": shadow_metrics
+        }
+        
+        return {
+             "should_start": should_start,
+             "start_time": start_time,
+             "reason": "arbitrated",
+             "blocked_by": gates_failed,
+             "frost_override": frost_override,
+             "effective_departure": effective_departure
+        }
+
+    async def _execute_control_actions(self, ctx: Context, dec: Decision) -> None:
+        """Execute the decision."""
+        if dec["should_start"]:
+             if dec["frost_override"]: _LOGGER.info("Frost Protection Active")
+             await self._start_preheat(ctx["operative_temp"])
+        else:
+             # If currently active, we might need to stop
+             if self._preheat_active and not self.hold_active:
+                  t = ctx["target_setpoint"]
+                  o = ctx["outdoor_temp"] if ctx["outdoor_temp"] else 10.0
+                  await self._stop_preheat(ctx["operative_temp"], t, o)
+
+    async def _post_update_tasks(self, ctx: Context, decision: Decision, pred: Prediction) -> None:
+        """Run tasks after update."""
+        # 1. Update Polling Interval
+        self._update_polling_interval(decision["start_time"], ctx["is_occupied"])
+        
+        # 2. Diagnostics
+        # 2. Diagnostics
+        await self.diagnostics.check_all(ctx, self.physics, self.weather_service, pred)
+        
+
+
+    def _build_preheat_data(self, ctx: Context, pred: Prediction, dec: Decision) -> PreheatData:
+        # Extra Metadata
+        hvac_action = None
+        hvac_mode = None
+        climate_ent = self._get_conf(CONF_CLIMATE)
+        if climate_ent:
+            st = self.hass.states.get(climate_ent)
+            if st:
+                hvac_mode = st.state
+                hvac_action = st.attributes.get("hvac_action")
+
+        p_res = getattr(self.planner, 'last_pattern_result', None)
+
+        return PreheatData(
+            preheat_active=self._preheat_active,
+            next_start_time=dec["start_time"],
+            operative_temp=ctx["operative_temp"],
+            target_setpoint=ctx["target_setpoint"],
+            next_arrival=ctx["next_event"],
+            predicted_duration=pred["predicted_duration"],
+            mass_factor=self.physics.mass_factor,
+            loss_factor=self.physics.loss_factor,
+            learning_active=True,
+            decision_trace=self.decision_trace,
+            window_open=ctx["is_window_open"],
+            outdoor_temp=ctx["outdoor_temp"],
+            valve_signal=ctx["valve_position"],
+            last_comfort_setpoint=self._last_comfort_setpoint,
+            deadtime=self.physics.deadtime,
+            
+            # Review Fixes v2
+            schedule_summary=self.planner.get_schedule_summary(),
+            departure_summary=self.planner.get_departure_schedule_summary(),
+            next_departure=dec["effective_departure"],
+            hvac_action=hvac_action,
+            hvac_mode=hvac_mode,
+            optimal_stop_active=self.optimal_stop_manager.is_active,
+            optimal_stop_time=self.optimal_stop_manager.stop_time,
+            pattern_type=p_res.pattern_type if p_res else None,
+            pattern_confidence=p_res.confidence if p_res else 0.0,
+            pattern_stability=p_res.stability if p_res else 0.0,
+            detected_modes=p_res.modes_found if p_res else None,
+            fallback_used=p_res.fallback_used if p_res else False,
+        )
+    
+
+
+    def _get_allowed_weekdays(self) -> list[int] | None:
+         if self._get_conf(CONF_ONLY_ON_WORKDAYS, False):
+             workday_sensor = self._get_effective_workday_sensor()
+             if workday_sensor:
+                 state = self.hass.states.get(workday_sensor)
+                 if state and state.state != "unavailable":
+                     w_attr = state.attributes.get("workdays")
+                     if isinstance(w_attr, list):
+                         week_map = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+                         return [week_map[str(d).lower()] for d in w_attr if str(d).lower() in week_map]
+         return None
+
 
     async def _start_preheat(self, operative_temp: float) -> None:
         self._preheat_active = True
@@ -2185,7 +1307,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 
                 # Fallback to current if buffer empty (unlikely)
                 if valve_pos_avg is None:
-                     valve_pos_avg = self._get_valve_position()
+                     valve_pos_avg = self._get_valve_position_with_fallback("passive")
                 
                 _LOGGER.debug("Learning Check: Valve Avg=%.1f (over %.1f min)", 
                               valve_pos_avg if valve_pos_avg else 0, duration)
@@ -2226,23 +1348,28 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # Try Sensor
         sensor = self._get_conf(CONF_OUTDOOR_TEMP)
         if sensor:
-             state = self.hass.states.get(sensor)
-             try:
-                 self._cached_outdoor_temp = float(state.state)
-                 self._last_weather_check = now
-                 return self._cached_outdoor_temp
-             except: pass
-        
+             if state and state.state not in ("unavailable", "unknown"):
+                 try:
+                     self._cached_outdoor_temp = float(state.state)
+                     self._last_weather_check = now
+                     return self._cached_outdoor_temp
+                 except (ValueError, TypeError): pass
+                     
         return 10.0
 
     async def _update_comfort_learning(self, current_setpoint: float, is_occupied: bool) -> None:
-        if not is_occupied or not self._occupancy_on_since: return
-        duration = (dt_util.utcnow() - self._occupancy_on_since).total_seconds() / 60
-        if duration < 15: return # Wait for settling
+        if not is_occupied or not self.session_manager.is_occupied:
+            return
+        
+        if not self.session_manager.session_start_time:
+            return
+            
+        duration = (dt_util.utcnow() - self.session_manager.session_start_time).total_seconds() / 60
+        if duration < 15: return
         
         if self._last_comfort_setpoint != current_setpoint:
-             self._last_comfort_setpoint = current_setpoint
-             await self._async_save_data()
+            self._last_comfort_setpoint = current_setpoint
+            await self._async_save_data()
 
     async def force_preheat_on(self) -> None:
         """Manually start preheat."""
@@ -2307,7 +1434,21 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                         except ValueError: pass
         return None
 
-    def _update_polling_interval(self, data: PreheatData) -> None:
+    async def _post_update_tasks(self, ctx: Context, decision: Decision, pred: Prediction) -> None:
+        """Run tasks after main update loop (non-critical)."""
+        # 1. Update Polling
+        self._update_polling_interval(decision["start_time"], ctx["is_occupied"])
+        
+        # 2. Comfort Learning
+        await self._update_comfort_learning(ctx["target_setpoint"], ctx["is_occupied"])
+        
+        # 3. Diagnostics
+        # Grace period check to avoid falses during boot
+        current_uptime = (dt_util.utcnow() - self._startup_time).total_seconds()
+        if current_uptime >= STARTUP_GRACE_SEC:
+             await self.diagnostics.check_all(ctx, self.physics, self.weather_service, pred)
+
+    def _update_polling_interval(self, next_start: datetime | None, is_occupied: bool) -> None:
         """
         Adjust polling interval based on activity (Adaptive Polling).
         - Active (1 min): Preheat Active, Occupied, Window Open, or approaching Next Start.
@@ -2319,14 +1460,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # 1. Preheat Active (Highest Priority)
         # 2. Occupied (User might change setpoint manually -> fast reaction)
         # 3. Window Open (Fast recovery detection)
-        if data.preheat_active or data.is_occupied or data.window_open:
+        if self._preheat_active or is_occupied or self._window_open_detected:
             new_interval = timedelta(minutes=1)
         
         # 4. Approaching Start (< 2 hours)
-        elif data.next_start_time:
+        elif next_start:
             # Check time delta
             now = dt_util.utcnow()
-            diff = (data.next_start_time - now).total_seconds()
+            diff = (next_start - now).total_seconds()
             if 0 < diff < 7200: # 2 hours
                  new_interval = timedelta(minutes=1)
                  

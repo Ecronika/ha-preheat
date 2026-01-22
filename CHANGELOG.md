@@ -1,3 +1,13 @@
+## v2.9.2-beta1 (2026-01-22) - Next Morning Fix 🌅
+
+### 🐛 Fixes
+*   **Next Arrival Calculation**: Fixed a critical bug where the "Next Arrival" prediction would skip the entirety of the next day's morning (checking 24h into the future) if the current time was late at night on a non-workday (e.g. Sunday 23:30 -> Monday 23:30). The logic now reset the search to midnight (00:00:00), ensuring early morning events (e.g. Monday 06:00) are correctly detected.
+
+### 🧹 Refactoring
+*   **Architecture**: Extracted `SessionManager` and Type definitions into separate files (`session_manager.py`, `types.py`) to reduce the complexity of the main Coordinator. This paves the way for better unit testing and modularity.
+
+---
+
 ## v2.9.1 (2026-01-14) - The Reliability Update 🛡️
 **Stable Release**
 

@@ -65,7 +65,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 import sys
 
-from custom_components.preheat.coordinator import OccupancyDebouncer, PreheatingCoordinator
+from custom_components.preheat.coordinator import PreheatingCoordinator
+from custom_components.preheat.session_manager import SessionManager
 from custom_components.preheat.const import (
     CONF_DEBOUNCE_MIN,
     CONF_PHYSICS_MODE,
@@ -81,56 +82,80 @@ class TestV28Features(unittest.TestCase):
     def run_async(self, coro):
         return asyncio.run(coro)
 
-    def test_occupancy_debouncer_boundary(self):
+    def test_session_manager_boundary(self):
         """
-        Test Debounce Logic:
+        Test Session Logic (Renamed from Debouncer):
         - OFF at 15:00. Debounce 15m.
         - ON at 15:14:59 -> NO Commit.
         - ON at 15:15:01 -> COMMIT (Timestamp 15:00).
         """
         hass = MagicMock()
         mock_planner = MagicMock()
-        debouncer = OccupancyDebouncer(15, hass) # Arg 1 is debounce_min, Arg 2 is coordinator (hass here for simplicity)
+        mock_coord = MagicMock()
+        mock_coord.planner = mock_planner
+        mock_coord.hass = hass
         
-        # NOTE: OccupancyDebouncer.__init__ signature is (debounce_min, parent_coordinator)
-        # My test instantiation `OccupancyDebouncer(hass, mock_planner)` was WRONG order too?
-        # Let's check init: `def __init__(self, debounce_min: float, parent_coordinator: "PreheatingCoordinator"):`
-        # Yes. Fixed above.
-        
-        debouncer._coordinator = MagicMock()
-        debouncer._coordinator.planner = mock_planner
+        manager = SessionManager(15, mock_coord)
         
         # 1. Start Event (OFF) at 15:00
+        # Assume we were ON before.
         t0 = datetime(2025, 1, 1, 15, 0, 0, tzinfo=timezone.utc)
         
-        # The debouncer.handle_change logic:
-        # If ON -> OFF: Record off_start_time
-        debouncer.handle_change(new_state_on=False, now=t0)
-        self.assertEqual(debouncer._off_start_time, t0)
+        # State: ON -> OFF
+        # We need to simulate prior state. Manager starts assuming OFF? 
+        # No, update(True) starts session. update(False) ends/debounces.
+        
+        # Init: Start a session first so we can end it
+        manager.update(True, t0 - timedelta(hours=1)) # Session starts 14:00
+        self.assertTrue(manager.is_occupied)
+        
+        # Now turn OFF at 15:00
+        manager.update(False, t0)
+        self.assertTrue(manager._is_debouncing) # Should be debouncing
+        self.assertEqual(manager._off_candidate_start, t0)
         
         # 2. Case A: Recovery within debounce (False Alarm)
         # Time is 15:14:59 (1s before timeout)
         t1 = t0 + timedelta(minutes=14, seconds=59)
         # User comes back (ON)
-        debouncer.handle_change(new_state_on=True, now=t1)
+        # returns is_new_session? No, session never ended (just debounced)
+        is_new = manager.update(True, t1)
         
-        # Expect: Reset, NO commit
-        self.assertIsNone(debouncer._off_start_time)
+        # Expect: Reset, NO commit, NO new session
+        self.assertIsNone(manager._off_candidate_start)
+        self.assertFalse(manager._is_debouncing)
+        self.assertFalse(is_new)
+        self.assertTrue(manager.is_occupied) # Still occupied
         mock_planner.record_departure.assert_not_called()
         
         # 3. Case B: True Departure
         # Reset state manually for test
-        debouncer.handle_change(new_state_on=False, now=t0)
+        manager.update(False, t0) # Trigger debounce again
         
         # Time is 15:15:01 (1s after timeout)
-        t2 = t0 + timedelta(minutes=15, seconds=1)
-        debouncer.handle_change(new_state_on=True, now=t2)
+        # But wait, update(True) won't trigger timeout logic, it triggers "Return/Anti-Flap".
+        # The timeout logic is in check_debounce() or if we return AFTER timeout.
         
-        # Expect: Commit called with t0 (Original departure time)
+        # If we return AFTER timeout, update(True) sees gap > limit.
+        t2 = t0 + timedelta(minutes=15, seconds=1)
+        
+        # To test RACE CONDITION logic in update():
+        # "If OFF duration > Limit, but check() missed it"
+        # We simulate returning at t2.
+        
+        is_new = manager.update(True, t2)
+        
+        # Expect: Race condition caught.
+        # It commits the OLD departure.
+        # And starts a NEW session (Anti-Flap passed).
+        
         mock_planner.record_departure.assert_called_once()
         args, _ = mock_planner.record_departure.call_args
         self.assertEqual(args[0], t0)
-        self.assertIsNone(debouncer._off_start_time)
+        
+        self.assertTrue(is_new)
+        self.assertTrue(manager.is_occupied)
+        self.assertEqual(manager.session_start_time, t2)
 
     def test_dst_flagging(self):
         """

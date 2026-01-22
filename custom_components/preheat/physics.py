@@ -12,6 +12,10 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+from homeassistant.util import dt as dt_util
+from datetime import timedelta
+from .math_preheat import integrate_forecast
+
 @dataclass
 class ThermalModelData:
     """Holds the learned parameters."""
@@ -105,6 +109,21 @@ class ThermalPhysics:
         # Time = Deadtime + (Mass * Delta_In) + (Loss * Delta_Out)
         duration = self.deadtime + (self.mass_factor * dt_in) + (self.loss_factor * dt_out)
         return max(0.0, duration)
+    
+        return max(0.0, duration)
+
+    def calculate_effective_outdoor_temp(self, forecasts: list[dict], duration_hours: float) -> float:
+        """
+        Calculate effective outdoor temperature for a duration starting NOW.
+        Uses Time-Weighted Average (Trapezoidal Integration).
+        Moved from WeatherService (v2.9.1) for architectural purity.
+        """
+        if not forecasts: return 10.0 # Fallback
+        
+        now = dt_util.utcnow()
+        end_dt = now + timedelta(hours=duration_hours)
+        
+        return integrate_forecast(forecasts, now, end_dt)
     
     def update_deadtime(self, new_deadtime: float) -> None:
         """Update the deadtime parameter (usually from DeadtimeAnalyzer)."""
