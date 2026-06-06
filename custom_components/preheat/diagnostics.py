@@ -56,6 +56,7 @@ class DiagnosticsManager:
             "capped_events": [], # Rolling list of bools
             "last_check_ts": 0.0,
             "stale_sensor_counter": 0, # Added initialization
+            "last_learning_attempt_ts": 0.0,
         }
 
     def load_data(self, data: dict[str, Any]) -> None:
@@ -138,8 +139,16 @@ class DiagnosticsManager:
         # 3. Learning Stalled
         curr_samp = physics.sample_count
         last_samp = self.data.get("last_sample_count", 0)
-        last_samp_ts = self.data.get("last_sample_change", dt_util.utcnow().timestamp())
+        last_samp_ts = self.data.get("last_sample_change", 0.0)
         now = dt_util.utcnow().timestamp()
+        
+        # If last_sample_change is 0.0, we initialize it to now to avoid immediate false alarm on first boot
+        if last_samp_ts == 0.0:
+            last_samp_ts = now
+            self.data["last_sample_change"] = now
+            self.data["last_sample_count"] = curr_samp
+
+        last_attempt_ts = self.data.get("last_learning_attempt_ts", 0.0)
         
         if curr_samp != last_samp:
             self.data["last_sample_count"] = curr_samp
@@ -148,7 +157,9 @@ class DiagnosticsManager:
         else:
             # If changed > 7 days ago and we have some samples (bootstrap done)
             if (now - last_samp_ts) > 604800 and curr_samp > 0:
-                self._create_issue("learning_stalled")
+                # Only raise if a learning attempt has occurred after the last sample change
+                if last_attempt_ts > last_samp_ts:
+                    self._create_issue("learning_stalled")
 
     async def _diag_weather(self, ctx: Context, physics: ThermalPhysics, weather_service: WeatherService | None, pred: Prediction) -> None:
          # 4. Weather / Forecast Checks

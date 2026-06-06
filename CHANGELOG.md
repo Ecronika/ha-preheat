@@ -1,3 +1,12 @@
+## v2.9.4 (2026-06-06) - Fix Startup Sensor Timeout Noise & False Stalled Learning Alarm 🛠️
+**Stable Release**
+
+This release resolves two key stability issues:
+*   **Startup Noise**: Suppresses spurious `Update Cycle Error: Sensor Timeout / Unavailable` ERROR logs on Home Assistant boot by utilizing a startup grace period and logging as DEBUG for the first two failures.
+*   **Summer Diagnostics**: Prevents false positive `learning_stalled` repair issues during the summer/off-season by only triggering the check if a learning attempt has actually occurred since the last sample update.
+
+---
+
 ## v2.9.3 (2026-06-06) - Fix TypeError in calculate_duration 🐛
 **Stable Release**
 

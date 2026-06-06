@@ -311,6 +311,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         self.decision_trace = {}
         self._consecutive_failures = 0
+        self._consecutive_readiness_errors = 0
         
         self.bootstrap_done = False
 
@@ -919,7 +920,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     # --------------------------------------------------------------------------
     def _build_error_state(self, reason: str) -> PreheatData:
         """Return safe fallback state."""
-        _LOGGER.error("Update Cycle Error: %s", reason)
+        _LOGGER.error("Update Cycle Error [%s]: %s", self.device_name, reason)
         return PreheatData(False, None, None, 20.0, None, self._last_predicted_duration, 0, 0, False)
 
     def _handle_update_error(self, err: Exception) -> PreheatData:
@@ -945,8 +946,18 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
             ctx: Context = await self._collect_context()
             if not ctx["is_sensor_ready"]:
-                 return self._build_error_state("Sensor Timeout / Unavailable")
+                 self._consecutive_readiness_errors += 1
+                 now_ts = dt_util.utcnow()
+                 is_grace = (now_ts - self._startup_time).total_seconds() < STARTUP_GRACE_SEC
+                 
+                 msg = f"Update Cycle Error [{self.device_name}]: Sensor Timeout / Unavailable"
+                 if is_grace or self._consecutive_readiness_errors < 3:
+                      _LOGGER.debug(msg)
+                 else:
+                      _LOGGER.warning(msg)
+                 return PreheatData(False, None, None, 20.0, None, self._last_predicted_duration, 0, 0, False)
 
+            self._consecutive_readiness_errors = 0
             prediction: Prediction = await self._run_physics_simulation(ctx)
             decision: Decision = self._evaluate_start_decision(ctx, prediction)
             await self._execute_control_actions(ctx, decision)
@@ -1296,6 +1307,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             if self._window_open_detected:
                 _LOGGER.info("Skipping learning due to Open Window detected.")
             else:
+                self.diagnostics.data["last_learning_attempt_ts"] = dt_util.utcnow().timestamp()
+                await self._async_save_data()
                 delta_in = end_temp - self._start_temp
                 delta_out = target - outdoor # Approx average delta
                 
