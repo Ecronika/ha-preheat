@@ -146,7 +146,7 @@ NEW_UPDATE_DATA = r'''    # ----------------------------------------------------
         delta_out = ctx["target_setpoint"] - (ctx["outdoor_temp"] if ctx["outdoor_temp"] is not None else 10.0)
         
         predicted_duration = self.physics.calculate_duration(
-            delta_in, delta_out, mode=self._get_conf(CONF_PHYSICS_MODE, PHYSICS_STANDARD)
+            delta_in, delta_out
         )
         self._last_predicted_duration = predicted_duration
         return {

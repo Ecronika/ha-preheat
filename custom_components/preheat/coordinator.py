@@ -1052,7 +1052,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              # delta_in calculated above
              delta_out = ctx["target_setpoint"] - outdoor_effective
              predicted_duration = self.physics.calculate_duration(
-                 delta_in, delta_out, mode=self._get_conf(CONF_PHYSICS_MODE, PHYSICS_STANDARD)
+                 delta_in, delta_out
              )
              uncapped_duration = predicted_duration
 

@@ -1,3 +1,13 @@
+## v2.9.3 (2026-06-06) - Fix TypeError in calculate_duration 🐛
+**Stable Release**
+
+This release fixes a critical TypeError crash in the physics calculation when forecast data is not available.
+
+### 🐛 Fixes
+*   **Physics Calculation**: Removed the unexpected `mode` keyword argument from the `calculate_duration` call in `coordinator.py` when running standard static calculations.
+
+---
+
 ## v2.9.2 (2026-06-06) - Repair Issue Translation Fixes 🏷️
 **Stable Release**
 
