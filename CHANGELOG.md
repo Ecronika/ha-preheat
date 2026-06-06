@@ -3,7 +3,7 @@
 
 This release resolves two key stability issues:
 *   **Startup Noise**: Suppresses spurious `Update Cycle Error: Sensor Timeout / Unavailable` ERROR logs on Home Assistant boot by utilizing a startup grace period and logging as DEBUG for the first two failures.
-*   **Summer Diagnostics**: Prevents false positive `learning_stalled` repair issues during the summer/off-season by only triggering the check if a learning attempt has actually occurred since the last sample update.
+*   **Summer Diagnostics**: Prevents false positive `learning_stalled` repair issues during the summer/off-season by only triggering the check if a learning attempt has actually occurred since the last sample update. Also, 'learning_stalled' now auto-resolves when no recent heating/learning attempt occurred (recency window), instead of lingering through the off-season.
 
 ---
 

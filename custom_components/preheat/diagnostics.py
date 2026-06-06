@@ -33,7 +33,8 @@ from .const import (
     DIAG_STALE_SENSOR_SEC,
     DIAG_MAX_VALVE_POS,
     CONF_MAX_PREHEAT_HOURS,
-    DEFAULT_MAX_HOURS
+    DEFAULT_MAX_HOURS,
+    LEARNING_STALL_EXPIRY_SEC
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -155,11 +156,17 @@ class DiagnosticsManager:
             self.data["last_sample_change"] = now
             self._delete_issue("learning_stalled")
         else:
-            # If changed > 7 days ago and we have some samples (bootstrap done)
-            if (now - last_samp_ts) > 604800 and curr_samp > 0:
-                # Only raise if a learning attempt has occurred after the last sample change
-                if last_attempt_ts > last_samp_ts:
-                    self._create_issue("learning_stalled")
+            stalled = (
+                (now - last_samp_ts) > 604800            # > 7 days no new sample
+                and curr_samp > 0
+                and last_attempt_ts > last_samp_ts        # Attempt after last sample (no sample generated)
+                and (now - last_attempt_ts) < LEARNING_STALL_EXPIRY_SEC   # ...and this attempt is still recent
+            )
+            if stalled:
+                self._create_issue("learning_stalled")
+            else:
+                # Self-healing: no current stall (e.g. heating pause) -> remove issue
+                self._delete_issue("learning_stalled")
 
     async def _diag_weather(self, ctx: Context, physics: ThermalPhysics, weather_service: WeatherService | None, pred: Prediction) -> None:
          # 4. Weather / Forecast Checks

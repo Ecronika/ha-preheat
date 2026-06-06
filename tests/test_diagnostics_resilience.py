@@ -1,7 +1,7 @@
 import unittest
 import sys
 import types
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch, AsyncMock, call
 from datetime import datetime, timedelta, timezone
 
 # Ensure homeassistant mock modules exist (as in test_resilience.py)
@@ -116,7 +116,7 @@ class TestDiagnosticsResilience(unittest.TestCase):
     @patch("custom_components.preheat.diagnostics.DiagnosticsManager._create_issue")
     @patch("custom_components.preheat.diagnostics.DiagnosticsManager._delete_issue")
     def test_learning_stalled_off_season(self, mock_delete, mock_create):
-        """Test that learning_stalled is only raised if a learning attempt has occurred since last sample."""
+        """Test that learning_stalled is only raised if a learning attempt has occurred since last sample and is recent."""
         hass = MagicMock()
         entry = MagicMock()
         entry.entry_id = "test_diagnostics_entry"
@@ -146,16 +146,32 @@ class TestDiagnosticsResilience(unittest.TestCase):
         import asyncio
         asyncio.run(manager._diag_physics(MagicMock(), physics, MagicMock(), pred))
         
-        # Issue should NOT be created because last_learning_attempt_ts <= last_sample_change
-        mock_create.assert_not_called()
+        # Issue should NOT be created and delete should be called
+        self.assertNotIn(call("learning_stalled"), mock_create.call_args_list)
+        mock_delete.assert_any_call("learning_stalled")
+        mock_delete.reset_mock()
+        mock_create.reset_mock()
         
-        # 2. A learning attempt occurred since last sample change (last_learning_attempt_ts > last_sample_change)
-        manager.data["last_learning_attempt_ts"] = now - 700000.0 # After last sample change (now - 800000)
+        # 2. A learning attempt occurred since last sample change (last_learning_attempt_ts > last_sample_change) and is recent (e.g., 5 days ago < 14 days)
+        manager.data["last_learning_attempt_ts"] = now - 432000.0 # 5 days ago (after now - 800000)
         
         asyncio.run(manager._diag_physics(MagicMock(), physics, MagicMock(), pred))
         
         # Issue should be created
-        mock_create.assert_called_with("learning_stalled")
+        mock_create.assert_any_call("learning_stalled")
+        self.assertNotIn(call("learning_stalled"), mock_delete.call_args_list)
+        mock_delete.reset_mock()
+        mock_create.reset_mock()
+        
+        # 3. A learning attempt occurred since last sample change, but is veraltet/expired (e.g., 15 days ago > 14 days)
+        manager.data["last_sample_change"] = now - 1728000.0 # 20 days ago
+        manager.data["last_learning_attempt_ts"] = now - 1296000.0 # 15 days ago (after last sample change, but > 14 days ago)
+        
+        asyncio.run(manager._diag_physics(MagicMock(), physics, MagicMock(), pred))
+        
+        # Issue should NOT be created and delete should be called
+        self.assertNotIn(call("learning_stalled"), mock_create.call_args_list)
+        mock_delete.assert_any_call("learning_stalled")
 
 if __name__ == "__main__":
     import asyncio
