@@ -31,7 +31,9 @@ from .const import (
     CONF_MAX_COAST_HOURS,
     CONF_SCHEDULE_ENTITY,
     DIAG_STALE_SENSOR_SEC,
-    DIAG_MAX_VALVE_POS
+    DIAG_MAX_VALVE_POS,
+    CONF_MAX_PREHEAT_HOURS,
+    DEFAULT_MAX_HOURS
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,6 +70,10 @@ class DiagnosticsManager:
         is_fixable = kwargs.pop("is_fixable", False)
         translation_key = kwargs.pop("translation_key", issue_id)
         
+        placeholders = dict(kwargs.pop("translation_placeholders", {}) or {})
+        # Zonenname IMMER bereitstellen
+        placeholders.setdefault("name", self.entry.title or self.entry.data.get("name") or "Preheat")
+
         # Append entry_id to make issue unique per device
         issue_uid = f"{issue_id}_{self.entry.entry_id}"
         
@@ -79,6 +85,7 @@ class DiagnosticsManager:
             severity=severity,
             translation_key=translation_key,
             is_persistent=is_persistent,
+            translation_placeholders=placeholders,
             **kwargs
         )
 
@@ -118,7 +125,13 @@ class DiagnosticsManager:
 
         # 2. Duration Limit (Restored)
         if pred["limit_exceeded"]:
-             self._create_issue("duration_limit_exceeded")
+             self._create_issue(
+                 "duration_limit_exceeded",
+                 translation_placeholders={
+                     "predicted": f"{pred['uncapped_duration']/60:.1f}",
+                     "limit": f"{self._get_conf(CONF_MAX_PREHEAT_HOURS, DEFAULT_MAX_HOURS):.1f}",
+                 }
+             )
         else:
              self._delete_issue("duration_limit_exceeded")
              

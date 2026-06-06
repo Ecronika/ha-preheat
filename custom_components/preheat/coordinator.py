@@ -471,7 +471,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                         translation_key="physics_partial_reset",
                         translation_placeholders={
                             "samples": str(self.physics.sample_count),
-                            "learn_more_url": "https://github.com/Ecronika/ha-preheat/releases/tag/v2.7.1"
+                            "learn_more_url": "https://github.com/Ecronika/ha-preheat/releases/tag/v2.7.1",
+                            "name": self.device_name
                         },
                         learn_more_url="https://github.com/Ecronika/ha-preheat/releases/tag/v2.7.1"
                     )

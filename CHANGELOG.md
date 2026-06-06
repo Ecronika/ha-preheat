@@ -1,3 +1,14 @@
+## v2.9.2 (2026-06-06) - Repair Issue Translation Fixes 🏷️
+**Stable Release**
+
+This release fixes translation placeholders and improves consistency across all language files for repair issues.
+
+### 🐛 Fixes
+*   **Repair Issues**: Zone name `{name}` is now dynamically injected and visible in all issue titles and descriptions across all languages.
+*   **Placeholder Validation**: Resolved translation placeholder mismatches for `weather_quality` and added missing placeholders for `duration_limit_exceeded`, `physics_railing`, and `config_sanity`.
+
+---
+
 ## v2.9.2-beta1 (2026-01-22) - Next Morning Fix 🌅
 
 ### 🐛 Fixes

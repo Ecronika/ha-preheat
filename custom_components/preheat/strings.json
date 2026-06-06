@@ -242,8 +242,8 @@
       "description": "Historical data from v1 was converted. Precision may be reduced initially. Use 'Analyze History' button to rebuild from recorder data for better accuracy."
     },
     "weather_setup_failed": {
-      "title": "Weather Entity Unavailable ({zone_name})",
-      "description": "The configured weather entity `{weather_entity}` for zone `{zone_name}` is not responding or does not exist. Please check your configuration."
+      "title": "Weather Entity Unavailable ({name})",
+      "description": "The configured weather entity `{weather_entity}` for zone `{name}` is not responding or does not exist. Please check your configuration."
     },
     "duration_limit_exceeded": {
       "title": "Max Heating Duration Exceeded ({name})",
@@ -255,7 +255,7 @@
     },
     "physics_partial_reset": {
       "title": "Thermal Model Recalibrated ({name})",
-      "description": "The physics engine was updated. Your heating history ({samples} sessions) was preserved, but insulation data was reset to profile defaults. The system will re-learn outdoor influences over the next 5-10 heating cycles."
+      "description": "The physics engine was updated. Your heating history ({samples} sessions) was preserved, but insulation data was reset to profile defaults. The system will re-learn outdoor influences over the next 5-10 heating cycles. [Learn more]({learn_more_url})"
     },
     "forecast_stale": {
       "title": "Forecast Data Stale ({name})",
@@ -340,6 +340,14 @@
     "tolerance_sanity": {
       "title": "Stop Tolerance Unusual ({name})",
       "description": "Value < 0.1K or > 1.5K is risky."
+    },
+    "physics_railing": {
+      "title": "Physical Limit Reached: {metric} ({name})",
+      "description": "The system has reached a safety boundary for the {metric} calculation in zone {name}. Learning might be suspended or degraded until mass/loss parameters stabilize."
+    },
+    "config_sanity": {
+      "title": "Configuration Sanity Warning ({name})",
+      "description": "An issue with the configuration of zone {name} was detected: {detail}."
     }
   }
 }
