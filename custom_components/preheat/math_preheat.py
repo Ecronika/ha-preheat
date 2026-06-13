@@ -140,31 +140,6 @@ def _percentile(data: list[float], percentile: float) -> float:
     fraction = index - lower
     return data[lower] * (1 - fraction) + data[upper] * fraction
 
-def solve_duration(
-    calc_func: Callable[[float], float], 
-    target_date: datetime,
-    max_hours: float
-) -> float:
-    """
-    Find preheat duration 'd' such that:
-    Duration(AverageTemp(d)) - d = 0
-    
-    Args:
-        calc_func: Lambda(avg_temp) -> calculates required duration based on physics model.
-        target_date: DateTime of arrival.
-        max_hours: Max search horizon in hours.
-        
-    Returns:
-        float: Duration in minutes.
-    """
-    
-    # Function to zero: g(d) = calculated_duration(d) - d
-    forecast_provider = calc_func # Actually passed calc_func is partial logic, we need the full injection
-    # Wait, simple design:
-    # We pass a callback that accepts duration (minutes) and returns 'g(d)'.
-    # This keeps math_preheat agnostic of physics/weather interactions.
-    pass
-
 # Redesign solve_duration signature to be cleaner
 def root_find_duration(
     eval_func: Callable[[float], float], 

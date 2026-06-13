@@ -31,11 +31,11 @@ After installation, click **Configure** on the integration entry to access addit
 *   **Arrival Window**: Define when the system should expect arrivals (Start/End times).
 *   **Comfort Fallback**: The default target temperature if no setpoint can be determined. Default: `21°C`.
 
-### 🛑 Optimal Stop
+### 🛑 Optimal Stop (WIP / planned for v2.10)
 
-*   **Enable Optimal Stop**: Activates "Coast-to-Stop" logic to save energy.
+*   **Enable Optimal Stop**: Activates "Coast-to-Stop" logic to save energy. (Note: Prepared in UI but currently inactive in the backend for 2.9.x).
 *   **Schedule Entity**: A `schedule`, `input_datetime`, or `sensor` helper defining when to stop heating.
-    *   **Note**: No longer mandatory! If not provided, the system uses **Learned Departure** patterns.
+    *   **Note**: Currently required for autonomous engine setup. Smart departure learning is planned for v2.10.
 
 ### 🔒 External Control
 

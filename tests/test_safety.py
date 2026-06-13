@@ -127,6 +127,8 @@ from custom_components.preheat.const import CONF_OCCUPANCY, CONF_CLIMATE, CONF_T
 
 class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        mock_dt.utcnow.return_value = datetime(2023, 10, 10, 12, 0, 0)
+        mock_dt.now.return_value = datetime(2023, 10, 10, 12, 0, 0)
         self.hass = MagicMock(spec=HomeAssistant)
         self.hass.states = MagicMock()
         self.hass.bus = MagicMock()
@@ -284,6 +286,126 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         # Should reset flag
         self.assertFalse(self.coordinator._frost_active)
 
+    async def test_disabled_prevents_normal_preheating_start(self):
+        """Test that disabled state prevents preheating from starting under normal conditions."""
+        # 1. Disable System
+        self.coordinator.enable_active = False
+        self.coordinator._preheat_active = False
+        
+        # 2. Mock next event in 30 minutes
+        now_dt = dt_util.utcnow()
+        event_dt = now_dt + timedelta(minutes=30)
+        self.coordinator.planner.get_next_scheduled_event.return_value = event_dt
+        
+        # Mock providers
+        from custom_components.preheat.providers import ProviderDecision
+        self.coordinator.schedule_provider.get_decision = MagicMock(return_value=ProviderDecision(
+             should_stop=False, session_end=event_dt + timedelta(hours=2), is_valid=True, is_shadow=False
+        ))
+        self.coordinator.learned_provider.get_decision = MagicMock(return_value=ProviderDecision(
+             should_stop=False, session_end=None, is_valid=False, is_shadow=True
+        ))
+        
+        # Mock normal temps
+        self.coordinator._get_operative_temperature = AsyncMock(return_value=20.0)
+        self.coordinator._get_target_setpoint = AsyncMock(return_value=21.0)
+        self.coordinator._get_outdoor_temp_current = AsyncMock(return_value=10.0)
+        
+        # Run Update
+        data = await self.coordinator._async_update_data()
+        
+        # Assertions
+        # Should NOT start preheat (disabled)
+        self.coordinator._start_preheat.assert_not_called()
+        self.assertFalse(data.preheat_active)
+        self.assertIsNone(data.next_start_time)
+        
+        # Trace assertions
+        trace = data.decision_trace
+        self.assertTrue(trace["blocked"])
+        self.assertIn("disabled", trace["blocked_reasons"])
+        self.assertEqual(trace["reason"], "disabled")
+
+    async def test_window_open_prevents_normal_preheating_start(self):
+        """Test that window open prevents preheating from starting under normal conditions."""
+        # 1. Enable System but set window open
+        self.coordinator.enable_active = True
+        self.coordinator._window_open_detected = True
+        self.coordinator._window_cooldown_counter = 30
+        self.coordinator._preheat_active = False
+        
+        # 2. Mock next event in 30 minutes
+        now_dt = dt_util.utcnow()
+        event_dt = now_dt + timedelta(minutes=30)
+        self.coordinator.planner.get_next_scheduled_event.return_value = event_dt
+        
+        # Mock providers
+        from custom_components.preheat.providers import ProviderDecision
+        self.coordinator.schedule_provider.get_decision = MagicMock(return_value=ProviderDecision(
+             should_stop=False, session_end=event_dt + timedelta(hours=2), is_valid=True, is_shadow=False
+        ))
+        self.coordinator.learned_provider.get_decision = MagicMock(return_value=ProviderDecision(
+             should_stop=False, session_end=None, is_valid=False, is_shadow=True
+        ))
+        
+        # Mock normal temps
+        self.coordinator._get_operative_temperature = AsyncMock(return_value=20.0)
+        self.coordinator._get_target_setpoint = AsyncMock(return_value=21.0)
+        self.coordinator._get_outdoor_temp_current = AsyncMock(return_value=10.0)
+        
+        # Run Update
+        data = await self.coordinator._async_update_data()
+        
+        # Assertions
+        # Should NOT start preheat (window open)
+        self.coordinator._start_preheat.assert_not_called()
+        self.assertFalse(data.preheat_active)
+        self.assertIsNone(data.next_start_time)
+        
+        # Trace assertions
+        trace = data.decision_trace
+        self.assertTrue(trace["blocked"])
+        self.assertIn("window_open", trace["blocked_reasons"])
+        self.assertEqual(trace["reason"], "window_open")
+
+    async def test_normal_preheating_starts_when_enabled(self):
+        """Test that preheating starts normally when enabled and conditions met."""
+        # 1. Enable System
+        self.coordinator.enable_active = True
+        self.coordinator._window_open_detected = False
+        self.coordinator._preheat_active = False
+        
+        # 2. Mock next event in 30 minutes
+        now_dt = dt_util.utcnow()
+        event_dt = now_dt + timedelta(minutes=30)
+        self.coordinator.planner.get_next_scheduled_event.return_value = event_dt
+        
+        # Mock providers
+        from custom_components.preheat.providers import ProviderDecision
+        self.coordinator.schedule_provider.get_decision = MagicMock(return_value=ProviderDecision(
+             should_stop=False, session_end=event_dt + timedelta(hours=2), is_valid=True, is_shadow=False
+        ))
+        self.coordinator.learned_provider.get_decision = MagicMock(return_value=ProviderDecision(
+             should_stop=False, session_end=None, is_valid=False, is_shadow=True
+        ))
+        
+        # Mock normal temps
+        self.coordinator._get_operative_temperature = AsyncMock(return_value=20.0)
+        self.coordinator._get_target_setpoint = AsyncMock(return_value=21.0)
+        self.coordinator._get_outdoor_temp_current = AsyncMock(return_value=10.0)
+        
+        # Run Update
+        data = await self.coordinator._async_update_data()
+        
+        # Assertions
+        # Should start preheat
+        self.coordinator._start_preheat.assert_called_once()
+        
+        # Trace assertions
+        trace = data.decision_trace
+        self.assertFalse(trace["blocked"])
+        self.assertEqual(trace["reason"], "none")
+
     async def test_stale_sensor_fallback_check(self):
         """Test that Check Diagnostics inspects Climate if no Sensor."""
         # Patch PreheatingCoordinator._get_conf (CLASS LEVEL)
@@ -362,3 +484,43 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
                       is_fixable=False, is_persistent=True, severity=ANY, 
                       translation_key="stale_sensor", translation_placeholders=ANY
                   )
+
+    async def test_no_provider_but_potential_demand_not_blocked(self):
+        """Test that a schedule-free zone near arrival is NOT blocked."""
+        # 1. Enable System but ensure no blockers
+        self.coordinator.enable_active = True
+        self.coordinator._window_open_detected = False
+        self.coordinator._preheat_active = False
+        
+        # 2. Mock next event in 30 minutes
+        now_dt = dt_util.utcnow()
+        event_dt = now_dt + timedelta(minutes=30)
+        self.coordinator.planner.get_next_scheduled_event.return_value = event_dt
+        
+        # Mock providers (both invalid)
+        from custom_components.preheat.providers import ProviderDecision
+        self.coordinator.schedule_provider.get_decision = MagicMock(return_value=ProviderDecision(
+             should_stop=False, session_end=None, is_valid=False, is_shadow=False, invalid_reason="schedule_invalid"
+        ))
+        self.coordinator.learned_provider.get_decision = MagicMock(return_value=ProviderDecision(
+             should_stop=False, session_end=None, is_valid=False, is_shadow=True, invalid_reason="learned_invalid"
+        ))
+        
+        # Mock normal temps
+        self.coordinator._get_operative_temperature = AsyncMock(return_value=20.0)
+        self.coordinator._get_target_setpoint = AsyncMock(return_value=21.0)
+        self.coordinator._get_outdoor_temp_current = AsyncMock(return_value=10.0)
+        
+        # Run Update
+        data = await self.coordinator._async_update_data()
+        
+        # Assertions
+        # Should NOT start preheat (no valid provider)
+        self.coordinator._start_preheat.assert_not_called()
+        self.assertFalse(data.preheat_active)
+        self.assertIsNone(data.next_start_time)
+        
+        # Trace assertions: blocked should be False (no active blockers, only invalid providers)
+        trace = data.decision_trace
+        self.assertFalse(trace["blocked"])
+        self.assertEqual(trace["reason"], "none")

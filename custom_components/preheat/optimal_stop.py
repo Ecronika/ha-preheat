@@ -59,7 +59,10 @@ class SessionResolver:
             return None
 
 class OptimalStopManager:
-    """State Machine for Optimal Stop decision."""
+    """
+    State Machine for Optimal Stop decision.
+    Manager wird in 2.9.x nicht aufgerufen; Aktivierung in v2.10.
+    """
     
     def __init__(self, hass: HomeAssistant):
         self._hass = hass

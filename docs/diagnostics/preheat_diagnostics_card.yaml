@@ -1,0 +1,50 @@
+# Diagnostic / debug tool only — not a feature. Shows internal decision_trace. Optional, manuell ins Dashboard einzufügen.
+type: markdown
+title: Autonomous Engine Cockpit
+content: >-
+  {% set trace = state_attr('sensor.office_neu_2_status','decision_trace') %}
+  {% set patterns = state_attr('sensor.office_neu_2_status','pattern_data') %}
+  {% if trace %}
+    {% set pc = trace.provider_candidates | default({}) %}
+    {% set sched = pc.get('schedule', {}) %}
+    {% set learned = pc.get('learned', {}) %}
+    {% set li = learned.get('gate_inputs', {}) %}
+    ### 🧠 Autonomous Engine Cockpit
+
+    | | |
+    |---|---|
+    | **Evaluated** | {{ as_timestamp(trace.evaluated_at) | timestamp_custom('%H:%M:%S') }} |
+    | **Controller** | `{{ trace.provider_selected | upper }}` |
+    | **Blocked** | {{ trace.get('blocked', false) }} ({{ trace.get('blocked_reasons', []) | join(', ') or '—' }}) |
+
+    #### 📡 Signal Quality
+    | Metric | Value |
+    |---|---|
+    | Pattern Confidence | {{ (li.get('pattern_confidence', 0) * 100) | round }}% |
+    | Potential Savings | {{ li.get('savings', 0) | round(1) }} min |
+    | Learned Confidence | {{ (learned.get('confidence', 0) * 100) | round }}% |
+
+    #### 🤖 Provider Status
+    *   **Schedule**: valid={{ sched.get('is_valid', false) }}{% if sched.get('invalid_reason') %} ({{ sched.get('invalid_reason') | replace('_',' ') | title }}){% endif %} · End: {{ sched.get('session_end') or '—' }}
+    *   **Learned**: valid={{ learned.get('is_valid', false) }} · {% if learned.get('is_shadow') %}👻 Shadow{% else %}🚀 Control{% endif %}{% if learned.get('invalid_reason') %} ({{ learned.get('invalid_reason') | replace('_',' ') | title }}){% endif %}
+
+    {% if patterns %}
+    #### 🧩 Detected Patterns
+    | Mode | Weight |
+    |---|---|
+    {% for k, v in patterns.items() %}| {{ k }} | {{ v }}x |
+    {% endfor %}
+    {% endif %}
+
+    #### 🛡️ Gates / Blocking
+    *   Active blockers: {{ trace.get('blocked_reasons', []) | join(', ') or 'none' }}
+    *   Arbitration gates failed: {{ trace.get('gates_failed', []) | join(', ') or 'none' }}
+
+    #### 👻 Shadow Performance
+    | Metric | Value |
+    |---|---|
+    | Accumulated Savings | {{ trace.metrics.get('cumulative_shadow_savings', 0) | round(1) }} min |
+    | Safety Violations | {{ trace.metrics.get('safety_violations', 0) }} |
+  {% else %}
+    *(No decision_trace available for the configured sensor)*
+  {% endif %}
