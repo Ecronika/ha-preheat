@@ -191,6 +191,7 @@ class TestCoordinatorArbitration(unittest.TestCase):
         self.coord.optimal_stop_manager = MagicMock()
         self.coord.optimal_stop_manager.is_active = False
         self.coord.optimal_stop_manager.stop_time = None
+        self.coord.optimal_stop_manager._reason = "mock"
         self.coord.optimal_stop_manager.debug_info = {"reason": "mock"}
         self.coord.optimal_stop_manager._savings_total = 0.0
         self.coord.optimal_stop_manager._savings_remaining = 0.0

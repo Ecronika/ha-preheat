@@ -161,16 +161,22 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         default_state.state = "unknown"
         default_state.last_changed = dt_util.utcnow() # Default to now (mocked)
         self.hass.states.get.return_value = default_state
-        
-        # Patch internals
+                # Patch internals
         with patch("custom_components.preheat.coordinator.PreheatPlanner") as MockPlanner, \
              patch("custom_components.preheat.coordinator.Store"), \
-             patch("custom_components.preheat.coordinator.OptimalStopManager"), \
-             patch("custom_components.preheat.coordinator.OptimalStopManager"), \
+             patch("custom_components.preheat.coordinator.OptimalStopManager") as MockOSM, \
              patch("custom_components.preheat.coordinator.async_track_state_change_event"), \
              patch("custom_components.preheat.diagnostics.async_create_issue"), \
              patch("custom_components.preheat.diagnostics.async_delete_issue"):
              
+            # Configure OptimalStopManager mock to avoid mock leakage / type errors
+            osm_instance = MockOSM.return_value
+            osm_instance.is_active = False
+            osm_instance.stop_time = None
+            osm_instance._reason = "mock"
+            osm_instance._savings_total = 0.0
+            osm_instance._savings_remaining = 0.0
+
             # Manually inject dt_util to ensure coordinator uses our mock
             import custom_components.preheat.coordinator
             custom_components.preheat.coordinator.dt_util = mock_dt
@@ -178,7 +184,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
             # Also inject for diagnostics to fix module-level import issues in 'discover'
             import custom_components.preheat.diagnostics
             custom_components.preheat.diagnostics.dt_util = mock_dt
-
+ 
             self.coordinator = PreheatingCoordinator(self.hass, self.entry)
             
             # Configure Planner Mock deeply
@@ -491,6 +497,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         self.coordinator.enable_active = True
         self.coordinator._window_open_detected = False
         self.coordinator._preheat_active = False
+        self.coordinator.planner.last_pattern_result.confidence = 0.0
         
         # 2. Mock next event in 30 minutes
         now_dt = dt_util.utcnow()
@@ -524,3 +531,27 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         trace = data.decision_trace
         self.assertFalse(trace["blocked"])
         self.assertEqual(trace["reason"], "none")
+
+    async def test_frost_protection_triggers_even_when_disabled_and_lead_time_active(self):
+        """Test that frost protection override is not suppressed by blocks when lead time is active."""
+        # 1. Disable System (which blocks normal preheat)
+        self.coordinator.enable_active = False
+        self.coordinator._preheat_active = False
+        
+        # 2. Mock next event in 30 minutes (lead time active)
+        now_dt = dt_util.utcnow()
+        event_dt = now_dt + timedelta(minutes=30)
+        self.coordinator.planner.get_next_scheduled_event.return_value = event_dt
+        
+        # 3. Mock Low Temp (4.0 C) -> Frost active
+        self.coordinator._get_operative_temperature = AsyncMock(return_value=4.0)
+        self.coordinator._get_target_setpoint = AsyncMock(return_value=20.0)
+        self.coordinator._get_outdoor_temp_current = AsyncMock(return_value=0.0)
+        
+        # 4. Run Update
+        await self.coordinator._async_update_data()
+        
+        # Assertions
+        # Should start preheat despite enable_active = False because frost overrides blockers
+        self.coordinator._start_preheat.assert_called_once()
+        self.assertTrue(self.coordinator._frost_active)

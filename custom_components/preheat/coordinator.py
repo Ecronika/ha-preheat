@@ -193,6 +193,7 @@ class PreheatData:
     # v2.9 Logic
     hvac_action: str | None = None
     hvac_mode: str | None = None
+    start_source: str = "none"
 
 class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     """Coordinator to manage preheating logic."""
@@ -228,6 +229,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self.optimal_stop_manager = OptimalStopManager(hass)
         self.cooling_analyzer = CoolingAnalyzer()
         self.session_resolver = None
+        self._last_cooling_analysis = None
+        self.tau_revalidated = False
+        self._last_savings_update = None
         
         # V3.0: Providers & Arbitration
         self.hold_active = False
@@ -421,8 +425,22 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 )
                 
                 # V2.5 Load Cooling Data
-                self.cooling_analyzer.learned_tau = data.get("model_cooling_tau", 4.0)
-                self.cooling_analyzer.confidence = data.get("cooling_confidence", 0.0)
+                loaded_tau = data.get("model_cooling_tau", 4.0)
+                loaded_conf = data.get("cooling_confidence", 0.0)
+                self.tau_revalidated = data.get("tau_revalidated", False)
+                
+                if not self.tau_revalidated:
+                    if loaded_tau >= 12.0:
+                        _LOGGER.info("Revalidating alt-tau: loaded tau %.2fh is implausibly high, resetting to profile default", loaded_tau)
+                        loaded_tau = profile_data.get("default_coast", 4.0)
+                        loaded_conf = 0.0
+                    self.tau_revalidated = True
+                
+                self.cooling_analyzer.learned_tau = loaded_tau
+                self.cooling_analyzer.confidence = loaded_conf
+                
+                # Load Shadow Savings
+                self._shadow_metrics["cumulative_shadow_savings"] = data.get("cumulative_shadow_savings", 0.0)
                 
                 # V2.9.1 Load Diagnostics Data
                 # V2.9.1 Load Diagnostics Data
@@ -521,6 +539,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # V2.5
             "model_cooling_tau": self.cooling_analyzer.learned_tau,
             "cooling_confidence": self.cooling_analyzer.confidence,
+            "tau_revalidated": self.tau_revalidated,
+            "cumulative_shadow_savings": self._shadow_metrics.get("cumulative_shadow_savings", 0.0),
             "enable_active": self.enable_active,
             # V2.9.1
             "diagnostics": self.diagnostics.data,
@@ -1078,23 +1098,74 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         """Arbitrate between providers and make a decision."""
         now = ctx["now"]
         
-        # Prepare Provider Context
+        # 1. Schedule Provider (Pre-evaluation for Optimal Stop session_end)
         provider_ctx = dict(ctx)
         provider_ctx.update({
             "tau_hours": self.cooling_analyzer.learned_tau,
             "physics_deadtime": self.physics.deadtime,
-            # Placeholders for metrics (Calculated later or in dedicated step)
             "potential_savings": 0.0, 
             "tau_confidence": 100.0, 
             "pattern_confidence": 0.0, 
         })
-        
-
-        
-        # 1. Schedule Provider
         sched_decision = self.schedule_provider.get_decision(provider_ctx)
-        
-        # 2. Learned Provider (Anchor Mode if Schedule valid)
+
+        # 2. Update Optimal Stop Manager (M1 & M3)
+        def forecast_provider(start_dt: datetime, end_dt: datetime) -> float:
+            hours = (end_dt - start_dt).total_seconds() / 3600.0
+            if ctx["forecasts"] and self.physics:
+                try:
+                    val = self.physics.calculate_effective_outdoor_temp(ctx["forecasts"], hours)
+                    if isinstance(val, (int, float)) and not isinstance(val, bool):
+                        return val
+                except Exception:
+                    pass
+            return ctx["outdoor_temp"] if ctx["outdoor_temp"] is not None else 10.0
+
+        tau_hours = self.cooling_analyzer.learned_tau
+        tau_hours = min(tau_hours, 12.0) # Plausibilitäts-Clamp
+        if self.cooling_analyzer.confidence < GATE_MIN_TAU_CONF:
+            tau_hours = 0.0 # Konfidenz-Gate -> kein Coast
+
+        opt_config = {
+            CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, 0.5),
+            CONF_MAX_COAST_HOURS: self._get_conf(CONF_MAX_COAST_HOURS, 4.0),
+            CONF_PHYSICS_MODE: self._get_conf(CONF_PHYSICS_MODE, PHYSICS_STANDARD),
+            "forecasts": ctx["forecasts"] or [],
+            "system_inertia": self.physics.deadtime,
+        }
+
+        # Always call update on optimal_stop_manager
+        self.optimal_stop_manager.update(
+            current_temp=ctx["operative_temp"],
+            target_temp=ctx["target_setpoint"],
+            schedule_end=sched_decision.session_end,
+            forecast_provider=forecast_provider,
+            tau_hours=tau_hours,
+            config=opt_config,
+            predicted_end=self.planner.get_next_predicted_departure(now)
+        )
+
+        # Extract values from optimal_stop_manager
+        is_optimal_stop_active = self.optimal_stop_manager.is_active
+        stop_time = self.optimal_stop_manager.stop_time
+        stop_reason = self.optimal_stop_manager._reason
+        savings_total = self.optimal_stop_manager._savings_total
+        savings_remaining = self.optimal_stop_manager._savings_remaining
+
+        # Accumulate Shadow Savings (M3)
+        if self._last_savings_update is not None:
+            elapsed = (now - self._last_savings_update).total_seconds() / 60.0
+            if 0 < elapsed < 30:
+                if is_optimal_stop_active:
+                    self._shadow_metrics["cumulative_shadow_savings"] += elapsed
+        self._last_savings_update = now
+
+        # 3. Update Provider Context with real calculated savings/confidence
+        provider_ctx.update({
+            "potential_savings": savings_total,
+            "tau_confidence": self.cooling_analyzer.confidence,
+            "pattern_confidence": getattr(self.planner.last_pattern_result, "confidence", 0.0) if getattr(self.planner, "last_pattern_result", None) else 0.0,
+        })
         if sched_decision.session_end:
              provider_ctx["scheduled_end"] = sched_decision.session_end
              
@@ -1104,23 +1175,33 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         final_decision = None
         gates_failed = []
         is_shadow = False
+        start_source = "none"
         
+        has_mature_pattern = False
+        if self.planner.last_pattern_result is not None:
+             conf = getattr(self.planner.last_pattern_result, "confidence", 0.0)
+             if isinstance(conf, (int, float)):
+                  has_mature_pattern = conf >= GATE_MIN_PATTERN_CONF
+
         if self.hold_active:
              selected_provider = PROVIDER_MANUAL
              gates_failed.append(GATE_FAIL_MANUAL)
         elif sched_decision.is_valid:
              selected_provider = PROVIDER_SCHEDULE
              final_decision = sched_decision
-        elif learned_decision.is_valid and not learned_decision.is_shadow:
+             start_source = "schedule"
+             is_shadow = False
+        elif has_mature_pattern and ctx["next_event"] is not None:
+             # M4: Schedule-free autonomous start
              selected_provider = PROVIDER_LEARNED
              final_decision = learned_decision
-        elif learned_decision.is_valid and learned_decision.is_shadow:
-             # Shadow Mode
-             selected_provider = PROVIDER_NONE 
-             final_decision = learned_decision
-             is_shadow = True
-             gates_failed.append("shadow_mode")
+             start_source = "learned"
+             is_shadow = False
         else:
+             start_source = "none"
+             selected_provider = PROVIDER_NONE
+             final_decision = None
+             is_shadow = True
              if not sched_decision.is_valid: gates_failed.append("schedule_invalid")
              if not learned_decision.is_valid: gates_failed.append("learned_invalid")
         
@@ -1130,7 +1211,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         frost_override = False
         
         # Frost Protection
-        # Standard: Frost > Hold > Schedule
         frost_temp = FROST_PROTECTION_TEMP 
         hysteresis = FROST_HYSTERESIS
         
@@ -1145,8 +1225,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              start_time = now
         
         # Determine if a preheat demand would exist (Bedarf bestünde)
-        # Potential demand exists if we are not in frost override, and we have a next event,
-        # and we are within the preheat lead time.
         potential_demand = False
         if not frost_override and ctx["next_event"] is not None:
              minutes_to_start = (ctx["next_event"] - now).total_seconds() / 60.0
@@ -1163,14 +1241,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                   # Check Lead Time
                   minutes_to_start = (evt - now).total_seconds() / 60.0
                   if minutes_to_start <= dur:
-                      normal_start_triggered = True
-                      
+                       normal_start_triggered = True
+                       
              if final_decision.session_end:
                   effective_departure = final_decision.session_end
 
         # Now, evaluate blocks on the normal preheat path
-        # If normal_start_triggered was True, but we have a blocker, we suppress the start.
-        # Check active blockers if there is a potential demand or normal start triggered
         blocked = False
         blocked_reasons = []
         if potential_demand:
@@ -1185,29 +1261,35 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                   blocked = True
 
         # Apply blocks to should_start & start_time
+        # M1: If Optimal Stop is active and enabled, we suppress the preheating start.
+        # M6: Frost protection overrides all blocks.
         if normal_start_triggered:
-             if blocked:
+             is_optimal_stop_suppressing = is_optimal_stop_active and self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False)
+             if (blocked or is_optimal_stop_suppressing) and not frost_override:
                   should_start = False
                   start_time = None
              else:
                   should_start = True
                   start_time = now
 
-        # Shadow Metrics Logic
-        shadow_metrics = {
-             "safety_violations": 0,
-             "cumulative_shadow_savings": 0.0
-        }
+        # Shadow Metrics Logic (M3)
+        safety_violations = self._shadow_metrics.get("safety_violations", 0)
         if learned_decision.is_valid and learned_decision.is_shadow and learned_decision.should_stop:
-             # Check Safety: If we STOPPED now, would it be uncomfortable?
              stop_tolerance = self._get_conf(CONF_STOP_TOLERANCE, 0.5)
              threshold = ctx["target_setpoint"] - stop_tolerance
              if ctx["operative_temp"] < threshold:
-                  shadow_metrics["safety_violations"] = 1
+                  safety_violations = 1
+                  self._shadow_metrics["safety_violations"] = 1
+        
+        shadow_metrics = {
+             "safety_violations": safety_violations,
+             "cumulative_shadow_savings": self._shadow_metrics.get("cumulative_shadow_savings", 0.0)
+        }
 
         self.decision_trace = {
              "evaluated_at": now.isoformat(),
              "schema_version": 1,
+             "start_source": start_source,
              KEY_PROVIDER_SELECTED: selected_provider,
              KEY_PROVIDER_CANDIDATES: {
                  PROVIDER_SCHEDULE: asdict(sched_decision),
@@ -1218,6 +1300,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              "blocked": blocked,
              "blocked_reasons": blocked_reasons,
              "reason": blocked_reasons[0] if blocked else "none",
+             # Optimal Stop Trace (M7)
+             "optimal_stop": {
+                 "enabled": self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False),
+                 "active": is_optimal_stop_active and self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False),
+                 "stop_time": stop_time.isoformat() if stop_time else None,
+                 "savings_total": savings_total,
+                 "savings_remaining": savings_remaining,
+                 "stop_reason": stop_reason,
+                 "tau_hours": tau_hours,
+                 "tau_confidence": self.cooling_analyzer.confidence,
+             }
         }
         
         return {
@@ -1226,7 +1319,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              "reason": blocked_reasons[0] if blocked else "arbitrated",
              "blocked_by": blocked_reasons,
              "frost_override": frost_override,
-             "effective_departure": effective_departure
+             "effective_departure": effective_departure,
+             "start_source": start_source
         }
 
     async def _execute_control_actions(self, ctx: Context, dec: Decision) -> None:
@@ -1277,8 +1371,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             next_departure=dec["effective_departure"],
             hvac_action=hvac_action,
             hvac_mode=hvac_mode,
-            optimal_stop_active=self.optimal_stop_manager.is_active,
+            optimal_stop_active=self.optimal_stop_manager.is_active and self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False),
             optimal_stop_time=self.optimal_stop_manager.stop_time,
+            stop_reason=self.optimal_stop_manager._reason,
+            savings_total=self.optimal_stop_manager._savings_total,
+            savings_remaining=self.optimal_stop_manager._savings_remaining,
             coast_tau=self.cooling_analyzer.learned_tau,
             tau_confidence=self.cooling_analyzer.confidence,
             pattern_type=p_res.pattern_type if p_res else None,
@@ -1286,6 +1383,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             pattern_stability=p_res.stability if p_res else 0.0,
             detected_modes=p_res.modes_found if p_res else None,
             fallback_used=p_res.fallback_used if p_res else False,
+            start_source=dec.get("start_source", "none"),
         )
     
 
@@ -1478,6 +1576,33 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         current_uptime = (dt_util.utcnow() - self._startup_time).total_seconds()
         if current_uptime >= STARTUP_GRACE_SEC:
              await self.diagnostics.check_all(ctx, self.physics, self.weather_service, pred)
+
+        # 4. Cooling Analyzer Learning (M2)
+        if ctx["operative_temp"] > INVALID_TEMP:
+            t_out = ctx["outdoor_temp"] if ctx["outdoor_temp"] is not None else 10.0
+            self.cooling_analyzer.add_data_point(
+                dt=ctx["now"],
+                t_in=ctx["operative_temp"],
+                t_out=t_out,
+                is_heating=self._preheat_active,
+                window_open=ctx["is_window_open"]
+            )
+            
+            # Periodically analyze (every 60 minutes)
+            now = ctx["now"]
+            if self._last_cooling_analysis is None:
+                self._last_cooling_analysis = now
+            elif (now - self._last_cooling_analysis).total_seconds() >= 3600:
+                self._last_cooling_analysis = now
+                old_tau = self.cooling_analyzer.learned_tau
+                old_conf = self.cooling_analyzer.confidence
+                
+                self.cooling_analyzer.analyze()
+                
+                if self.cooling_analyzer.learned_tau != old_tau or self.cooling_analyzer.confidence != old_conf:
+                    _LOGGER.info("Cooling analyzer learned new parameters: tau=%.2fh, confidence=%.1f%%", 
+                                 self.cooling_analyzer.learned_tau, self.cooling_analyzer.confidence * 100)
+                    await self._async_save_data()
 
     def _update_polling_interval(self, next_start: datetime | None, is_occupied: bool) -> None:
         """
