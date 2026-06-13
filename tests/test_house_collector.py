@@ -146,9 +146,10 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
         # Predict next arrival. Since today is Saturday 2026-06-13, we check predictions.
         # Mon 2026-06-15 is a workday.
         now = datetime(2026, 6, 13, 12, 0, 0, tzinfo=timezone.utc)
-        expected_dt, predicted_conf = house.get_next_arrival(now)
+        expected_dt, predicted_conf, source = house.get_next_arrival(now)
         
         self.assertIsNotNone(expected_dt)
+        self.assertEqual(source, "confident")
         # Use python native timezone-aware conversion to avoid calling mocked dt_util in test body
         expected_local = expected_dt.astimezone()
         self.assertEqual(expected_local.weekday(), 0) # Monday
@@ -177,12 +178,24 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
         # Evening spread is 300, so evening confidence is 0.0.
         house.evening_window_str = "17:30-22:00"
         now_mon_afternoon = datetime(2026, 6, 15, 13, 0, 0, tzinfo=timezone.utc)
-        expected_dt, predicted_conf = house.get_next_arrival(now_mon_afternoon)
+        expected_dt, predicted_conf, source = house.get_next_arrival(now_mon_afternoon)
         self.assertIsNotNone(expected_dt)
+        self.assertEqual(source, "fallback")
         expected_local = expected_dt.astimezone()
         self.assertEqual(expected_local.weekday(), 0) # Monday
         self.assertEqual(expected_local.hour, 17)
         self.assertEqual(expected_local.minute, 30)
+        self.assertEqual(predicted_conf, 0.0)
+
+        # Test no evening window -> source is "none"
+        house.evening_window_str = None
+        # Clear AM history so AM won't match either
+        house.history = {i: [] for i in range(7)}
+        house.history[0] = [(date(2026, 6, 8), 1000), (date(2026, 6, 15), 1000)]
+        house.history[1] = [(date(2026, 6, 9), 1300), (date(2026, 6, 16), 1300)]
+        expected_dt, predicted_conf, source = house.get_next_arrival(now_mon_afternoon)
+        self.assertIsNone(expected_dt)
+        self.assertEqual(source, "none")
         self.assertEqual(predicted_conf, 0.0)
 
     async def test_h4_arbitration_logic(self):
@@ -219,7 +232,9 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
             "outdoor_temp": 10.0,
             "forecasts": [],
             "has_confident_house": True,
+            "has_house_fallback": False,
             "house_confidence": 0.8,
+            "house_source": "confident",
             "house_next_event": now + timedelta(minutes=45),
             "zone_next_event": now + timedelta(minutes=60),
             "next_event": now + timedelta(minutes=45),
@@ -246,9 +261,11 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dec["start_source"], "house")
         self.assertEqual(dec["should_start"], True)
 
-        # 3. Zone learned wins when House is not confident
+        # 3. Zone learned wins when House is not confident and no fallback
         ctx["has_confident_house"] = False
+        ctx["has_house_fallback"] = False
         ctx["house_confidence"] = 0.5
+        ctx["house_source"] = "none"
         ctx["next_event"] = now + timedelta(minutes=60)
         
         # Mock mature zone pattern
@@ -281,6 +298,109 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
         coord.learned_provider.get_decision = MagicMock(return_value=learned_decision)
         dec = coord._evaluate_start_decision(ctx, pred)
         self.assertEqual(dec["start_source"], "none")
+
+    async def test_h4b_house_fallback_arbitration(self):
+        """Test house_fallback arbitration: evening comfort window triggers start without 0.7 gate."""
+        entry = MagicMock()
+        entry.entry_id = "zone_1"
+        entry.options = {CONF_SCHEDULE_ENTITY: "schedule.test"}
+        entry.data = {}
+        
+        with patch("custom_components.preheat.coordinator.PreheatingCoordinator._setup_listeners"), \
+             patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
+            coord = PreheatingCoordinator(self.hass, entry)
+            
+        house = HouseArrivalCollector(self.hass)
+        coord.house_collector = house
+        
+        now = datetime(2026, 6, 13, 12, 0, 0, tzinfo=timezone.utc)
+        
+        # Schedule is invalid (schedule-free zone)
+        sched_decision = ProviderDecision(
+            should_stop=False,
+            session_end=None,
+            is_valid=False,
+            is_shadow=True,
+            confidence=0.0
+        )
+        coord.schedule_provider.get_decision = MagicMock(return_value=sched_decision)
+        
+        # Immature learned pattern (no zone-level learned start)
+        mock_pattern = MagicMock()
+        mock_pattern.confidence = 0.3
+        coord.planner.last_pattern_result = mock_pattern
+        learned_decision = ProviderDecision(
+            should_stop=False, session_end=None,
+            is_valid=False, is_shadow=True, confidence=0.0
+        )
+        coord.learned_provider.get_decision = MagicMock(return_value=learned_decision)
+        
+        pred = {"predicted_duration": 50.0}
+        
+        # --- Case 1: Evening fallback active, low confidence -> start_source="house_fallback" ---
+        ctx_fallback = {
+            "now": now,
+            "operative_temp": 18.0,
+            "target_setpoint": 21.0,
+            "outdoor_temp": 10.0,
+            "forecasts": [],
+            "has_confident_house": False,
+            "has_house_fallback": True,
+            "house_confidence": 0.3,
+            "house_source": "fallback",
+            "house_next_event": now + timedelta(minutes=45),
+            "zone_next_event": None,
+            "next_event": now + timedelta(minutes=45),
+        }
+        dec = coord._evaluate_start_decision(ctx_fallback, pred)
+        self.assertEqual(dec["start_source"], "house_fallback")
+        self.assertTrue(dec["should_start"])
+        
+        # --- Case 2: No evening window, no fallback -> start_source="none" ---
+        ctx_no_fallback = {
+            "now": now,
+            "operative_temp": 18.0,
+            "target_setpoint": 21.0,
+            "outdoor_temp": 10.0,
+            "forecasts": [],
+            "has_confident_house": False,
+            "has_house_fallback": False,
+            "house_confidence": 0.0,
+            "house_source": "none",
+            "house_next_event": None,
+            "zone_next_event": None,
+            "next_event": None,
+        }
+        dec = coord._evaluate_start_decision(ctx_no_fallback, pred)
+        self.assertEqual(dec["start_source"], "none")
+        
+        # --- Case 3: Schedule valid -> schedule wins over fallback ---
+        sched_valid = ProviderDecision(
+            should_stop=False, session_end=now + timedelta(hours=3),
+            is_valid=True, is_shadow=False, confidence=1.0
+        )
+        coord.schedule_provider.get_decision = MagicMock(return_value=sched_valid)
+        dec = coord._evaluate_start_decision(ctx_fallback, pred)
+        self.assertEqual(dec["start_source"], "schedule")
+        
+        # --- Case 4: Morning confident -> "house" (not "house_fallback") ---
+        coord.schedule_provider.get_decision = MagicMock(return_value=sched_decision)
+        ctx_morning = {
+            "now": now,
+            "operative_temp": 18.0,
+            "target_setpoint": 21.0,
+            "outdoor_temp": 10.0,
+            "forecasts": [],
+            "has_confident_house": True,
+            "has_house_fallback": False,
+            "house_confidence": 0.8,
+            "house_source": "confident",
+            "house_next_event": now + timedelta(minutes=45),
+            "zone_next_event": None,
+            "next_event": now + timedelta(minutes=45),
+        }
+        dec = coord._evaluate_start_decision(ctx_morning, pred)
+        self.assertEqual(dec["start_source"], "house")
 
     async def test_h5_bootstrap_aggregation(self):
         """Test H5: Bootstrap pools history from all existing zones and deduplicates correctly."""

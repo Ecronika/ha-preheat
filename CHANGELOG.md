@@ -9,7 +9,10 @@ This release introduces the House Arrival Hub, a single-instance shared collecto
 * **Prediction & Comfort Customization**: Supports morning (P25) vs. evening (comfort-biased percentile) split and customizable comfort bias ("comfort", "balanced", "economy") (H3).
 * **Fallback Comfort Window**: Adds support for configuring a fallback arrival window (`evening_comfort_window`) if prediction confidence falls below the 70% threshold (H3).
 * **Data-Safe Zero-Wait Bootstrap**: Automatically initializes the global history by pooling existing zone stores on the first run, without resetting or neulernen (H5).
-* **Zone Arbitration Update**: Priority order is resolved as `Schedule > House (confident) > Zone Learned > None` (H4).
+* **Zone Arbitration Update**: Priority order is resolved as `Schedule > House (confident) > House-Fallback > Zone Learned > None` (H4).
+
+### 🐛 Fixes
+* **Evening Comfort Window Now Effective**: The evening fallback comfort window (`house_fallback`) now correctly bypasses the 0.7 confidence gate, so schedule-free zones preheat before evening arrivals even with low statistical confidence. Previously the fallback was computed but discarded.
 
 ---
 

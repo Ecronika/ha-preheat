@@ -1028,12 +1028,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         house_next_event = None
         house_conf = 0.0
+        house_source = "none"
         if self.house_collector:
-            house_next_event, house_conf = self.house_collector.get_next_arrival(now)
+            house_next_event, house_conf, house_source = self.house_collector.get_next_arrival(now)
             
         has_confident_house = (house_next_event is not None and house_conf >= 0.7)
+        has_house_fallback = (house_next_event is not None and house_source == "fallback")
         
-        if has_confident_house:
+        if has_confident_house or has_house_fallback:
             next_event = house_next_event
         else:
             next_event = zone_next_event
@@ -1053,7 +1055,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "target_setpoint": target_setpoint, "next_event": next_event, "blocked_dates": blocked_dates,
             "is_sensor_ready": is_ready, "forecasts": forecasts, "preheat_active": self._preheat_active,
             "has_confident_house": has_confident_house, "house_confidence": house_conf,
-            "house_next_event": house_next_event, "zone_next_event": zone_next_event
+            "house_next_event": house_next_event, "zone_next_event": zone_next_event,
+            "has_house_fallback": has_house_fallback, "house_source": house_source
         }
 
     async def _run_physics_simulation(self, ctx: Context) -> Prediction:
@@ -1203,6 +1206,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                   has_mature_pattern = conf >= GATE_MIN_PATTERN_CONF
 
         has_confident_house = ctx.get("has_confident_house", False)
+        has_house_fallback = ctx.get("has_house_fallback", False)
         house_conf = ctx.get("house_confidence", 0.0)
         house_next_event = ctx.get("house_next_event")
         zone_next_event = ctx.get("zone_next_event")
@@ -1225,6 +1229,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  confidence=house_conf
              )
              start_source = "house"
+             is_shadow = False
+        elif has_house_fallback:
+             selected_provider = "house"
+             final_decision = ProviderDecision(
+                 should_stop=False,
+                 session_end=None,
+                 is_valid=True,
+                 is_shadow=False,
+                 confidence=house_conf
+             )
+             start_source = "house_fallback"
              is_shadow = False
         elif has_mature_pattern and ctx["next_event"] is not None:
              # M4: Schedule-free autonomous start

@@ -202,8 +202,8 @@ class HouseArrivalCollector:
                         pm_list.append(m)
         return sorted(am_list), sorted(pm_list)
 
-    def get_next_arrival(self, now: datetime) -> tuple[datetime | None, float]:
-        """Predict the next expected house arrival time and return (arrival_dt, confidence)."""
+    def get_next_arrival(self, now: datetime) -> tuple[datetime | None, float, str]:
+        """Predict the next expected house arrival time and return (arrival_dt, confidence, source)."""
         now_local = dt_util.as_local(now)
         today_date = now_local.date()
         
@@ -222,7 +222,7 @@ class HouseArrivalCollector:
                 if conf >= 0.7:
                     event_dt = datetime.combine(check_date, datetime.min.time(), tzinfo=now_local.tzinfo) + timedelta(minutes=p25)
                     if event_dt > now_local:
-                        return event_dt, conf
+                        return event_dt, conf, "confident"
             
             # Check PM block (Evening)
             if len(pm_list) >= 2:
@@ -243,7 +243,7 @@ class HouseArrivalCollector:
                 if conf >= 0.7:
                     event_dt = datetime.combine(check_date, datetime.min.time(), tzinfo=now_local.tzinfo) + timedelta(minutes=target_time)
                     if event_dt > now_local:
-                        return event_dt, conf
+                        return event_dt, conf, "confident"
                 else:
                     # Fallback comfort window
                     if self.evening_window_str:
@@ -252,9 +252,9 @@ class HouseArrivalCollector:
                             start_min, _ = window
                             event_dt = datetime.combine(check_date, datetime.min.time(), tzinfo=now_local.tzinfo) + timedelta(minutes=start_min)
                             if event_dt > now_local:
-                                return event_dt, conf
+                                return event_dt, conf, "fallback"
                                 
-        return None, 0.0
+        return None, 0.0, "none"
 
     def get_max_predicted_duration(self) -> float:
         """Find the maximum predicted preheat duration across all active zones."""

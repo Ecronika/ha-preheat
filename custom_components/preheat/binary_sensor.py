@@ -355,7 +355,7 @@ class PreheatHouseIncomingBinarySensor(Entity, BinarySensorEntity):
     def is_on(self) -> bool:
         """Return True if house arrival is incoming."""
         now = dt_util.now()
-        expected_arrival, _ = self.house.get_next_arrival(now)
+        expected_arrival, _, _ = self.house.get_next_arrival(now)
         if not expected_arrival:
             return False
         max_dur = self.house.get_max_predicted_duration()

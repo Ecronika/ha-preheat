@@ -369,7 +369,7 @@ class PreheatHouseNextArrivalSensor(PreheatHouseBaseSensor, SensorEntity):
     @property
     def native_value(self) -> datetime | None:
         """Return the next predicted house arrival."""
-        val, _ = self.house.get_next_arrival(dt_util.now())
+        val, _, _ = self.house.get_next_arrival(dt_util.now())
         return val
 
 
@@ -388,7 +388,7 @@ class PreheatHouseArrivalConfidenceSensor(PreheatHouseBaseSensor, SensorEntity):
     @property
     def native_value(self) -> int:
         """Return prediction confidence."""
-        _, conf = self.house.get_next_arrival(dt_util.now())
+        _, conf, _ = self.house.get_next_arrival(dt_util.now())
         return int(round(conf * 100))
 
 
