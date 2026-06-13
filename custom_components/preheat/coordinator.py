@@ -641,20 +641,24 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             count_arrival = 0
             count_departure = 0
             _LOGGER.debug("DEBUG: Found %d raw states. Processing...", len(states))
+            prev_state = None
             for state in states:
                 local_dt = dt_util.as_local(state.last_changed)
                 current_minutes = local_dt.hour * 60 + local_dt.minute
                 
-                if state.state == STATE_ON:
-                    # Basic window filter for arrivals
-                    if win_start_min <= current_minutes <= win_end_min:
-                        self.planner.record_arrival(local_dt)
-                        count_arrival += 1
-                elif state.state != STATE_ON: # OFF, UNAVAILABLE (End of session)
-                    # Departures don't need window filtering (or maybe minimal?)
-                    # record_departure handles deduplication logic internally
-                    self.planner.record_departure(local_dt)
-                    count_departure += 1
+                if prev_state is not None:
+                    if prev_state != STATE_ON and state.state == STATE_ON:
+                        # Basic window filter for arrivals
+                        if win_start_min <= current_minutes <= win_end_min:
+                            self.planner.record_arrival(local_dt)
+                            count_arrival += 1
+                    elif prev_state == STATE_ON and state.state != STATE_ON: # OFF, UNAVAILABLE (End of session)
+                        # Departures don't need window filtering (or maybe minimal?)
+                        # record_departure handles deduplication logic internally
+                        self.planner.record_departure(local_dt)
+                        count_departure += 1
+                
+                prev_state = state.state
             
             if count_arrival > 0 or count_departure > 0:
                 _LOGGER.info("Identified %d arrival and %d departure events from history.", count_arrival, count_departure)
@@ -1116,22 +1120,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "limit_exceeded": (uncapped_duration > max_preheat)
         }
 
-    def _evaluate_start_decision(self, ctx: Context, pred: Prediction) -> Decision:
-        """Arbitrate between providers and make a decision."""
-        now = ctx["now"]
-        
-        # 1. Schedule Provider (Pre-evaluation for Optimal Stop session_end)
-        provider_ctx = dict(ctx)
-        provider_ctx.update({
-            "tau_hours": self.cooling_analyzer.learned_tau,
-            "physics_deadtime": self.physics.deadtime,
-            "potential_savings": 0.0, 
-            "tau_confidence": 100.0, 
-            "pattern_confidence": 0.0, 
-        })
-        sched_decision = self.schedule_provider.get_decision(provider_ctx)
-
-        # 2. Update Optimal Stop Manager (M1 & M3)
+    def _update_optimal_stop_and_savings(
+        self, ctx: Context, now: datetime, sched_decision: ProviderDecision
+    ) -> tuple[bool, datetime | None, str, float, float, float]:
+        """Update Optimal Stop Manager and accumulate shadow savings."""
         def forecast_provider(start_dt: datetime, end_dt: datetime) -> float:
             hours = (end_dt - start_dt).total_seconds() / 3600.0
             if ctx["forecasts"] and self.physics:
@@ -1144,9 +1136,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             return ctx["outdoor_temp"] if ctx["outdoor_temp"] is not None else 10.0
 
         tau_hours = self.cooling_analyzer.learned_tau
-        tau_hours = min(tau_hours, 12.0) # Plausibilitäts-Clamp
+        tau_hours = min(tau_hours, 12.0)  # Plausibilitäts-Clamp
         if self.cooling_analyzer.confidence < GATE_MIN_TAU_CONF:
-            tau_hours = 0.0 # Konfidenz-Gate -> kein Coast
+            tau_hours = 0.0  # Konfidenz-Gate -> kein Coast
 
         opt_config = {
             CONF_STOP_TOLERANCE: self._get_conf(CONF_STOP_TOLERANCE, 0.5),
@@ -1167,20 +1159,246 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             predicted_end=self.planner.get_next_predicted_departure(now)
         )
 
-        # Extract values from optimal_stop_manager
         is_optimal_stop_active = self.optimal_stop_manager.is_active
         stop_time = self.optimal_stop_manager.stop_time
         stop_reason = self.optimal_stop_manager._reason
         savings_total = self.optimal_stop_manager._savings_total
         savings_remaining = self.optimal_stop_manager._savings_remaining
 
-        # Accumulate Shadow Savings (M3)
+        # Accumulate Shadow Savings
         if self._last_savings_update is not None:
             elapsed = (now - self._last_savings_update).total_seconds() / 60.0
             if 0 < elapsed < 30:
                 if is_optimal_stop_active:
                     self._shadow_metrics["cumulative_shadow_savings"] += elapsed
         self._last_savings_update = now
+
+        return is_optimal_stop_active, stop_time, stop_reason, savings_total, savings_remaining, tau_hours
+
+    def _arbitrate_provider(
+        self,
+        ctx: Context,
+        sched_decision: ProviderDecision,
+        learned_decision: ProviderDecision,
+        has_confident_house: bool,
+        has_house_fallback: bool,
+        house_conf: float,
+        has_mature_pattern: bool
+    ) -> tuple[str, str, ProviderDecision | None, list[str]]:
+        """Arbitrate between schedule, house, and learned providers."""
+        selected_provider = PROVIDER_NONE
+        final_decision = None
+        gates_failed = []
+        start_source = "none"
+
+        if self.hold_active:
+            selected_provider = PROVIDER_MANUAL
+            gates_failed.append(GATE_FAIL_MANUAL)
+        elif sched_decision.is_valid:
+            selected_provider = PROVIDER_SCHEDULE
+            final_decision = sched_decision
+            start_source = "schedule"
+        elif has_confident_house:
+            selected_provider = "house"
+            final_decision = ProviderDecision(
+                should_stop=False,
+                session_end=None,
+                is_valid=True,
+                is_shadow=False,
+                confidence=house_conf
+            )
+            start_source = "house"
+        elif has_house_fallback:
+            selected_provider = "house"
+            final_decision = ProviderDecision(
+                should_stop=False,
+                session_end=None,
+                is_valid=True,
+                is_shadow=False,
+                confidence=house_conf
+            )
+            start_source = "house_fallback"
+        elif has_mature_pattern and ctx["next_event"] is not None:
+            selected_provider = PROVIDER_LEARNED
+            final_decision = learned_decision
+            start_source = "learned"
+        else:
+            start_source = "none"
+            selected_provider = PROVIDER_NONE
+            final_decision = None
+            if not sched_decision.is_valid:
+                gates_failed.append("schedule_invalid")
+            if not learned_decision.is_valid:
+                gates_failed.append("learned_invalid")
+
+        return selected_provider, start_source, final_decision, gates_failed
+
+    def _apply_frost_override(self, ctx: Context, now: datetime) -> tuple[bool, bool, datetime | None]:
+        """Apply frost protection override if operative temp is below threshold."""
+        frost_temp = FROST_PROTECTION_TEMP
+        hysteresis = FROST_HYSTERESIS
+        frost_override = False
+        should_start = False
+        start_time = None
+
+        if ctx["operative_temp"] < frost_temp:
+            self._frost_active = True
+        elif self._frost_active and ctx["operative_temp"] > (frost_temp + hysteresis):
+            self._frost_active = False
+
+        if self._frost_active:
+            frost_override = True
+            should_start = True
+            start_time = now
+
+        return frost_override, should_start, start_time
+
+    def _apply_blocks_and_suppression(
+        self,
+        ctx: Context,
+        pred: Prediction,
+        now: datetime,
+        frost_override: bool,
+        final_decision: ProviderDecision | None,
+        is_optimal_stop_active: bool,
+        should_start: bool,
+        start_time: datetime | None
+    ) -> tuple[bool, datetime | None, datetime | None, bool, list[str]]:
+        """Evaluate blocks (disabled, window open, manual hold) and Optimal Stop suppression."""
+        potential_demand = False
+        if not frost_override and ctx["next_event"] is not None:
+            minutes_to_start = (ctx["next_event"] - now).total_seconds() / 60.0
+            if minutes_to_start <= pred["predicted_duration"]:
+                potential_demand = True
+
+        normal_start_triggered = False
+        effective_departure = None
+        if not frost_override and final_decision:
+            evt = ctx["next_event"]
+            dur = pred["predicted_duration"]
+
+            if evt:
+                minutes_to_start = (evt - now).total_seconds() / 60.0
+                if minutes_to_start <= dur:
+                    normal_start_triggered = True
+
+            if final_decision.session_end:
+                effective_departure = final_decision.session_end
+
+        blocked = False
+        blocked_reasons = []
+        if potential_demand:
+            if not self.enable_active:
+                blocked_reasons.append("disabled")
+            if self._window_open_detected:
+                blocked_reasons.append("window_open")
+            if self.hold_active:
+                blocked_reasons.append("manual_hold")
+
+            if blocked_reasons:
+                blocked = True
+
+        if normal_start_triggered:
+            is_optimal_stop_suppressing = is_optimal_stop_active and self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False)
+            if (blocked or is_optimal_stop_suppressing) and not frost_override:
+                should_start = False
+                start_time = None
+            else:
+                should_start = True
+                start_time = now
+
+        return should_start, start_time, effective_departure, blocked, blocked_reasons
+
+    def _build_decision_trace(
+        self,
+        ctx: Context,
+        now: datetime,
+        start_source: str,
+        selected_provider: str,
+        sched_decision: ProviderDecision,
+        learned_decision: ProviderDecision,
+        has_confident_house: bool,
+        house_conf: float,
+        house_next_event: datetime | None,
+        gates_failed: list[str],
+        blocked: bool,
+        blocked_reasons: list[str],
+        is_optimal_stop_active: bool,
+        stop_time: datetime | None,
+        savings_total: float,
+        savings_remaining: float,
+        stop_reason: str,
+        tau_hours: float
+    ) -> None:
+        """Construct the decision trace and update shadow metrics."""
+        safety_violations = self._shadow_metrics.get("safety_violations", 0)
+        if learned_decision.is_valid and learned_decision.is_shadow and learned_decision.should_stop:
+            stop_tolerance = self._get_conf(CONF_STOP_TOLERANCE, 0.5)
+            threshold = ctx["target_setpoint"] - stop_tolerance
+            if ctx["operative_temp"] < threshold:
+                safety_violations = 1
+                self._shadow_metrics["safety_violations"] = 1
+
+        shadow_metrics = {
+            "safety_violations": safety_violations,
+            "cumulative_shadow_savings": self._shadow_metrics.get("cumulative_shadow_savings", 0.0)
+        }
+
+        self.decision_trace = {
+            "evaluated_at": now.isoformat(),
+            "schema_version": 1,
+            "start_source": start_source,
+            KEY_PROVIDER_SELECTED: selected_provider,
+            KEY_PROVIDER_CANDIDATES: {
+                PROVIDER_SCHEDULE: asdict(sched_decision),
+                PROVIDER_LEARNED: asdict(learned_decision),
+                "house": {
+                    "is_valid": has_confident_house,
+                    "confidence": house_conf,
+                    "next_event": house_next_event.isoformat() if house_next_event else None
+                }
+            },
+            KEY_GATES_FAILED: gates_failed,
+            "metrics": shadow_metrics,
+            "blocked": blocked,
+            "blocked_reasons": blocked_reasons,
+            "reason": blocked_reasons[0] if blocked else "none",
+            "optimal_stop": {
+                "enabled": self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False),
+                "active": is_optimal_stop_active and self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False),
+                "stop_time": stop_time.isoformat() if stop_time else None,
+                "savings_total": savings_total,
+                "savings_remaining": savings_remaining,
+                "stop_reason": stop_reason,
+                "tau_hours": tau_hours,
+                "tau_confidence": self.cooling_analyzer.confidence,
+            }
+        }
+
+    def _evaluate_start_decision(self, ctx: Context, pred: Prediction) -> Decision:
+        """Arbitrate between providers and make a decision."""
+        now = ctx["now"]
+
+        # 1. Schedule Provider (Pre-evaluation for Optimal Stop session_end)
+        provider_ctx = dict(ctx)
+        provider_ctx.update({
+            "tau_hours": self.cooling_analyzer.learned_tau,
+            "physics_deadtime": self.physics.deadtime,
+            "potential_savings": 0.0,
+            "tau_confidence": 100.0,
+            "pattern_confidence": 0.0,
+        })
+        sched_decision = self.schedule_provider.get_decision(provider_ctx)
+
+        # 2. Update Optimal Stop Manager
+        (
+            is_optimal_stop_active,
+            stop_time,
+            stop_reason,
+            savings_total,
+            savings_remaining,
+            tau_hours
+        ) = self._update_optimal_stop_and_savings(ctx, now, sched_decision)
 
         # 3. Update Provider Context with real calculated savings/confidence
         provider_ctx.update({
@@ -1189,193 +1407,88 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "pattern_confidence": getattr(self.planner.last_pattern_result, "confidence", 0.0) if getattr(self.planner, "last_pattern_result", None) else 0.0,
         })
         if sched_decision.session_end:
-             provider_ctx["scheduled_end"] = sched_decision.session_end
-             
+            provider_ctx["scheduled_end"] = sched_decision.session_end
+
         learned_decision = self.learned_provider.get_decision(provider_ctx)
-        
-        selected_provider = PROVIDER_NONE
-        final_decision = None
-        gates_failed = []
-        is_shadow = False
-        start_source = "none"
-        
+
         has_mature_pattern = False
         if self.planner.last_pattern_result is not None:
-             conf = getattr(self.planner.last_pattern_result, "confidence", 0.0)
-             if isinstance(conf, (int, float)):
-                  has_mature_pattern = conf >= GATE_MIN_PATTERN_CONF
+            conf = getattr(self.planner.last_pattern_result, "confidence", 0.0)
+            if isinstance(conf, (int, float)):
+                has_mature_pattern = conf >= GATE_MIN_PATTERN_CONF
 
         has_confident_house = ctx.get("has_confident_house", False)
         has_house_fallback = ctx.get("has_house_fallback", False)
         house_conf = ctx.get("house_confidence", 0.0)
         house_next_event = ctx.get("house_next_event")
-        zone_next_event = ctx.get("zone_next_event")
 
-        if self.hold_active:
-             selected_provider = PROVIDER_MANUAL
-             gates_failed.append(GATE_FAIL_MANUAL)
-        elif sched_decision.is_valid:
-             selected_provider = PROVIDER_SCHEDULE
-             final_decision = sched_decision
-             start_source = "schedule"
-             is_shadow = False
-        elif has_confident_house:
-             selected_provider = "house"
-             final_decision = ProviderDecision(
-                 should_stop=False,
-                 session_end=None,
-                 is_valid=True,
-                 is_shadow=False,
-                 confidence=house_conf
-             )
-             start_source = "house"
-             is_shadow = False
-        elif has_house_fallback:
-             selected_provider = "house"
-             final_decision = ProviderDecision(
-                 should_stop=False,
-                 session_end=None,
-                 is_valid=True,
-                 is_shadow=False,
-                 confidence=house_conf
-             )
-             start_source = "house_fallback"
-             is_shadow = False
-        elif has_mature_pattern and ctx["next_event"] is not None:
-             # M4: Schedule-free autonomous start
-             selected_provider = PROVIDER_LEARNED
-             final_decision = learned_decision
-             start_source = "learned"
-             is_shadow = False
-        else:
-             start_source = "none"
-             selected_provider = PROVIDER_NONE
-             final_decision = None
-             is_shadow = True
-             if not sched_decision.is_valid: gates_failed.append("schedule_invalid")
-             if not learned_decision.is_valid: gates_failed.append("learned_invalid")
-        
-        should_start = False
-        start_time = None
-        effective_departure = None
-        frost_override = False
-        
-        # Frost Protection
-        frost_temp = FROST_PROTECTION_TEMP 
-        hysteresis = FROST_HYSTERESIS
-        
-        if ctx["operative_temp"] < frost_temp:
-             self._frost_active = True
-        elif self._frost_active and ctx["operative_temp"] > (frost_temp + hysteresis):
-             self._frost_active = False
-             
-        if self._frost_active:
-             frost_override = True
-             should_start = True
-             start_time = now
-        
-        # Determine if a preheat demand would exist (Bedarf bestünde)
-        potential_demand = False
-        if not frost_override and ctx["next_event"] is not None:
-             minutes_to_start = (ctx["next_event"] - now).total_seconds() / 60.0
-             if minutes_to_start <= pred["predicted_duration"]:
-                  potential_demand = True
+        # 4. Arbitrate Provider
+        (
+            selected_provider,
+            start_source,
+            final_decision,
+            gates_failed
+        ) = self._arbitrate_provider(
+            ctx,
+            sched_decision,
+            learned_decision,
+            has_confident_house,
+            has_house_fallback,
+            house_conf,
+            has_mature_pattern
+        )
 
-        # Start Logic (Normal)
-        normal_start_triggered = False
-        if not frost_override and final_decision:
-             evt = ctx["next_event"]
-             dur = pred["predicted_duration"]
-             
-             if evt:
-                  # Check Lead Time
-                  minutes_to_start = (evt - now).total_seconds() / 60.0
-                  if minutes_to_start <= dur:
-                       normal_start_triggered = True
-                       
-             if final_decision.session_end:
-                  effective_departure = final_decision.session_end
+        # 5. Apply Frost Override
+        frost_override, should_start, start_time = self._apply_frost_override(ctx, now)
 
-        # Now, evaluate blocks on the normal preheat path
-        blocked = False
-        blocked_reasons = []
-        if potential_demand:
-             if not self.enable_active:
-                  blocked_reasons.append("disabled")
-             if self._window_open_detected:
-                  blocked_reasons.append("window_open")
-             if self.hold_active:
-                  blocked_reasons.append("manual_hold")
-             
-             if blocked_reasons:
-                  blocked = True
+        # 6. Apply Blocks and Suppression
+        (
+            should_start,
+            start_time,
+            effective_departure,
+            blocked,
+            blocked_reasons
+        ) = self._apply_blocks_and_suppression(
+            ctx,
+            pred,
+            now,
+            frost_override,
+            final_decision,
+            is_optimal_stop_active,
+            should_start,
+            start_time
+        )
 
-        # Apply blocks to should_start & start_time
-        # M1: If Optimal Stop is active and enabled, we suppress the preheating start.
-        # M6: Frost protection overrides all blocks.
-        if normal_start_triggered:
-             is_optimal_stop_suppressing = is_optimal_stop_active and self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False)
-             if (blocked or is_optimal_stop_suppressing) and not frost_override:
-                  should_start = False
-                  start_time = None
-             else:
-                  should_start = True
-                  start_time = now
+        # 7. Build Decision Trace
+        self._build_decision_trace(
+            ctx,
+            now,
+            start_source,
+            selected_provider,
+            sched_decision,
+            learned_decision,
+            has_confident_house,
+            house_conf,
+            house_next_event,
+            gates_failed,
+            blocked,
+            blocked_reasons,
+            is_optimal_stop_active,
+            stop_time,
+            savings_total,
+            savings_remaining,
+            stop_reason,
+            tau_hours
+        )
 
-        # Shadow Metrics Logic (M3)
-        safety_violations = self._shadow_metrics.get("safety_violations", 0)
-        if learned_decision.is_valid and learned_decision.is_shadow and learned_decision.should_stop:
-             stop_tolerance = self._get_conf(CONF_STOP_TOLERANCE, 0.5)
-             threshold = ctx["target_setpoint"] - stop_tolerance
-             if ctx["operative_temp"] < threshold:
-                  safety_violations = 1
-                  self._shadow_metrics["safety_violations"] = 1
-        
-        shadow_metrics = {
-             "safety_violations": safety_violations,
-             "cumulative_shadow_savings": self._shadow_metrics.get("cumulative_shadow_savings", 0.0)
-        }
-
-        self.decision_trace = {
-             "evaluated_at": now.isoformat(),
-             "schema_version": 1,
-             "start_source": start_source,
-             KEY_PROVIDER_SELECTED: selected_provider,
-             KEY_PROVIDER_CANDIDATES: {
-                 PROVIDER_SCHEDULE: asdict(sched_decision),
-                 PROVIDER_LEARNED: asdict(learned_decision),
-                 "house": {
-                     "is_valid": has_confident_house,
-                     "confidence": house_conf,
-                     "next_event": house_next_event.isoformat() if house_next_event else None
-                 }
-             },
-             KEY_GATES_FAILED: gates_failed,
-             "metrics": shadow_metrics,
-             "blocked": blocked,
-             "blocked_reasons": blocked_reasons,
-             "reason": blocked_reasons[0] if blocked else "none",
-             # Optimal Stop Trace (M7)
-             "optimal_stop": {
-                 "enabled": self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False),
-                 "active": is_optimal_stop_active and self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False),
-                 "stop_time": stop_time.isoformat() if stop_time else None,
-                 "savings_total": savings_total,
-                 "savings_remaining": savings_remaining,
-                 "stop_reason": stop_reason,
-                 "tau_hours": tau_hours,
-                 "tau_confidence": self.cooling_analyzer.confidence,
-             }
-        }
-        
         return {
-             "should_start": should_start,
-             "start_time": start_time,
-             "reason": blocked_reasons[0] if blocked else "arbitrated",
-             "blocked_by": blocked_reasons,
-             "frost_override": frost_override,
-             "effective_departure": effective_departure,
-             "start_source": start_source
+            "should_start": should_start,
+            "start_time": start_time,
+            "reason": blocked_reasons[0] if blocked else "arbitrated",
+            "blocked_by": blocked_reasons,
+            "frost_override": frost_override,
+            "effective_departure": effective_departure,
+            "start_source": start_source
         }
 
     async def _execute_control_actions(self, ctx: Context, dec: Decision) -> None:

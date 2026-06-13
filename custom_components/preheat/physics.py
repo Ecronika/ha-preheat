@@ -124,7 +124,7 @@ class ThermalPhysics:
     
     def update_deadtime(self, new_deadtime: float) -> None:
         """Update the deadtime parameter (usually from DeadtimeAnalyzer)."""
-        # Apply EMA smoothing to deadtime updates to reject measurement noise.
+        # Cold start: take the first measured value as-is; afterwards apply EMA smoothing (0.2/0.8).
         if self.deadtime == 0.0:
             self.deadtime = new_deadtime
         else:

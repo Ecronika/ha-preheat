@@ -92,12 +92,14 @@ class TestRetroactiveLearning(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(p_on.stop)
         self.addCleanup(p_off.stop)
         
-        # 3 Events: ON (Arr), OFF (Dep), ON (Arr)
+        # 4 Events: OFF (Init), ON (Arr), OFF (Dep), ON (Arr)
+        t_init = datetime(2025, 1, 1, 7, 0)
         t0 = datetime(2025, 1, 1, 8, 0)
         t1 = datetime(2025, 1, 1, 9, 0) # Departure
         t2 = datetime(2025, 1, 1, 10, 0) # Arrival
         
         states = [
+            MockState("off", t_init),
             MockState("on", t0),
             MockState("off", t1), # Should be learnt as departure
             MockState("on", t2)
@@ -122,4 +124,50 @@ class TestRetroactiveLearning(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.coord.planner.record_arrival.call_count, 2)
         
         # 2. record_departure called ONCE (t1) -> PROOF IT WORKS
+        self.assertEqual(self.coord.planner.record_departure.call_count, 1)
+
+    async def test_scan_history_flank_logic_toggling(self):
+        """Verify that multiple ON/OFF toggles only register transitions (edges)."""
+        mock_recorder = sys.modules['homeassistant.components.recorder']
+        mock_instance = MagicMock()
+        mock_recorder.get_instance.return_value = mock_instance
+        mock_recorder.history = MagicMock()
+        
+        p = patch("custom_components.preheat.coordinator.dt_util")
+        mock_util = p.start()
+        mock_util.as_local.side_effect = lambda x: x
+        self.addCleanup(p.stop)
+        
+        p_on = patch("custom_components.preheat.coordinator.STATE_ON", "on")
+        p_off = patch("custom_components.preheat.coordinator.STATE_OFF", "off")
+        p_on.start()
+        p_off.start()
+        self.addCleanup(p_on.stop)
+        self.addCleanup(p_off.stop)
+        
+        # Simulate: OFF, then ON, ON, ON (should be 1 arrival), then OFF, OFF (should be 1 departure), then ON (should be 1 arrival)
+        t_base = datetime(2025, 1, 1, 8, 0)
+        states = [
+            MockState("off", t_base),
+            MockState("on", t_base + timedelta(minutes=10)),  # Transition to ON -> Arrival 1
+            MockState("on", t_base + timedelta(minutes=11)),  # Duplicate ON -> Ignore
+            MockState("on", t_base + timedelta(minutes=12)),  # Duplicate ON -> Ignore
+            MockState("off", t_base + timedelta(minutes=20)), # Transition to OFF -> Departure 1
+            MockState("off", t_base + timedelta(minutes=21)), # Duplicate OFF -> Ignore
+            MockState("on", t_base + timedelta(minutes=30)),  # Transition to ON -> Arrival 2
+        ]
+        
+        def mock_get_history(*args):
+            return {"binary_sensor.occ": states}
+            
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        future.set_result(mock_get_history())
+        mock_instance.async_add_executor_job = MagicMock(return_value=future)
+        
+        await self.coord.scan_history_from_recorder()
+        
+        # 2 transitions to ON -> 2 arrivals
+        self.assertEqual(self.coord.planner.record_arrival.call_count, 2)
+        # 1 transition to OFF -> 1 departure
         self.assertEqual(self.coord.planner.record_departure.call_count, 1)

@@ -1,3 +1,20 @@
+## v2.11.2 (2026-06-13) - Maintenance & Hardening 🔧
+**Patch Release**
+
+This release brings code hygiene improvements, a refactor of the start decision evaluation logic, and a fix to the recorder history scanning logic.
+
+### 🐛 Bug Fixes
+* **Recorder Bootstrap Flank Logic**: Replaced state-based scan with true edge-based flank tracking (`prev != STATE_ON and state == STATE_ON` for arrivals, and `prev == STATE_ON and state != STATE_ON` for departures) in the recorder scan, matching the live logic and preventing duplicate event counts from toggling motion sensors.
+
+### 🧹 Code Hygiene & Maintenance
+* **Imports Cleanup**: Moved `timedelta` import in `cooling_analyzer.py` to the top block.
+* **Docstring Correction**: Updated outdated docstrings in `CoolingAnalyzer` to accurately describe active learning.
+* **Comment Clarification**: Clarified comments in `update_deadtime` regarding cold start vs. EMA smoothing.
+* **Cleaned Root Directory**: Removed obsolete debugging scripts (`debug_planner.py` and `patch_coord.py`) from the repository root.
+* **Orchestration Refactor**: Split the complex 260+ line `_evaluate_start_decision` coordinator method into clean, dedicated private helper methods without modifying logic.
+
+---
+
 ## v2.11.1 (2026-06-13) - Preheat System Hub-Owner ⚙️
 **Patch Release**
 

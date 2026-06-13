@@ -1,10 +1,10 @@
-"""Cooling Analyzer to learn thermal time constant (tau) for Optimal Stop. Klasse wird derzeit nicht gespeist (add_data_point/analyze ohne Aufrufer); learned_tau bleibt konstant."""
+"""Cooling Analyzer to learn thermal time constant (tau) for Optimal Stop. Learns the room's cooling time constant (tau). Fed each cycle via `add_data_point`; `analyze()` runs periodically (hourly). `learned_tau` starts at the profile/default coast value until the first confident fit."""
 from __future__ import annotations
 
 import logging
 import math
 import statistics
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import NamedTuple
 
 from homeassistant.util import dt as dt_util
@@ -21,8 +21,9 @@ class CoolingSegment(NamedTuple):
 
 class CoolingAnalyzer:
     """
-    Analyzes historical data to find the cooling time constant (tau).
-    Klasse wird derzeit nicht gespeist (add_data_point/analyze ohne Aufrufer); learned_tau bleibt konstant.
+    Learns the room's cooling time constant (tau). Fed each cycle via `add_data_point`;
+    `analyze()` runs periodically (hourly). `learned_tau` starts at the profile/default
+    coast value until the first confident fit.
     """
     
     def __init__(self):
@@ -259,4 +260,3 @@ class CoolingAnalyzer:
         c_mae = max(0.0, min(1.0, (0.2 - mae) / 0.2))
         
         return c_samples * c_r2 * c_mae
-from datetime import timedelta
