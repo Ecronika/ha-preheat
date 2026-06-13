@@ -31,4 +31,5 @@ jobs:
           pip install pytest pytest-asyncio
 
       - name: Run pytest
-        run: pytest -v
+        # `python -m pytest` puts the repo root on sys.path so `import custom_components...` resolves.
+        run: python -m pytest -v
