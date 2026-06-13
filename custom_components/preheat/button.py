@@ -60,6 +60,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the buttons."""
+    if entry.unique_id == "preheat_system":
+        return
     coordinator = entry.runtime_data
     async_add_entities(
         PreheatButton(coordinator, entry, description)

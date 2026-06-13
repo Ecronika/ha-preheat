@@ -15,7 +15,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
 
+
 from .const import DOMAIN, VERSION, CONF_ENABLE_OPTIMAL_STOP
+from .house_collector import HouseArrivalCollector
 from .coordinator import PreheatingCoordinator
 
 async def async_setup_entry(
@@ -24,6 +26,14 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up binary sensors."""
+    if entry.unique_id == "preheat_system":
+        if house := hass.data[DOMAIN].get("house"):
+            global_sensors = [
+                PreheatHouseIncomingBinarySensor(house),
+            ]
+            async_add_entities(global_sensors)
+        return
+
     coordinator: PreheatingCoordinator = entry.runtime_data
     
     sensors = [
@@ -308,3 +318,46 @@ class PreheatHeatDemandBinarySensor(PreheatBaseBinarySensor):
          if data.valve_signal is not None and data.valve_signal >= 15.0: return "valve"
          if delta is not None and delta >= 0.4: return "delta_t"
          return "none"
+
+
+class PreheatHouseIncomingBinarySensor(BinarySensorEntity):
+    """Binary sensor indicating if a house arrival is incoming."""
+    _attr_translation_key = "house_incoming"
+    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
+    _attr_has_entity_name = True
+
+    def __init__(self, house: HouseArrivalCollector) -> None:
+        """Initialize the sensor."""
+        self.house = house
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, "house")},
+            "name": "Preheat House",
+            "manufacturer": "Ecronika",
+            "model": "House Arrival Hub",
+            "sw_version": VERSION,
+        }
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return "house_incoming"
+
+    @property
+    def should_poll(self) -> bool:
+        """No polling needed."""
+        return False
+
+    async def async_added_to_hass(self) -> None:
+        """Register callbacks."""
+        self.async_on_remove(self.house.async_add_listener(self.async_write_ha_state))
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if house arrival is incoming."""
+        now = dt_util.now()
+        expected_arrival, _, _ = self.house.get_next_arrival(now)
+        if not expected_arrival:
+            return False
+        max_dur = self.house.get_max_predicted_duration()
+        lead_time = timedelta(minutes=max_dur)
+        return expected_arrival - lead_time <= now <= expected_arrival

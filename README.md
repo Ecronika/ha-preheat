@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.10.0)
+# Intelligent Preheating for Home Assistant (v2.11.0)
 
 **Turn your heating into a Predictive Smart System.**
 
@@ -74,10 +74,10 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 
 ## ⚠️ Status / Known Limitations
 
-This version (v2.10.0) is a minor release with the following feature maturity:
+This version (v2.11.0) is a minor release with the following feature maturity:
 *   **Preheating Start**: Fully active, supports both Schedule Helper entities and Schedule-Free Autonomous Start (gated by arrival pattern maturity).
 *   **Optimal Stop / Coast-to-Vacancy**: Available (opt-in via `enable_optimal_stop` option).
-*   **Schedule-Free Operation**: Available (gated by arrival pattern maturity).
+*   **Schedule-Free Operation**: Available (House Arrival Hub, opt-in).
 *   **Shadow Savings Metrics**: Fully active and accumulated over time.
 *   **Autonomous Engine Cockpit Card**: The original forum card is incompatible. An updated card is available as a diagnostic-only tool at [docs/diagnostics/preheat_diagnostics_card.yaml](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/diagnostics/preheat_diagnostics_card.yaml) (see [docs/troubleshooting.md](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/troubleshooting.md) for details).
 

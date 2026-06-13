@@ -1,3 +1,34 @@
+## v2.11.1 (2026-06-13) - Preheat System Hub-Owner ⚙️
+**Patch Release**
+
+This release introduces an architectural refinement to the House Arrival Hub. The global "Preheat House" device and its 4 global entities are now owned by a dedicated, automatically created "Preheat System" configuration entry, avoiding fragile ownership and zone reload issues.
+
+### ✨ Improvements & Registry Migration
+* **Preheat System Entry**: Automatically creates and manages a single "Preheat System" entry to own global entities, preventing ownership issues when deleting/reloading zone entries.
+* **Self-Healing / Re-Creation**: Automatically recreates the system config entry if deleted by a user, as long as active zones exist.
+* **Registry-Based Migration**: Seamlessly migrates the "Preheat House" device and global entities to the system entry without loss of history or configuration.
+* **Separated Options Flow**: Keeps global settings separated from zone settings in the options flow UI.
+
+---
+
+## v2.11.0 (2026-06-13) - House Arrival Hub 🏠
+**Minor Release**
+
+This release introduces the House Arrival Hub, a single-instance shared collector that learns global homecoming patterns from pooled zone data and provides a unified arrival prediction.
+
+### ✨ New Features
+* **House Arrival Hub**: Aggregates arrival history from all zone config entries and applies workday/weekend morning/evening predictors (H1).
+* **Preheat House Device & Global Entities**: Exposes global sensors (`sensor.preheat_house_next_arrival`, `sensor.preheat_house_arrival_confidence`, `sensor.preheat_house_arrival_window`) and binary sensor (`binary_sensor.preheat_house_incoming`) under a dedicated "Preheat House" device (H2).
+* **Prediction & Comfort Customization**: Supports morning (P25) vs. evening (comfort-biased percentile) split and customizable comfort bias ("comfort", "balanced", "economy") (H3).
+* **Fallback Comfort Window**: Adds support for configuring a fallback arrival window (`evening_comfort_window`) if prediction confidence falls below the 70% threshold (H3).
+* **Data-Safe Zero-Wait Bootstrap**: Automatically initializes the global history by pooling existing zone stores on the first run, without resetting or neulernen (H5).
+* **Zone Arbitration Update**: Priority order is resolved as `Schedule > House (confident) > House-Fallback > Zone Learned > None` (H4).
+
+### 🐛 Fixes
+* **Evening Comfort Window Now Effective**: The evening fallback comfort window (`house_fallback`) now correctly bypasses the 0.7 confidence gate, so schedule-free zones preheat before evening arrivals even with low statistical confidence. Previously the fallback was computed but discarded.
+
+---
+
 ## v2.10.0 (2026-06-13) - Optimal Stop & Autonomous Start 🚀
 **Minor Release**
 

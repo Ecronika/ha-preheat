@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.10.0"
+VERSION = "2.11.1"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -248,3 +248,8 @@ WINDOW_OPEN_TIME: Final = 4.5 # Minutes
 WINDOW_COOLDOWN_MIN: Final = 30
 STARTUP_GRACE_SEC: Final = 1800
 LEARNING_STALL_EXPIRY_SEC: Final = 1209600  # 14 days
+
+# --- House Arrival Hub Constants (V2.11.0) ---
+CONF_GLOBAL_PRESENCE: Final = "global_presence_source"
+CONF_ARRIVAL_COMFORT_BIAS: Final = "arrival_comfort_bias"
+CONF_EVENING_COMFORT_WINDOW: Final = "evening_comfort_window"
