@@ -1,3 +1,18 @@
+## v2.10.0 (2026-06-13) - Optimal Stop & Autonomous Start 🚀
+**Minor Release**
+
+This release activates the autonomy and energy-saving features previously introduced in v2.9.x as WIP/experimental. All behavioral changes are opt-in or gated by confidence levels to maintain backward compatibility.
+
+### ✨ New Features & Autonomy
+* **Optimal Stop (Coast-to-Vacancy)**: Activates optimal stop calculations when `enable_optimal_stop` is enabled. It uses learned cooling parameter `tau` with safety clamping (max 12h) and confidence gating (min 60% confidence).
+* **Schedule-free Autonomous Start**: Automatically preheats in schedule-free zones when the learned arrival pattern confidence is mature (>= 70%).
+* **Shadow Savings**: Calculates potential energy/coasting savings in the background and accumulates them into `cumulative_shadow_savings` for diagnostic insight.
+* **Alt-tau Revalidation**: Automatically revalidates implausible pre-existing high `tau` parameters (>= 12h) on startup and resets them to profile defaults to ensure safe and reliable optimal stop operation.
+* **Refined Block Semantics**: Differentiates between actual block reasons and the absence of a starting source (`start_source` is set to `none` instead of marking the zone as `blocked`).
+* **Frost Protection Override**: Ensures frost protection triggers even if the integration is disabled.
+
+---
+
 ## v2.9.5 (2026-06-13) - Bugfixes & Honest Docs 🛠️
 **Stable Release**
 

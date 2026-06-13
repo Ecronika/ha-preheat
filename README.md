@@ -1,11 +1,11 @@
-# Intelligent Preheating for Home Assistant (v2.9.5)
+# Intelligent Preheating for Home Assistant (v2.10.0)
 
 **Turn your heating into a Predictive Smart System.**
 
 This integration acts as a **Stand-Alone Pilot** for your heating. It learns the thermal physics of your room to calculate heating signals for **any** thermostat (actual control is done via a Blueprint or automation), without needing complex dependencies.
 
 *   **Goal**: Reach your target temperature *exactly* when you arrive/wake up.
-*   **Goal**: Stop heating *before* you leave ("Optimal Stop" - planned for v2.10).
+*   **Goal**: Stop heating *before* you leave ("Optimal Stop").
 
 ---
 
@@ -46,8 +46,8 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 *   **Physics Safety Net**: The thermal model uses a physics-based model with stability protection (clamping, 20% jump limitation).
 
 ### 📉 Energy Saving
-*   **Optimal Stop (Coast-to-Vacancy) (WIP / Planned v2.10)**: Turns off the heating early if the room stays warm enough until the schedule ends (currently preparing parameters but inactive).
-*   **Schedule-Free Operation (WIP / Planned v2.10)**: Works with Learned Patterns alone—currently, a Schedule Helper is required for autonomous start.
+*   **Optimal Stop (Coast-to-Vacancy)**: Turns off the heating early if the room stays warm enough until the schedule ends (opt-in).
+*   **Schedule-Free Operation**: Works with Learned Patterns alone, without requiring a Schedule Helper, once arrival patterns are mature.
 *   **Adaptive Polling**: Sleeps (5 min updates) when idle, sprints (1 min) when active—**80% less system load**.
 
 ### 🔌 Compatibility & Control
@@ -74,12 +74,12 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 
 ## ⚠️ Status / Known Limitations
 
-This version (v2.9.5) is a bugfix release with the following feature maturity:
-*   **Preheating Start**: Fully active, currently requires a Schedule Helper entity configuration.
-*   **Optimal Stop / Coast-to-Vacancy**: Work in progress (WIP), prepared parameters but inactive (scheduled for release in v2.10).
-*   **Schedule-Free Operation**: Work in progress (WIP), currently a Schedule Helper is required for autonomous starts (scheduled for release in v2.10).
-*   **Shadow Savings Metrics**: Work in progress (WIP), metrics are currently not populated.
-*   **Autonomous Engine Cockpit Card**: The original forum card is incompatible. An updated card is available as a diagnostic-only tool at [docs/diagnostics/preheat_diagnostics_card.yaml](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/diagnostics/preheat_diagnostics_card.yaml) (see [docs/troubleshooting.md](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/troubleshooting.md) for details; autonomy parameters are WIP for v2.10).
+This version (v2.10.0) is a minor release with the following feature maturity:
+*   **Preheating Start**: Fully active, supports both Schedule Helper entities and Schedule-Free Autonomous Start (gated by arrival pattern maturity).
+*   **Optimal Stop / Coast-to-Vacancy**: Available (opt-in via `enable_optimal_stop` option).
+*   **Schedule-Free Operation**: Available (gated by arrival pattern maturity).
+*   **Shadow Savings Metrics**: Fully active and accumulated over time.
+*   **Autonomous Engine Cockpit Card**: The original forum card is incompatible. An updated card is available as a diagnostic-only tool at [docs/diagnostics/preheat_diagnostics_card.yaml](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/diagnostics/preheat_diagnostics_card.yaml) (see [docs/troubleshooting.md](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/troubleshooting.md) for details).
 
 ---
 

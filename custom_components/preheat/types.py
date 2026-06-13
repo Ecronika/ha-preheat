@@ -49,3 +49,4 @@ class Decision(TypedDict):
     reason: str
     blocked_by: list[str]
     frost_override: bool
+    start_source: str # Additive v2.10.0
