@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity import Entity
+
 
 from .const import DOMAIN, VERSION, CONF_ENABLE_OPTIMAL_STOP
 from .house_collector import HouseArrivalCollector
@@ -320,7 +320,7 @@ class PreheatHeatDemandBinarySensor(PreheatBaseBinarySensor):
          return "none"
 
 
-class PreheatHouseIncomingBinarySensor(Entity, BinarySensorEntity):
+class PreheatHouseIncomingBinarySensor(BinarySensorEntity):
     """Binary sensor indicating if a house arrival is incoming."""
     _attr_translation_key = "house_incoming"
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
