@@ -24,11 +24,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install test dependencies
-        # The test suite mocks Home Assistant in tests/conftest.py,
-        # so no real `homeassistant` / pytest-homeassistant-custom-component install is required.
+        # The test suite mocks Home Assistant in tests/conftest.py, so no real `homeassistant`
+        # install is needed. `voluptuous` is NOT mocked (config_flow imports it at module level),
+        # so it must be installed for test collection to succeed.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio voluptuous
 
       - name: Run pytest
         # `python -m pytest` puts the repo root on sys.path so `import custom_components...` resolves.
