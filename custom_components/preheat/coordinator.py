@@ -216,6 +216,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
         self.entry = entry
         self.device_name = entry.title
+        self.house_collector = None
         
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY_TEMPLATE.format(entry.entry_id))
         
@@ -736,6 +737,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             _LOGGER.debug("Recording arrival at %s", now)
             self.planner.record_arrival(now)
             await self._async_save_data()
+            if self.house_collector:
+                await self.house_collector.async_record_zone_arrival(self.entry.entry_id, now)
 
     async def _check_entity_availability(self, entity_id: str, issue_id: str) -> None:
         if not entity_id: return
@@ -975,6 +978,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             decision: Decision = self._evaluate_start_decision(ctx, prediction)
             await self._execute_control_actions(ctx, decision)
             await self._post_update_tasks(ctx, decision, prediction)
+            if self.house_collector:
+                self.house_collector.async_update_listeners()
             return self._build_preheat_data(ctx, prediction, decision)
         except Exception as err:
             return self._handle_update_error(err)
@@ -1019,8 +1024,20 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     next_day = now + timedelta(days=1)
                     search_start_date = datetime.combine(next_day.date(), datetime.min.time(), tzinfo=now.tzinfo)
 
-        next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays, blocked_dates=blocked_dates)
+        zone_next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays, blocked_dates=blocked_dates)
         
+        house_next_event = None
+        house_conf = 0.0
+        if self.house_collector:
+            house_next_event, house_conf = self.house_collector.get_next_arrival(now)
+            
+        has_confident_house = (house_next_event is not None and house_conf >= 0.7)
+        
+        if has_confident_house:
+            next_event = house_next_event
+        else:
+            next_event = zone_next_event
+            
         outdoor_temp = await self._get_outdoor_temp_current()
         target_setpoint = await self._get_target_setpoint()
         is_ready = (op_temp > INVALID_TEMP)
@@ -1034,7 +1051,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "now": now, "operative_temp": op_temp, "outdoor_temp": outdoor_temp,
             "valve_position": valve_pos, "is_occupied": is_occupied, "is_window_open": is_window,
             "target_setpoint": target_setpoint, "next_event": next_event, "blocked_dates": blocked_dates,
-            "is_sensor_ready": is_ready, "forecasts": forecasts, "preheat_active": self._preheat_active
+            "is_sensor_ready": is_ready, "forecasts": forecasts, "preheat_active": self._preheat_active,
+            "has_confident_house": has_confident_house, "house_confidence": house_conf,
+            "house_next_event": house_next_event, "zone_next_event": zone_next_event
         }
 
     async def _run_physics_simulation(self, ctx: Context) -> Prediction:
@@ -1183,6 +1202,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              if isinstance(conf, (int, float)):
                   has_mature_pattern = conf >= GATE_MIN_PATTERN_CONF
 
+        has_confident_house = ctx.get("has_confident_house", False)
+        house_conf = ctx.get("house_confidence", 0.0)
+        house_next_event = ctx.get("house_next_event")
+        zone_next_event = ctx.get("zone_next_event")
+
         if self.hold_active:
              selected_provider = PROVIDER_MANUAL
              gates_failed.append(GATE_FAIL_MANUAL)
@@ -1190,6 +1214,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              selected_provider = PROVIDER_SCHEDULE
              final_decision = sched_decision
              start_source = "schedule"
+             is_shadow = False
+        elif has_confident_house:
+             selected_provider = "house"
+             final_decision = ProviderDecision(
+                 should_stop=False,
+                 session_end=None,
+                 is_valid=True,
+                 is_shadow=False,
+                 confidence=house_conf
+             )
+             start_source = "house"
              is_shadow = False
         elif has_mature_pattern and ctx["next_event"] is not None:
              # M4: Schedule-free autonomous start
@@ -1293,7 +1328,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              KEY_PROVIDER_SELECTED: selected_provider,
              KEY_PROVIDER_CANDIDATES: {
                  PROVIDER_SCHEDULE: asdict(sched_decision),
-                 PROVIDER_LEARNED: asdict(learned_decision)
+                 PROVIDER_LEARNED: asdict(learned_decision),
+                 "house": {
+                     "is_valid": has_confident_house,
+                     "confidence": house_conf,
+                     "next_event": house_next_event.isoformat() if house_next_event else None
+                 }
              },
              KEY_GATES_FAILED: gates_failed,
              "metrics": shadow_metrics,

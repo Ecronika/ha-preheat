@@ -190,6 +190,15 @@
       },
       "next_session_end": {
         "name": "Next Session End"
+      },
+      "house_next_arrival": {
+        "name": "House Next Arrival"
+      },
+      "house_arrival_confidence": {
+        "name": "House Arrival Confidence"
+      },
+      "house_arrival_window": {
+        "name": "House Arrival Window"
       }
     },
     "switch": {
@@ -229,6 +238,9 @@
       },
       "preheat_blocked": {
         "name": "Preheat Blocked"
+      },
+      "house_incoming": {
+        "name": "House Incoming"
       }
     }
   },

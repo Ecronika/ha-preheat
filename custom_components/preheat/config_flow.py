@@ -35,6 +35,9 @@ from .const import (
     CONF_SCHEDULE_ENTITY,
     CONF_MAX_PREHEAT_HOURS,
     DEFAULT_MAX_HOURS,
+    CONF_GLOBAL_PRESENCE,
+    CONF_ARRIVAL_COMFORT_BIAS,
+    CONF_EVENING_COMFORT_WINDOW,
 )
 
 # Centralized Option Definitions (Key -> {selector, default})
@@ -107,12 +110,32 @@ OPTION_SETTINGS = {
         ),
         "default": DEFAULT_MAX_HOURS # Overridden by Profile Check
     },
+    CONF_GLOBAL_PRESENCE: {
+        "selector": selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="binary_sensor")
+        ),
+        "default": None
+    },
+    CONF_ARRIVAL_COMFORT_BIAS: {
+        "selector": selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=["comfort", "balanced", "economy"],
+                mode=selector.SelectSelectorMode.DROPDOWN,
+                translation_key="arrival_comfort_bias"
+            )
+        ),
+        "default": "comfort"
+    },
+    CONF_EVENING_COMFORT_WINDOW: {
+        "selector": selector.TextSelector(),
+        "default": None
+    },
 }
 
 class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Preheat."""
 
-    VERSION = 4
+    VERSION = 5
 
     def _validate_entity_ids(self, user_input: dict[str, Any]) -> dict[str, str]:
         """Validate existence of entities using Entity Registry and State Machine."""

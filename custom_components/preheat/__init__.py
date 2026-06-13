@@ -82,8 +82,21 @@ async def _get_target_entries(hass: HomeAssistant, call) -> list[str]:
 
 async def async_setup_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> bool:
     """Set up Preheat from a config entry."""
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+        
+    if "house" not in hass.data[DOMAIN]:
+        from .house_collector import HouseArrivalCollector
+        house = HouseArrivalCollector(hass)
+        await house.async_load()
+        await house.async_bootstrap()
+        hass.data[DOMAIN]["house"] = house
+    else:
+        hass.data[DOMAIN]["house"].update_config()
+
     from .coordinator import PreheatingCoordinator
     coordinator = PreheatingCoordinator(hass, entry)
+    coordinator.house_collector = hass.data[DOMAIN]["house"]
     
     await coordinator.async_load_data()
     await coordinator.async_config_entry_first_refresh()
@@ -97,7 +110,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        if DOMAIN in hass.data and "house" in hass.data[DOMAIN]:
+            hass.data[DOMAIN]["house"].unregister_global_entities(entry.entry_id)
+        if len(hass.config_entries.async_entries(DOMAIN)) <= 1:
+            if DOMAIN in hass.data and "house" in hass.data[DOMAIN]:
+                house = hass.data[DOMAIN].pop("house")
+                if house._unsub_listener:
+                    house._unsub_listener()
+                    house._unsub_listener = None
+    return unload_ok
 
 async def async_reload_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> None:
     """Reload config entry when options change."""
@@ -172,5 +195,24 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: PreheatConfigEn
         )
         current_version = 4
         _LOGGER.info("Migration v3->v4 successful")
+
+    # v4 -> v5: Add default settings for House Arrival Hub
+    if current_version == 4:
+        _LOGGER.info("Migrating v4 -> v5 (Adding House Hub Defaults)")
+        new_data = dict(config_entry.data)
+        new_options = dict(config_entry.options)
+        
+        from .const import CONF_GLOBAL_PRESENCE, CONF_ARRIVAL_COMFORT_BIAS, CONF_EVENING_COMFORT_WINDOW
+        if CONF_ARRIVAL_COMFORT_BIAS not in new_options:
+            new_options[CONF_ARRIVAL_COMFORT_BIAS] = "comfort"
+            
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data=new_data,
+            options=new_options,
+            version=5
+        )
+        current_version = 5
+        _LOGGER.info("Migration v4->v5 successful")
 
     return True

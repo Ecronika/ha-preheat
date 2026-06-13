@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
 )
+from homeassistant.helpers.entity import Entity
+from homeassistant.util import dt as dt_util
+from .house_collector import HouseArrivalCollector, get_percentile
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -43,6 +46,16 @@ async def async_setup_entry(
     ]
 
     async_add_entities(sensors)
+
+    # Global Entities Registration (H2)
+    if house := hass.data[DOMAIN].get("house"):
+        if house.register_global_entities(entry.entry_id):
+            global_sensors = [
+                PreheatHouseNextArrivalSensor(house),
+                PreheatHouseArrivalConfidenceSensor(house),
+                PreheatHouseArrivalWindowSensor(house),
+            ]
+            async_add_entities(global_sensors)
 
 class PreheatBaseSensor(CoordinatorEntity[PreheatingCoordinator], SensorEntity):
     """Base sensor."""
@@ -310,11 +323,134 @@ class PreheatNextSessionEndSensor(PreheatBaseSensor):
         # We need to expose next_departure from data
         return self.coordinator.data.next_departure
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
         """Return learned departure patterns."""
         attrs = {}
         data = self.coordinator.data
         if data.departure_summary:
             attrs["learned_departures"] = data.departure_summary
         return attrs
+
+
+class PreheatHouseBaseSensor(Entity):
+    """Base sensor for Preheat House global sensors."""
+    _attr_has_entity_name = True
+
+    def __init__(self, house: HouseArrivalCollector) -> None:
+        """Initialize the sensor."""
+        self.house = house
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, "house")},
+            "name": "Preheat House",
+            "manufacturer": "Ecronika",
+            "model": "House Arrival Hub",
+            "sw_version": VERSION,
+        }
+
+    @property
+    def should_poll(self) -> bool:
+        """No polling needed."""
+        return False
+
+    async def async_added_to_hass(self) -> None:
+        """Register callbacks."""
+        self.async_on_remove(self.house.async_add_listener(self.async_write_ha_state))
+
+
+class PreheatHouseNextArrivalSensor(PreheatHouseBaseSensor, SensorEntity):
+    """House global next arrival sensor."""
+    _attr_translation_key = "house_next_arrival"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return "house_next_arrival"
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the next predicted house arrival."""
+        val, _ = self.house.get_next_arrival(dt_util.now())
+        return val
+
+
+class PreheatHouseArrivalConfidenceSensor(PreheatHouseBaseSensor, SensorEntity):
+    """House global arrival confidence sensor."""
+    _attr_translation_key = "house_arrival_confidence"
+    _attr_native_unit_of_measurement = "%"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:shield-check"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return "house_arrival_confidence"
+
+    @property
+    def native_value(self) -> int:
+        """Return prediction confidence."""
+        _, conf = self.house.get_next_arrival(dt_util.now())
+        return int(round(conf * 100))
+
+
+class PreheatHouseArrivalWindowSensor(PreheatHouseBaseSensor, SensorEntity):
+    """House global arrival window sensor."""
+    _attr_translation_key = "house_arrival_window"
+    _attr_icon = "mdi:clock-time-four-outline"
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return "house_arrival_window"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return expected arrival window."""
+        now = dt_util.now()
+        now_local = dt_util.as_local(now)
+        today_date = now_local.date()
+        
+        for day_offset in range(8):
+            check_date = today_date + timedelta(days=day_offset)
+            is_weekend = (check_date.weekday() >= 5)
+            am_list, pm_list = self.house.get_pooled_arrivals(is_weekend)
+            
+            if len(am_list) >= 2:
+                p25 = get_percentile(am_list, 0.25)
+                p75 = get_percentile(am_list, 0.75)
+                spread = p75 - p25
+                conf = max(0.0, 1.0 - (spread / 300.0))
+                if conf >= 0.7:
+                    event_dt = datetime.combine(check_date, datetime.min.time(), tzinfo=now_local.tzinfo) + timedelta(minutes=p25)
+                    if event_dt > now_local:
+                        h_start = p25 // 60
+                        m_start = p25 % 60
+                        h_end = p75 // 60
+                        m_end = p75 % 60
+                        return f"{h_start:02d}:{m_start:02d}-{h_end:02d}:{m_end:02d}"
+            
+            if len(pm_list) >= 2:
+                p25 = get_percentile(pm_list, 0.25)
+                p75 = get_percentile(pm_list, 0.75)
+                spread = p75 - p25
+                conf = max(0.0, 1.0 - (spread / 300.0))
+                
+                q = 0.25
+                if self.house.comfort_bias == "comfort":
+                    q = 0.15
+                elif self.house.comfort_bias == "economy":
+                    q = 0.50
+                    
+                target_time = get_percentile(pm_list, q)
+                
+                if conf >= 0.7:
+                    event_dt = datetime.combine(check_date, datetime.min.time(), tzinfo=now_local.tzinfo) + timedelta(minutes=target_time)
+                    if event_dt > now_local:
+                        h_start = target_time // 60
+                        m_start = target_time % 60
+                        h_end = p75 // 60
+                        m_end = p75 % 60
+                        return f"{h_start:02d}:{m_start:02d}-{h_end:02d}:{m_end:02d}"
+                else:
+                    if self.house.evening_window_str:
+                        return self.house.evening_window_str
+        return None

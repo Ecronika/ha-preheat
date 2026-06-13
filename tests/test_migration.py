@@ -35,14 +35,14 @@ class TestMigration(unittest.IsolatedAsyncioTestCase):
         # Call migration
         await async_migrate_entry(hass, entry)
         
-        # Verify update call (Called twice: v1->v2, v2->v3)
-        self.assertEqual(hass.config_entries.async_update_entry.call_count, 3)
+        # Verify update call (v1->v2->v3->v4->v5 = 4 calls)
+        self.assertEqual(hass.config_entries.async_update_entry.call_count, 4)
         
-        # Check Final Call (v3)
+        # Check Final Call (v5)
         last_call_args = hass.config_entries.async_update_entry.call_args
         kwargs = last_call_args[1]
         
-        self.assertEqual(kwargs["version"], 4)
+        self.assertEqual(kwargs["version"], 5)
         # self.assertEqual(kwargs["options"][CONF_PRESET_MODE], PRESET_BALANCED) # Default applied
         # Note: v3 logic ensures Expert Mode is False (Simple) if not present, checking implementation logic
         # v1->v2 set Expert=True. v2->v3 keeps options. So it should be True.
@@ -63,7 +63,7 @@ class TestMigration(unittest.IsolatedAsyncioTestCase):
         call_args = hass.config_entries.async_update_entry.call_args
         kwargs = call_args[1]
         
-        self.assertEqual(kwargs["version"], 4)
+        self.assertEqual(kwargs["version"], 5)
         self.assertEqual(kwargs["data"], {"dat": 2}) # Data preserved
         self.assertEqual(kwargs["options"]["opt"], 1)
         # self.assertEqual(kwargs["options"][CONF_PRESET_MODE], PRESET_BALANCED) # Default applied

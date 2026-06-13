@@ -1,3 +1,18 @@
+## v2.11.0 (2026-06-13) - House Arrival Hub 🏠
+**Minor Release**
+
+This release introduces the House Arrival Hub, a single-instance shared collector that learns global homecoming patterns from pooled zone data and provides a unified arrival prediction.
+
+### ✨ New Features
+* **House Arrival Hub**: Aggregates arrival history from all zone config entries and applies workday/weekend morning/evening predictors (H1).
+* **Preheat House Device & Global Entities**: Exposes global sensors (`sensor.preheat_house_next_arrival`, `sensor.preheat_house_arrival_confidence`, `sensor.preheat_house_arrival_window`) and binary sensor (`binary_sensor.preheat_house_incoming`) under a dedicated "Preheat House" device (H2).
+* **Prediction & Comfort Customization**: Supports morning (P25) vs. evening (comfort-biased percentile) split and customizable comfort bias ("comfort", "balanced", "economy") (H3).
+* **Fallback Comfort Window**: Adds support for configuring a fallback arrival window (`evening_comfort_window`) if prediction confidence falls below the 70% threshold (H3).
+* **Data-Safe Zero-Wait Bootstrap**: Automatically initializes the global history by pooling existing zone stores on the first run, without resetting or neulernen (H5).
+* **Zone Arbitration Update**: Priority order is resolved as `Schedule > House (confident) > Zone Learned > None` (H4).
+
+---
+
 ## v2.10.0 (2026-06-13) - Optimal Stop & Autonomous Start 🚀
 **Minor Release**
 
