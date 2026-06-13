@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.11.0)
+# Intelligent Preheating for Home Assistant (v2.11.1)
 
 **Turn your heating into a Predictive Smart System.**
 
@@ -32,13 +32,23 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 *   **View Discussion:** [Smart Setpoint Blueprint (Community)](https://community.home-assistant.io/t/en-16798-1-smart-setpoint-blueprint/956624)
 *   **What it does:** Automatically switches between Comfort/Eco based on the `preheat` and `optimal_stop` signals.
 
+---
+
 ## ✨ Features
 
 ### 🧠 Intelligence & Learning
 *   **Self-Learning Physics**: Automatically calculates `Thermal Mass`, `Thermal Loss`, and `Deadtime`. Supports **Euler Simulation** for complex scenarios.
 *   **The Observer**: Learns your habits to predict *when* you leave (Shadow Mode), providing "Next Departure" insights.
 *   **Calendar Intelligence**: Auto-detects holidays and shifts via Calendar integration to skip preheating intelligently.
-*   **🚀 Retroactive Bootstrap (New in v2.9.0)**: On first install, the system automatically scans your Home Assistant history to learn your habits instantly. No more "cold start" week!
+*   **🚀 Retroactive Bootstrap**: On first install, the system automatically scans your Home Assistant history to learn your habits instantly. No more "cold start" week!
+
+### 🏠 House Arrival Hub (New in v2.11)
+*   **Global Homecoming Prediction**: A dedicated, automatically created **"Preheat System"** configuration entry manages a shared **House Arrival Hub** (device "Preheat House"). It aggregates occupancy data across all zones (or an optional global presence entity) to learn the typical homecoming patterns for the entire house once, robustly. Individual zone config entries reference this shared hub, and the System entry is created automatically (no manual step).
+*   **Global Entities**:
+    *   `sensor.<...>_next_arrival` — Predicted next house arrival time (Timestamp).
+    *   `sensor.<...>_arrival_confidence` — Statistical confidence of the arrival pattern (%).
+    *   `sensor.<...>_arrival_window` — Expected arrival time window (e.g. `17:30-19:00`).
+    *   `binary_sensor.<...>_incoming` — **The "someone is coming home" preheat signal** (ON within maximum preheat lead time before expected arrival).
 
 ### 🛡️ Safety & Responsiveness
 *   **Frost Protection**: Heating is automatically forced ON if the temperature drops below 5°C, even if the system is disabled.
@@ -74,14 +84,13 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 
 ## ⚠️ Status / Known Limitations
 
-This version (v2.11.0) is a minor release with the following feature maturity:
+This version is a stable release with the following feature maturity:
 *   **Preheating Start**: Fully active, supports both Schedule Helper entities and Schedule-Free Autonomous Start (gated by arrival pattern maturity).
 *   **Optimal Stop / Coast-to-Vacancy**: Available (opt-in via `enable_optimal_stop` option).
 *   **Schedule-Free Operation**: Available (House Arrival Hub, opt-in).
 *   **Shadow Savings Metrics**: Fully active and accumulated over time.
-*   **Autonomous Engine Cockpit Card**: The original forum card is incompatible. An updated card is available as a diagnostic-only tool at [docs/diagnostics/preheat_diagnostics_card.yaml](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/diagnostics/preheat_diagnostics_card.yaml) (see [docs/troubleshooting.md](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/troubleshooting.md) for details).
+*   **Autonomous Engine Cockpit Card**: The original forum card is incompatible. An updated card is available as a diagnostic-only tool at [docs/diagnostics/preheat_diagnostics_card.yaml](docs/diagnostics/preheat_diagnostics_card.yaml) (see [docs/troubleshooting.md](docs/troubleshooting.md) for details).
 
 ---
 
 **License**: MIT
-

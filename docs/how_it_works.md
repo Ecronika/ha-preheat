@@ -45,12 +45,31 @@ Every minute (or 5 minutes when idle), the system runs a simulation:
 
 ## History & Occupancy
 
-The system does NOT use a fixed schedule input from you for the **Start** time. It learns from your behavior.
-*   It looks at your `occupancy_sensor` history (rolling window of **30 days** for arrivals, **60 days** for departures).
+For zone-specific behaviors, the system can learn from your historical activity.
+*   It looks at your occupancy sensor history (rolling window of **30 days** for arrivals, **60 days** for departures).
 *   It continuously records when you leave ("Departure") to build a probability model.
-*   It predicts the next event based on weekday-specific patterns (e.g., "Usually occupied at 06:45 on Mondays").
+*   It predicts the next event based on weekday-specific patterns.
 *   It supports **Multi-Modal Patterns** (e.g., morning shift AND afternoon return).
 
+## House Arrival Prediction
+
+To enable fully autonomous, schedule-free preheating, the **House Arrival Hub** analyzes occupancy patterns across the entire home.
+
+### The Prediction Model
+Arrival events from the occupancy sensors are processed using a statistical pooling model:
+*   **Time Blocks**: Arrival events are divided into **AM** (morning) and **PM** (evening) blocks.
+*   **Day Groups**: Data is pooled by **workday** vs. **weekend** (using the configured Workday Sensor) to distinguish daily routines.
+*   **First-Event Filtering**: To prevent noise (e.g. going out briefly to get the mail), the hub only records the **first arrival per block per day**.
+*   **Target Quantile (P25)**: Rather than aiming for the average arrival time (which would leave you cold half of the time), the hub targets an **early quantile (P25)** by default. This "prefer early" approach ensures the house is warm before the typical arrival window begins.
+*   **Graded Confidence**: Instead of an all-or-nothing threshold, arrival confidence is graded dynamically based on the spread (tolerance band) of historical arrivals. If arrivals are highly consistent, confidence is high.
+*   **Shift Patterns**: The model can detect alternating weekly shift patterns (e.g., early/late weeks) if the arrival times are clearly separated.
+
+### Morning vs. Evening Preheating
+*   **Morning Arrivals**: Typically exhibit highly consistent, high-confidence patterns, allowing the autonomous engine to reliably preheat without a schedule helper.
+*   **Evening Homecoming**: Intrinsically more variable. To manage this variability, you can adjust the **Arrival Comfort Bias** (economy, balanced, comfort) or rely on the **Evening Comfort Window fallback**. If arrival confidence is too low to predict a specific time, the system will fallback to the configured evening window to guarantee warmth.
+
 > [!NOTE]
-> **Schedule-Free Optimal Stop (v2.9.0)**: For the **Stop** time (Optimal Stop), the system can now use **Learned Departure** patterns if no Schedule Helper is configured. A fixed schedule is no longer required!
+> **Schedule-Free & Energy Saving Features**:
+> *   **Schedule-Free Autonomous Start (since v2.11)**: Managed globally via the House Arrival Hub. Once arrival patterns are mature and confident, zones can preheat dynamically without requiring a manual Schedule Helper.
+> *   **Optimal Stop (since v2.10)**: Available as an opt-in feature (`Enable Optimal Stop` in configuration) to turn off heating early when residual heat is sufficient to carry the room to the end of a scheduled session.
 

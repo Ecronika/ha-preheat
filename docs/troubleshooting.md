@@ -7,6 +7,7 @@
 1.  **Check Occupancy**: Is your occupancy sensor currently `OFF`? The system only pre-heats if it thinks the room is currently *empty* but *will be occupied soon*. If you are already there (`ON`), it assumes the normal thermostat is running and does nothing.
 2.  **Check Target Temp**: Is the target setpoint higher than the current temperature?
 3.  **Check "Frost Protection"**: If the room is below 5°C, the system will force-start regardless of other settings.
+4.  **Check Schedule-Free / House Hub Confidence**: If you are running a schedule-free configuration (no Schedule Helper selected), the zone will only start preheating autonomously once the **House Arrival Hub** has registered enough arrival history and reached sufficient confidence (>= 70% confidence). Until then, it will wait. Check that the **"Preheat System"** configuration entry exists and is active.
 
 ### "It starts too late / The room is cold."
 *   **Solution**: Increase the **Buffer** in the configuration options.
@@ -20,7 +21,7 @@
 
 ## 🛠️ Repair Issues (Diagnostics)
 
-**New in v2.9.0**: The integration includes 15+ built-in health checks that appear as "Repair Issues" in your Home Assistant **Settings → Repairs** dashboard.
+The integration includes 15+ built-in health checks that appear as "Repair Issues" in your Home Assistant **Settings → Repairs** dashboard.
 
 *   **Stale Sensor**: Warning if your temperature sensor hasn't updated in >6 hours.
 *   **Physics Railing**: Alert if the learning model has hit its limits.
@@ -58,7 +59,7 @@ logger:
 
 ### "Analyze History" / Retroactive Bootstrap
 
-**v2.9.0 Update**: The system now **automatically scans** your Home Assistant Recorder history on first install. You should see learned sessions within 5 minutes of installation.
+The system **automatically scans** your Home Assistant Recorder history on first install. You should see learned sessions within 5 minutes of installation.
 
 *   If it shows 0 sessions, check that your **Occupancy Sensor** has history in the Recorder (at least 7 days).
 *   You can manually trigger a rescan using the **"Analyze History"** button.
@@ -67,9 +68,9 @@ logger:
 
 ## 🎛️ "Autonomous Engine Cockpit" Card Compatibility
 
-If you are using the original "Autonomous Engine Cockpit" card template shared in the community forums (Post 5), note that it will crash with an `UndefinedError: 'dict object' has no attribute 'schedule'` error and render empty in v2.9.5. This is because the empty placeholder keys previously added in early 2.9.5 pre-releases have been removed to maintain clean telemetry and avoid misleading indicators.
+If you are using the original "Autonomous Engine Cockpit" card template shared in the community forums (Post 5), note that it will crash with an `UndefinedError: 'dict object' has no attribute 'schedule'` error.
 
 To resolve this:
-*   Replace your Lovelace card template with the updated, defensive diagnostics template provided in the repository: [preheat_diagnostics_card.yaml](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/diagnostics/preheat_diagnostics_card.yaml).
+*   Replace your Lovelace card template with the updated, defensive diagnostics template provided in the repository: [preheat_diagnostics_card.yaml](docs/diagnostics/preheat_diagnostics_card.yaml).
 *   This updated card is provided **exclusively as a diagnostic/debugging tool** and not as an active feature.
-*   Note that Signal Quality metrics (such as Pattern Confidence, Potential Savings, and Learned Confidence) will display as `0` or `0%` under the 2.9.x release line, as full autonomy and Optimal Stop features are work-in-progress (scheduled for release in v2.10).
+*   **v2.11.1 Reality**: Optimal Stop and Shadow Savings metrics are fully active. Pattern Confidence and predicted arrival windows are sourced directly from the **House Arrival Hub** ("Preheat System" configuration entry).

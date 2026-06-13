@@ -1,8 +1,16 @@
 # ⚙️ Configuration Reference
 
+## Integration Entry Types
+
+Starting with **v2.11.1**, the integration automatically manages two types of configuration entries:
+1.  **Per-Zone Entries**: Created for each heating zone (room). They contain zone-specific settings (thermostats, local sensors, heating profiles).
+2.  **Preheat System Entry**: Created automatically in the background (no manual step required). It manages the shared **House Arrival Hub** and holds global settings.
+
+---
+
 ## Initial Setup Wizard
 
-When you add the integration, you will be asked for the essential entities:
+When you add the integration for a new zone, you will be asked for the essential entities:
 
 | **Setting** | **Description** | **Required** |
 | :--- | :--- | :--- |
@@ -15,15 +23,26 @@ When you add the integration, you will be asked for the essential entities:
 | **Weather Entity** | `weather.*` entity for forecast logic. | Optional |
 
 > [!NOTE]
-> **v2.9.0 Simplification**: Most "Expert" settings (Physics Mode, Initial Gain, Risk Mode, etc.) are now **automatically configured** based on your Heating Profile. You no longer need to tune them manually.
+> **Simplification**: Most "Expert" settings (Physics Mode, Initial Gain, Risk Mode, etc.) are now **automatically configured** based on your Heating Profile. You no longer need to tune them manually.
 
 ---
 
 ## Configure Options
 
-After installation, click **Configure** on the integration entry to access additional settings.
+After setup, click **Configure** on any entry to access settings.
 
-### 🏗️ Profile & Timing
+### 🏠 Preheat System (Global Hub) Options
+These options are configured only on the automatically created **Preheat System** entry:
+
+*   **Global Presence Source** (`global_presence`): An optional `binary_sensor`, `person`, or presence entity used as the primary source for detecting when anyone is home. If left empty, the hub automatically aggregates occupancy data across all active zones.
+*   **Arrival Comfort Bias** (`arrival_comfort_bias`): Controls how early the predicted arrival target is set. Options:
+    *   `comfort`: P15/P10 percentile (earliest target, prioritizes warmth, lower savings).
+    *   `balanced`: P25 percentile (default, standard balance).
+    *   `economy`: P50 percentile (median target, prioritizes savings, might feel cooler).
+*   **Evening Comfort Window** (`evening_comfort_window`): An optional fallback window (e.g., `17:00-22:00`) used for evening preheating when the hub's statistical arrival confidence falls below the 70% threshold. This guarantees evening warmth when schedules are irregular.
+
+### 🏗️ Zone Options (Per-Zone Entries)
+These options are configured on each individual zone entry:
 
 *   **Heating Profile**: Change your heating type if needed (Radiator, Floor, AC).
 *   **Buffer (Minutes)**: Add extra minutes to the calculated start time for safety. Default: Profile-based.
@@ -31,16 +50,12 @@ After installation, click **Configure** on the integration entry to access addit
 *   **Arrival Window**: Define when the system should expect arrivals (Start/End times).
 *   **Comfort Fallback**: The default target temperature if no setpoint can be determined. Default: `21°C`.
 
-### 🛑 Optimal Stop (WIP / planned for v2.10)
-
-*   **Enable Optimal Stop**: Activates "Coast-to-Stop" logic to save energy. (Note: Prepared in UI but currently inactive in the backend for 2.9.x).
-*   **Schedule Entity**: A `schedule`, `input_datetime`, or `sensor` helper defining when to stop heating.
-    *   **Note**: Currently required for autonomous engine setup. Smart departure learning is planned for v2.10.
+### 🛑 Optimal Stop
+*   **Enable Optimal Stop**: Activates "Coast-to-Stop" logic to save energy. Turns off the heating early if the room stays warm enough until the schedule ends.
+*   **Schedule Entity**: A `schedule`, `input_datetime`, or `sensor` helper defining when to stop heating (required for Optimal Stop).
 
 ### 🔒 External Control
-
-*   **External Inhibit (Lock/Window)**: Select a `binary_sensor`, `switch`, or `input_boolean` that blocks preheating when ON.
-    *   **Use Case**: Connect your window sensors to pause heating when a window is open.
+*   **External Inhibit (Lock/Window)**: Select a `binary_sensor`, `switch`, or `input_boolean` that blocks preheating when ON (e.g., window sensor to pause heating when open).
 *   **Workday Sensor**: Select a `binary_sensor` (usually `binary_sensor.workday_sensor`) to distinguish weekends/holidays.
 *   **Valve Position Sensor**: Optional sensor for TRV valve position (improves learning accuracy).
 
@@ -48,7 +63,7 @@ After installation, click **Configure** on the integration entry to access addit
 
 ## Advanced Settings (Auto-Configured)
 
-The following settings are now **automatically determined** based on your Heating Profile and environment. They are hidden from the UI but can still be accessed via internal storage if needed.
+The following settings are automatically determined based on your Heating Profile and environment:
 
 | **Setting** | **Default Behavior** |
 | :--- | :--- |
@@ -56,42 +71,54 @@ The following settings are now **automatically determined** based on your Heatin
 | **Initial Gain** | Set from Heating Profile (e.g., 20 min/K for Radiators). |
 | **Max Coast Duration** | Profile-based (e.g., 2h for Radiators, 4h for Floor). |
 | **Occupancy Debounce** | Fixed at 15 minutes (not user-configurable). |
-| **Risk Mode** | Always "Balanced" (deprecated setting). |
 
 ---
 
 ## Entity Explanations (Automation Interface)
 
-### 🎛️ Controls
-*   **`switch.enabled`**: **Master Enable**. Turns the integration on/off. If OFF, no calculations or checks run.
-*   **`switch.preheat`** (Hidden by default): **Manual Override**. Reflects the *current* heating state. Toggling it manually **Forces** preheat ON or OFF.
-*   **`switch.preheat_hold`**: **Temporary Hold (Logic)**. Temporarily blocks preheating (e.g., for automation-based inhibits).
-    *   **Note**: This state is **logic-based** and resets to OFF upon a Home Assistant restart. It is not suitable for long-term "Vacation Mode". Use the Integration's `Enable` switch for long absences.
+### 🏠 Global House Entities (Exposed by Preheat System)
+Exposed under the **Preheat House** device:
+*   **`sensor.preheat_house_next_arrival`**: Timestamp of the next predicted arrival for the house.
+*   **`sensor.preheat_house_arrival_confidence`**: Confidence in the house arrival prediction (%).
+*   **`sensor.preheat_house_arrival_window`**: expected arrival window (e.g. `12:13-13:34`).
+*   **`binary_sensor.preheat_house_incoming`**: Primary "someone is coming home" preheat signal. Returns `ON` within the maximum preheat lead time before expected house arrival.
 
-### 🚥 Automation Triggers
-*   **`binary_sensor.preheat_needed`**:
-    *   **Logic**: Returns `ON` when `Now >= Next Start Time`.
-    *   **Note**: This entity is **Hidden by default** (Expert debug tool).
-    *   **Recommendation**: For automation triggers, prefer **`binary_sensor.preheat_active`**.
-*   **`binary_sensor.preheat_active`** (Primary Trigger):
-    *   **Logic**: `ON` when the room **should be heating right now** (Needed AND Not Blocked AND Not Occupied).
-    *   **Use Case**: Use this entity to start your boiler/thermostat.
-*   **`binary_sensor.preheat_blocked`**:
-    *   **Logic**: `ON` if heating is prevented (Hold, Window, Holiday, Disabled). Check attributes for the specific reason.
+### 🎛️ Zone Controls
+*   **`switch.<zone>_enabled`**: Master Enable. Turns the zone on/off. If OFF, no calculations or checks run.
+*   **`switch.<zone>_preheat`** (Hidden by default): Manual Override. Reflects the current heating state. Toggling it manually forces preheat ON or OFF.
+*   **`switch.<zone>_preheat_hold`**: Temporary Hold. Temporarily blocks preheating. Resets to OFF on restart.
 
-### 📊 Data Sensors
-*   **`sensor.*_next_preheat_start`**: Timestamp of next heating cycle start (`next_start`).
-*   **`sensor.*_predicted_duration`**: Estimated heat-up time (minutes).
-*   **`sensor.*_target_temperature`**: The effective target setpoint.
-*   **`sensor.*_next_arrival_time`**: Next expected occupancy event.
-*   **`sensor.*_next_session_end`**: When the current session ends (for Optimal Stop).
+### 🚥 Zone Automation Triggers
+*   **`binary_sensor.<zone>_preheat_needed`**: `ON` when `Now >= Next Start Time`. (Hidden by default).
+*   **`binary_sensor.<zone>_preheat_active`** (Primary Trigger): `ON` when the room should be heating right now (Needed AND Not Blocked AND Not Occupied). Use this to trigger your thermostat.
+*   **`binary_sensor.<zone>_preheat_blocked`**: `ON` if heating is actively prevented by a **true suppressor** (e.g., integration disabled, window open, manual hold, or safety limits). 
+    *   *Note*: Having "no source available" (no upcoming schedule and no confident house pattern) is **not** considered blocked.
 
-### 🛠️ Maintenance (Buttons)
-*   **`button.*_recompute`**: Force immediate re-evaluation of all logic.
-*   **`button.*_reset_model`**: Reset physics learning to defaults.
-*   **`button.*_analyze_history`**: Rebuild patterns from recorder history.
+### 📊 Zone Data Sensors
+*   **`sensor.<zone>_next_preheat_start`**: Timestamp of next heating cycle start (`next_start`).
+*   **`sensor.<zone>_predicted_duration`**: Estimated heat-up time (minutes).
+*   **`sensor.<zone>_target_temperature`**: The effective target setpoint.
+*   **`sensor.<zone>_next_arrival_time`**: Next expected occupancy event.
+*   **`sensor.<zone>_next_session_end`**: When the current session ends (for Optimal Stop).
 
 ### 📉 Optimal Stop
-*   **`binary_sensor.optimal_stop_active`**:
-    *   **Note**: This entity is automatically **Hidden by default** if the feature is unused (disabled in config). If enabled, it is visible.
-    *   **ON** when the system determines you can turn **OFF** the heating early, because the residual heat will carry you to the end of the schedule.
+*   **`binary_sensor.<zone>_optimal_stop_active`**: `ON` when the system determines you can turn OFF the heating early, because the residual heat will carry you to the end of the schedule.
+
+### 🛠️ Maintenance (Buttons)
+*   **`button.<zone>_recompute`**: Force immediate re-evaluation of all logic.
+*   **`button.<zone>_reset_model`**: Reset physics learning to defaults.
+*   **`button.<zone>_analyze_history`**: Rebuild patterns from recorder history.
+
+---
+
+## Decision Trace (Debugging)
+
+The `decision_trace` attribute on `binary_sensor.<zone>_preheat_active` contains detailed diagnostics. The `start_source` field indicates which preheating provider won the arbitration.
+
+### `start_source` values and priority:
+When evaluating when to start preheating, the system arbitrates among available providers in the following strict priority:
+1.  **`schedule`**: Preheating is scheduled via a configured Schedule entity (highest priority).
+2.  **`house`**: Preheating is triggered by a confident (>= 70% confidence) prediction from the House Arrival Hub.
+3.  **`house_fallback`**: Preheating is triggered by the global Evening Comfort Window fallback.
+4.  **`learned`**: Preheating is triggered by zone-specific learned patterns (only if no house prediction wins).
+5.  **`none`**: No preheating is needed or no source is available (lowest priority).
