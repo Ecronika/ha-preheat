@@ -135,7 +135,7 @@ OPTION_SETTINGS = {
 class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Preheat."""
 
-    VERSION = 5
+    VERSION = 6
 
     def _validate_entity_ids(self, user_input: dict[str, Any]) -> dict[str, str]:
         """Validate existence of entities using Entity Registry and State Machine."""
@@ -295,6 +295,16 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors
         )
 
+    async def async_step_system(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Handle automatic system entry creation."""
+        await self.async_set_unique_id("preheat_system")
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title="Preheat System",
+            data={},
+            options={},
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> PreheatingOptionsFlow:
@@ -315,20 +325,26 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         """Manage options."""
         errors = {}
         
+        # Determine options allowed for this entry
+        is_system = (self._config_entry.unique_id == "preheat_system")
+        global_keys = {CONF_GLOBAL_PRESENCE, CONF_ARRIVAL_COMFORT_BIAS, CONF_EVENING_COMFORT_WINDOW}
+        
         if user_input is not None:
             # Defensive check (User feedback: > 60)
-            if user_input.get(CONF_BUFFER_MIN, 0) > 60:
+            if not is_system and user_input.get(CONF_BUFFER_MIN, 0) > 60:
                  errors[CONF_BUFFER_MIN] = "buffer_too_high"
             
             if not errors:
                 # SAFE MERGE STRATEGY
-                # 1. Start with copy of existing options
                 new_options = dict(self._config_entry.options)
                 
-                # 2. Iterate keys presented in this form (SCHEMA is source of truth for what can change)
-                all_keys = list(OPTION_SETTINGS.keys())
+                # Iterate keys presented in this form
+                if is_system:
+                    allowed_keys = [k for k in OPTION_SETTINGS.keys() if k in global_keys]
+                else:
+                    allowed_keys = [k for k in OPTION_SETTINGS.keys() if k not in global_keys]
                 
-                for key in all_keys:
+                for key in allowed_keys:
                     if key in user_input:
                         val = user_input[key]
                         # Clean "Empty" values (None, "", [], UNDEFINED)
@@ -338,12 +354,6 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                         else:
                              # Update value
                              new_options[key] = val
-                    else:
-                        # Key expected but missing from input?
-                        # In HA Options Flow, if key is missing but was in schema, it might mean "cleared" depending on frontend.
-                        # However, user suggested blocking updates for missing keys to be safe ("Safe Bet").
-                        # We do NOT touch new_options[key] here.
-                        pass
                 
                 return self.async_create_entry(title="", data=new_options)
         
@@ -356,6 +366,12 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
         profile_data = HEATING_PROFILES.get(current_profile, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
         
         for key, settings in OPTION_SETTINGS.items():
+            # Filter keys depending on whether this is system vs zone entry
+            if is_system and key not in global_keys:
+                continue
+            if not is_system and key in global_keys:
+                continue
+                
             schema_dict[vol.Optional(key)] = settings["selector"]
             
             # Smart Default handling for suggestions

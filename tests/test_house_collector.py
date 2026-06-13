@@ -50,23 +50,32 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
         self.dt_patcher.stop()
 
     async def test_h1_single_instance_lifecycle(self):
-        """Test H1: Single shared instance creation, reuse, and teardown."""
+        """Test H1: Single shared instance creation, reuse, and teardown with Preheat System entry."""
         # Setup entries
         entry1 = MagicMock()
         entry1.entry_id = "zone_1"
+        entry1.unique_id = "zone_1"
         entry1.title = "Zone 1"
         entry1.options = {}
         entry1.data = {}
         
+        system_entry = MagicMock()
+        system_entry.entry_id = "system_entry"
+        system_entry.unique_id = "preheat_system"
+        system_entry.title = "Preheat System"
+        system_entry.options = {}
+        system_entry.data = {}
+        
         entry2 = MagicMock()
         entry2.entry_id = "zone_2"
+        entry2.unique_id = "zone_2"
         entry2.title = "Zone 2"
         entry2.options = {}
         entry2.data = {}
 
-        self.hass.config_entries.async_entries.return_value = [entry1, entry2]
+        self.hass.config_entries.async_entries.return_value = [entry1]
 
-        # 1. First setup
+        # 1. Zone setup triggers system entry flow creation
         with patch("custom_components.preheat.coordinator.PreheatingCoordinator") as mock_coord_cls, \
              patch("custom_components.preheat.house_collector.HouseArrivalCollector.async_bootstrap") as mock_bootstrap:
             
@@ -80,43 +89,36 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
             self.assertIn("house", self.hass.data[DOMAIN])
             house_instance = self.hass.data[DOMAIN]["house"]
             self.assertIsInstance(house_instance, HouseArrivalCollector)
-            self.assertEqual(entry1.runtime_data.house_collector, house_instance)
+            
+            # Assert system flow init called
+            self.hass.config_entries.flow.async_init.assert_called_once_with(
+                DOMAIN, context={"source": "system"}
+            )
             mock_bootstrap.assert_called_once()
             
-            # 2. Second setup (should reuse)
-            mock_bootstrap.reset_mock()
+            # 2. System entry setup
+            self.hass.config_entries.async_entries.return_value = [entry1, system_entry]
+            await async_setup_entry(self.hass, system_entry)
+            self.assertEqual(system_entry.runtime_data, house_instance)
+            
+            # 3. Second zone setup (should NOT trigger flow creation again since system_entry is in async_entries)
+            self.hass.config_entries.flow.async_init.reset_mock()
+            self.hass.config_entries.async_entries.return_value = [entry1, system_entry, entry2]
+            
             await async_setup_entry(self.hass, entry2)
-            self.assertEqual(self.hass.data[DOMAIN]["house"], house_instance)
-            self.assertEqual(entry2.runtime_data.house_collector, house_instance)
-            # Bootstrap should NOT run again (only once)
-            mock_bootstrap.assert_not_called()
-
-            # 3. Global entities ownership guard (H2)
-            self.assertTrue(house_instance.register_global_entities("zone_1"))
-            # Second zone registers -> returns False because zone_1 is owner
-            self.assertFalse(house_instance.register_global_entities("zone_2"))
-
-            # 4. Unload entry 1 (owner unloads)
+            self.hass.config_entries.flow.async_init.assert_not_called()
+            
+            # 4. Unload zone entry 1
             with patch("homeassistant.config_entries.ConfigEntry.async_on_unload"), \
                  patch("homeassistant.config_entries.ConfigEntry.add_update_listener"), \
                  patch("homeassistant.config_entries.ConfigEntry.runtime_data"):
                 
-                # Simulate entry 1 unload. During unload, entry1 is still part of the entries list
-                self.hass.config_entries.async_entries.return_value = [entry1, entry2]
                 await async_unload_entry(self.hass, entry1)
-                
-                # Ownership is cleared
-                self.assertIsNone(house_instance.global_entities_entry_id)
-                # House collector remains because entry2 is still active
+                # House collector remains
                 self.assertIn("house", self.hass.data[DOMAIN])
-
-                # Entry 2 can now register/own global entities
-                self.assertTrue(house_instance.register_global_entities("zone_2"))
-
-                # Simulate entry 2 unload (last entry, so return_value only has entry2 during unloading)
-                self.hass.config_entries.async_entries.return_value = [entry2]
-                await async_unload_entry(self.hass, entry2)
-
+                
+                # 5. Unload system entry
+                await async_unload_entry(self.hass, system_entry)
                 # House collector is cleaned up/removed
                 self.assertNotIn("house", self.hass.data[DOMAIN])
 

@@ -94,6 +94,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> b
     else:
         hass.data[DOMAIN]["house"].update_config()
 
+    if entry.unique_id == "preheat_system":
+        entry.runtime_data = hass.data[DOMAIN]["house"]
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+        return True
+
+    # Check if system entry exists
+    system_entry_exists = any(
+        e.unique_id == "preheat_system"
+        for e in hass.config_entries.async_entries(DOMAIN)
+    )
+    if not system_entry_exists:
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": "system"}
+            )
+        )
+
     from .coordinator import PreheatingCoordinator
     coordinator = PreheatingCoordinator(hass, entry)
     coordinator.house_collector = hass.data[DOMAIN]["house"]
@@ -112,15 +130,31 @@ async def async_unload_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> 
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        if DOMAIN in hass.data and "house" in hass.data[DOMAIN]:
-            hass.data[DOMAIN]["house"].unregister_global_entities(entry.entry_id)
-        if len(hass.config_entries.async_entries(DOMAIN)) <= 1:
+        if entry.unique_id == "preheat_system":
             if DOMAIN in hass.data and "house" in hass.data[DOMAIN]:
                 house = hass.data[DOMAIN].pop("house")
                 if house._unsub_listener:
                     house._unsub_listener()
                     house._unsub_listener = None
     return unload_ok
+
+async def async_remove_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> None:
+    """Handle removal of an entry."""
+    if entry.unique_id == "preheat_system":
+        # Recreate system entry automatically if there are still active zone entries
+        active_zones = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if e.unique_id != "preheat_system"
+        ]
+        if active_zones:
+            _LOGGER.warning(
+                "Preheat System entry was deleted while active zone entries exist. Re-creating system entry automatically."
+            )
+            hass.async_create_task(
+                hass.config_entries.flow.async_init(
+                    DOMAIN, context={"source": "system"}
+                )
+            )
 
 async def async_reload_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> None:
     """Reload config entry when options change."""
@@ -148,19 +182,16 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: PreheatConfigEn
         data = dict(config_entry.data)
         options = dict(config_entry.options)
         
-        # Move core keys into data if they were previously stored in options
-        # We need to import these keys here or ensure they are available
         from .const import CONF_OCCUPANCY, CONF_CLIMATE, CONF_TEMPERATURE, CONF_WEATHER_ENTITY
 
         for k in (CONF_OCCUPANCY, CONF_CLIMATE, CONF_TEMPERATURE, CONF_WEATHER_ENTITY):
             if k not in data and k in options:
                 data[k] = options.pop(k)
         
-        # Ensure defaults for Behavior
         if CONF_PRESET_MODE not in options:
             options[CONF_PRESET_MODE] = PRESET_BALANCED
         if CONF_EXPERT_MODE not in options:
-            options[CONF_EXPERT_MODE] = False # Default to Simple
+            options[CONF_EXPERT_MODE] = False
 
         hass.config_entries.async_update_entry(
             config_entry, 
@@ -175,13 +206,11 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: PreheatConfigEn
     if current_version == 3:
         _LOGGER.info("Migrating v3 -> v4 (Cleaning Storage)")
         
-        # Clean Data
         new_data = {}
         for k, v in config_entry.data.items():
-            if v not in (None, "", []): # Strict cleaning (Removed "None" string check)
+            if v not in (None, "", []):
                 new_data[k] = v
                 
-        # Clean Options
         new_options = {}
         for k, v in config_entry.options.items():
             if v not in (None, "", []):
@@ -214,5 +243,72 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: PreheatConfigEn
         )
         current_version = 5
         _LOGGER.info("Migration v4->v5 successful")
+
+    # v5 -> v6: Move Hub ownership to system config entry
+    if current_version == 5:
+        _LOGGER.info("Migrating v5 -> v6 (Moving Hub ownership to system config entry)")
+        # 1. Ensure system entry exists
+        system_entry = None
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            if entry.unique_id == "preheat_system":
+                system_entry = entry
+                break
+        if not system_entry:
+            await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": "system"}
+            )
+            for entry in hass.config_entries.async_entries(DOMAIN):
+                if entry.unique_id == "preheat_system":
+                    system_entry = entry
+                    break
+                    
+        if system_entry:
+            # 2. Re-home device
+            from homeassistant.helpers import device_registry as dr
+            dev_reg = dr.async_get(hass)
+            dev = dev_reg.async_get_device(identifiers={(DOMAIN, "house")})
+            if dev and config_entry.entry_id in dev.config_entries:
+                dev_reg.async_update_device(
+                    dev.id,
+                    add_config_entry_id=system_entry.entry_id,
+                    remove_config_entry_id=config_entry.entry_id
+                )
+                
+            # 3. Re-home global entities
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(hass)
+            from .const import CONF_GLOBAL_PRESENCE, CONF_ARRIVAL_COMFORT_BIAS, CONF_EVENING_COMFORT_WINDOW
+            GLOBAL_ENTITY_UNIQUE_IDS = {"house_next_arrival", "house_arrival_confidence", "house_arrival_window", "house_incoming"}
+            for unique_id in GLOBAL_ENTITY_UNIQUE_IDS:
+                for platform in PLATFORMS:
+                    entity_id = ent_reg.async_get_entity_id(platform, DOMAIN, unique_id)
+                    if entity_id:
+                        entity_entry = ent_reg.async_get(entity_id)
+                        if entity_entry and entity_entry.config_entry_id == config_entry.entry_id:
+                            ent_reg.async_update_entity(entity_id, config_entry_id=system_entry.entry_id)
+                        break
+                        
+            # 4. Migrate global option values
+            system_options = dict(system_entry.options)
+            zone_options = dict(config_entry.options)
+            zone_data = dict(config_entry.data)
+            
+            for key in (CONF_GLOBAL_PRESENCE, CONF_ARRIVAL_COMFORT_BIAS, CONF_EVENING_COMFORT_WINDOW):
+                if key in zone_options:
+                    system_options[key] = zone_options.pop(key)
+                elif key in zone_data:
+                    system_options[key] = zone_data.pop(key)
+                    
+            hass.config_entries.async_update_entry(system_entry, options=system_options)
+            
+            # Update zone entry (removing migrated keys and bumping version to 6)
+            hass.config_entries.async_update_entry(
+                config_entry,
+                data=zone_data,
+                options=zone_options,
+                version=6
+            )
+            current_version = 6
+            _LOGGER.info("Migration v5->v6 successful")
 
     return True

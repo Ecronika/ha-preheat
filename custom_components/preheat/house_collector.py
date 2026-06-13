@@ -51,7 +51,6 @@ class HouseArrivalCollector:
         self.history: dict[int, list[tuple[date, int]]] = defaultdict(list)
         self._store = Store(hass, 1, "preheat.house")
         self.bootstrap_done = False
-        self.global_entities_entry_id = None
         self._unsub_listener = None
         self._listeners: list[callback] = []
         
@@ -59,17 +58,7 @@ class HouseArrivalCollector:
         self.comfort_bias: str = "comfort"
         self.evening_window_str: str | None = None
 
-    def register_global_entities(self, entry_id: str) -> bool:
-        """Register which entry ID 'owns' the global entities (once)."""
-        if self.global_entities_entry_id is None:
-            self.global_entities_entry_id = entry_id
-            return True
-        return self.global_entities_entry_id == entry_id
 
-    def unregister_global_entities(self, entry_id: str) -> None:
-        """Clean up owner entry ID on unload."""
-        if self.global_entities_entry_id == entry_id:
-            self.global_entities_entry_id = None
 
     def async_add_listener(self, update_callback: callback) -> callback:
         """Listen for updates."""
@@ -126,16 +115,29 @@ class HouseArrivalCollector:
         comfort_bias = "comfort"
         evening_window_str = None
         
+        # Try to find the system entry first
+        system_entry = None
         for entry in self.hass.config_entries.async_entries(DOMAIN):
-            gp = entry.options.get(CONF_GLOBAL_PRESENCE) or entry.data.get(CONF_GLOBAL_PRESENCE)
-            if gp:
-                global_presence = gp
-            cb = entry.options.get(CONF_ARRIVAL_COMFORT_BIAS) or entry.data.get(CONF_ARRIVAL_COMFORT_BIAS)
-            if cb:
-                comfort_bias = cb
-            ew = entry.options.get(CONF_EVENING_COMFORT_WINDOW) or entry.data.get(CONF_EVENING_COMFORT_WINDOW)
-            if ew:
-                evening_window_str = ew
+            if entry.unique_id == "preheat_system":
+                system_entry = entry
+                break
+                
+        if system_entry:
+            global_presence = system_entry.options.get(CONF_GLOBAL_PRESENCE) or system_entry.data.get(CONF_GLOBAL_PRESENCE)
+            comfort_bias = system_entry.options.get(CONF_ARRIVAL_COMFORT_BIAS) or system_entry.data.get(CONF_ARRIVAL_COMFORT_BIAS) or "comfort"
+            evening_window_str = system_entry.options.get(CONF_EVENING_COMFORT_WINDOW) or system_entry.data.get(CONF_EVENING_COMFORT_WINDOW)
+        else:
+            # Fallback to zones for backward compatibility
+            for entry in self.hass.config_entries.async_entries(DOMAIN):
+                gp = entry.options.get(CONF_GLOBAL_PRESENCE) or entry.data.get(CONF_GLOBAL_PRESENCE)
+                if gp:
+                    global_presence = gp
+                cb = entry.options.get(CONF_ARRIVAL_COMFORT_BIAS) or entry.data.get(CONF_ARRIVAL_COMFORT_BIAS)
+                if cb:
+                    comfort_bias = cb
+                ew = entry.options.get(CONF_EVENING_COMFORT_WINDOW) or entry.data.get(CONF_EVENING_COMFORT_WINDOW)
+                if ew:
+                    evening_window_str = ew
                 
         self.global_presence = global_presence
         self.comfort_bias = comfort_bias

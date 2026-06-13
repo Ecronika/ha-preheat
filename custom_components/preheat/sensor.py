@@ -27,6 +27,16 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up sensors."""
+    if entry.unique_id == "preheat_system":
+        if house := hass.data[DOMAIN].get("house"):
+            global_sensors = [
+                PreheatHouseNextArrivalSensor(house),
+                PreheatHouseArrivalConfidenceSensor(house),
+                PreheatHouseArrivalWindowSensor(house),
+            ]
+            async_add_entities(global_sensors)
+        return
+
     coordinator: PreheatingCoordinator = entry.runtime_data
     
     sensors = [
@@ -46,16 +56,6 @@ async def async_setup_entry(
     ]
 
     async_add_entities(sensors)
-
-    # Global Entities Registration (H2)
-    if house := hass.data[DOMAIN].get("house"):
-        if house.register_global_entities(entry.entry_id):
-            global_sensors = [
-                PreheatHouseNextArrivalSensor(house),
-                PreheatHouseArrivalConfidenceSensor(house),
-                PreheatHouseArrivalWindowSensor(house),
-            ]
-            async_add_entities(global_sensors)
 
 class PreheatBaseSensor(CoordinatorEntity[PreheatingCoordinator], SensorEntity):
     """Base sensor."""

@@ -1,3 +1,16 @@
+## v2.11.1 (2026-06-13) - Preheat System Hub-Owner ⚙️
+**Patch Release**
+
+This release introduces an architectural refinement to the House Arrival Hub. The global "Preheat House" device and its 4 global entities are now owned by a dedicated, automatically created "Preheat System" configuration entry, avoiding fragile ownership and zone reload issues.
+
+### ✨ Improvements & Registry Migration
+* **Preheat System Entry**: Automatically creates and manages a single "Preheat System" entry to own global entities, preventing ownership issues when deleting/reloading zone entries.
+* **Self-Healing / Re-Creation**: Automatically recreates the system config entry if deleted by a user, as long as active zones exist.
+* **Registry-Based Migration**: Seamlessly migrates the "Preheat House" device and global entities to the system entry without loss of history or configuration.
+* **Separated Options Flow**: Keeps global settings separated from zone settings in the options flow UI.
+
+---
+
 ## v2.11.0 (2026-06-13) - House Arrival Hub 🏠
 **Minor Release**
 
