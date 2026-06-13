@@ -24,10 +24,6 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
 
 from .math_preheat import root_find_duration
-from .weather_service import WeatherService
-from .planner import PreheatPlanner
-from .physics import ThermalPhysics
-from .optimal_stop import OptimalStopManager
 from .types import Context, Prediction, Decision
 
 from .const import (
@@ -114,8 +110,6 @@ from .const import (
     REASON_PARSE_ERROR,
     REASON_END_TOO_SOON,
     REASON_LOW_CONFIDENCE,
-    REASON_BLOCKED_BY_GATES,
-    REASON_INSUFFICIENT_DATA,
     REASON_BLOCKED_BY_GATES,
     REASON_INSUFFICIENT_DATA,
     REASON_EXTERNAL_INHIBIT,
@@ -281,7 +275,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         
         # Caching
         self._cached_outdoor_temp: float = 10.0
-        self._last_weather_check: datetime | None = None
         self._last_weather_check: datetime | None = None
         self.weather_service: WeatherService | None = None
         weather_entity = self._get_conf(CONF_WEATHER_ENTITY)
@@ -1149,38 +1142,68 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if self._frost_active:
              frost_override = True
              should_start = True
-             # Do not set start_time to preserve original schedule intention for analytics?
-             # Or set it to now?
              start_time = now
         
+        # Determine if a preheat demand would exist (Bedarf bestünde)
+        # Potential demand exists if we are not in frost override, and we have a next event,
+        # and we are within the preheat lead time.
+        potential_demand = False
+        if not frost_override and ctx["next_event"] is not None:
+             minutes_to_start = (ctx["next_event"] - now).total_seconds() / 60.0
+             if minutes_to_start <= pred["predicted_duration"]:
+                  potential_demand = True
+
         # Start Logic (Normal)
+        normal_start_triggered = False
         if not frost_override and final_decision:
              evt = ctx["next_event"]
              dur = pred["predicted_duration"]
              
              if evt:
-                 # Check Lead Time
-                 minutes_to_start = (evt - now).total_seconds() / 60.0
-                 if minutes_to_start <= dur:
-                     should_start = True
-                     start_time = now # Start immediately
-                     
+                  # Check Lead Time
+                  minutes_to_start = (evt - now).total_seconds() / 60.0
+                  if minutes_to_start <= dur:
+                      normal_start_triggered = True
+                      
              if final_decision.session_end:
-                 effective_departure = final_decision.session_end
+                  effective_departure = final_decision.session_end
 
-        # Manual Override (Hold can inhibit standard start, but does it inhibit Frost?)
-        # Standard: Frost > Hold > Schedule.
-        if selected_provider == PROVIDER_MANUAL and not frost_override:
-             should_start = False
+        # Now, evaluate blocks on the normal preheat path
+        # If normal_start_triggered was True, but we have a blocker, we suppress the start.
+        # Check active blockers if there is a potential demand or normal start triggered
+        blocked = False
+        blocked_reasons = []
+        if potential_demand:
+             if not self.enable_active:
+                  blocked_reasons.append("disabled")
+             if self._window_open_detected:
+                  blocked_reasons.append("window_open")
+             if self.hold_active:
+                  blocked_reasons.append("manual_hold")
+             
+             if blocked_reasons:
+                  blocked = True
+
+        # Apply blocks to should_start & start_time
+        if normal_start_triggered:
+             if blocked:
+                  should_start = False
+                  start_time = None
+             else:
+                  should_start = True
+                  start_time = now
 
         # Shadow Metrics Logic
-        shadow_metrics = {"safety_violations": 0}
+        shadow_metrics = {
+             "safety_violations": 0,
+             "cumulative_shadow_savings": 0.0
+        }
         if learned_decision.is_valid and learned_decision.is_shadow and learned_decision.should_stop:
              # Check Safety: If we STOPPED now, would it be uncomfortable?
              stop_tolerance = self._get_conf(CONF_STOP_TOLERANCE, 0.5)
              threshold = ctx["target_setpoint"] - stop_tolerance
              if ctx["operative_temp"] < threshold:
-                 shadow_metrics["safety_violations"] = 1
+                  shadow_metrics["safety_violations"] = 1
 
         self.decision_trace = {
              "evaluated_at": now.isoformat(),
@@ -1191,14 +1214,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  PROVIDER_LEARNED: asdict(learned_decision)
              },
              KEY_GATES_FAILED: gates_failed,
-             "metrics": shadow_metrics
+             "metrics": shadow_metrics,
+             "blocked": blocked,
+             "blocked_reasons": blocked_reasons,
+             "reason": blocked_reasons[0] if blocked else "none",
         }
         
         return {
              "should_start": should_start,
              "start_time": start_time,
-             "reason": "arbitrated",
-             "blocked_by": gates_failed,
+             "reason": blocked_reasons[0] if blocked else "arbitrated",
+             "blocked_by": blocked_reasons,
              "frost_override": frost_override,
              "effective_departure": effective_departure
         }
@@ -1214,17 +1240,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                   t = ctx["target_setpoint"]
                   o = ctx["outdoor_temp"] if ctx["outdoor_temp"] else 10.0
                   await self._stop_preheat(ctx["operative_temp"], t, o)
-
-    async def _post_update_tasks(self, ctx: Context, decision: Decision, pred: Prediction) -> None:
-        """Run tasks after update."""
-        # 1. Update Polling Interval
-        self._update_polling_interval(decision["start_time"], ctx["is_occupied"])
-        
-        # 2. Diagnostics
-        # 2. Diagnostics
-        await self.diagnostics.check_all(ctx, self.physics, self.weather_service, pred)
-        
-
 
     def _build_preheat_data(self, ctx: Context, pred: Prediction, dec: Decision) -> PreheatData:
         # Extra Metadata
@@ -1264,6 +1279,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             hvac_mode=hvac_mode,
             optimal_stop_active=self.optimal_stop_manager.is_active,
             optimal_stop_time=self.optimal_stop_manager.stop_time,
+            coast_tau=self.cooling_analyzer.learned_tau,
+            tau_confidence=self.cooling_analyzer.confidence,
             pattern_type=p_res.pattern_type if p_res else None,
             pattern_confidence=p_res.confidence if p_res else 0.0,
             pattern_stability=p_res.stability if p_res else 0.0,

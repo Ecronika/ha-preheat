@@ -62,3 +62,14 @@ logger:
 
 *   If it shows 0 sessions, check that your **Occupancy Sensor** has history in the Recorder (at least 7 days).
 *   You can manually trigger a rescan using the **"Analyze History"** button.
+
+---
+
+## 🎛️ "Autonomous Engine Cockpit" Card Compatibility
+
+If you are using the original "Autonomous Engine Cockpit" card template shared in the community forums (Post 5), note that it will crash with an `UndefinedError: 'dict object' has no attribute 'schedule'` error and render empty in v2.9.5. This is because the empty placeholder keys previously added in early 2.9.5 pre-releases have been removed to maintain clean telemetry and avoid misleading indicators.
+
+To resolve this:
+*   Replace your Lovelace card template with the updated, defensive diagnostics template provided in the repository: [preheat_diagnostics_card.yaml](file:///C:/Users/tpaul/.gemini/antigravity/scratch/ha-preheat/docs/diagnostics/preheat_diagnostics_card.yaml).
+*   This updated card is provided **exclusively as a diagnostic/debugging tool** and not as an active feature.
+*   Note that Signal Quality metrics (such as Pattern Confidence, Potential Savings, and Learned Confidence) will display as `0` or `0%` under the 2.9.x release line, as full autonomy and Optimal Stop features are work-in-progress (scheduled for release in v2.10).

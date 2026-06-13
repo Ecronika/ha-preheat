@@ -136,13 +136,13 @@ class ScheduleProvider(SessionEndProvider):
             
         state = self.hass.states.get(sched_entity)
         if not state or state.state in ("unavailable", "unknown"):
-            # self._update_manager_passive(context) # Removed: Centralized
+            # self._update_manager_passive(context) # Manager wird in 2.9.x nicht aufgerufen; Aktivierung in v2.10.
             return ProviderDecision(False, None, False, False, invalid_reason=REASON_UNAVAILABLE)
         
         if state.state != "on":
              # Legacy: If schedule is OFF, we are not in a session.
              # Manager reset is handled centrally in Coordinator.
-             # self._update_manager_passive(context) # Removed: Centralized
+             # self._update_manager_passive(context) # Manager wird in 2.9.x nicht aufgerufen; Aktivierung in v2.10.
              return ProviderDecision(False, None, False, False, invalid_reason=REASON_OFF)
 
         # 2. Resolve Session End
@@ -154,7 +154,7 @@ class ScheduleProvider(SessionEndProvider):
         if not session_end:
              return ProviderDecision(False, None, False, False, invalid_reason=REASON_NO_NEXT_EVENT)
              
-        # 3. Optimal Stop Logic is now CENTRALIZED in Coordinator.
+        # 3. Optimal Stop Logic is NOT active/called in 2.9.x (Aktivierung in v2.10).
         # This provider just reports the Schedule's Intent (Run until session_end).
         # We perform NO side-effects on the manager here.
         
@@ -172,6 +172,7 @@ class ScheduleProvider(SessionEndProvider):
 class LearnedDepartureProvider(SessionEndProvider):
     """
     Shadow Mode Provider.
+    Reiner Shadow-Provider; erhält potential_savings=0 fest -> nie is_valid.
     Predicts session end based on historical patterns.
     Checks Safety Gates.
     """

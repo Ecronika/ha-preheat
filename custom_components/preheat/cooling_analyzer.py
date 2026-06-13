@@ -1,4 +1,4 @@
-"""Cooling Analyzer to learn thermal time constant (tau) for Optimal Stop."""
+"""Cooling Analyzer to learn thermal time constant (tau) for Optimal Stop. Klasse wird derzeit nicht gespeist (add_data_point/analyze ohne Aufrufer); learned_tau bleibt konstant."""
 from __future__ import annotations
 
 import logging
@@ -20,7 +20,10 @@ class CoolingSegment(NamedTuple):
     samples: int
 
 class CoolingAnalyzer:
-    """Analyzes historical data to find the cooling time constant (tau)."""
+    """
+    Analyzes historical data to find the cooling time constant (tau).
+    Klasse wird derzeit nicht gespeist (add_data_point/analyze ohne Aufrufer); learned_tau bleibt konstant.
+    """
     
     def __init__(self):
         self._buffer = [] # List of (dt, t_in, t_out, is_heating)

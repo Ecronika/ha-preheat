@@ -1,3 +1,19 @@
+## v2.9.5 (2026-06-13) - Bugfixes & Honest Docs 🛠️
+**Stable Release**
+
+This release fixes critical bugs regarding master switch control, blocks reporting, and improves documentation transparency.
+
+### 🐛 Fixes & Improvements
+* **Master Switch**: Gated the preheating start check using the `enable_active` switch. Preheating will no longer start under normal conditions if the integration is disabled.
+* **Frost Protection Exception**: Retained the frost protection override so that it still triggers if `operative_temp < 5°C`, even if the integration is disabled (README commitment).
+* **Blocked State Reporting (A4)**: Refined `blocked` / `blocked_reasons` to only represent true blockers (disabled, window open, manual hold) and prevent false positives in schedule-free zones.
+* **Coast Tau Display**: Fixed the `coast_tau_hours` displaying `0` by properly populating `coast_tau` and `tau_confidence` in coordinator data.
+* **Autonomous Engine Cockpit Card (A5)**: Removed empty placeholders from the trace to keep telemetry clean. Provided a corrected diagnostics template card at `docs/diagnostics/preheat_diagnostics_card.yaml` since the original forum card is incompatible.
+* **Code Hygiene**: Removed duplicated `_post_update_tasks` definition, redundant `return` in `physics.py`, empty `solve_duration` stub in `math_preheat.py`, duplicate `_last_weather_check` initialization, and cleaned up duplicate imports in the coordinator.
+* **Documentation Honesty**: Updated `README.md` and inline comments to accurately describe features (Optimal Stop, Schedule-Free Start, and Shadow Savings are marked as WIP/planned for v2.10).
+
+---
+
 ## v2.9.4 (2026-06-06) - Fix Startup Sensor Timeout Noise & False Stalled Learning Alarm 🛠️
 **Stable Release**
 

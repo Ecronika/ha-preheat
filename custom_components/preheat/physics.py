@@ -106,10 +106,7 @@ class ThermalPhysics:
         dt_in = delta_t_internal
         dt_out = max(0.0, delta_t_external) 
 
-        # Time = Deadtime + (Mass * Delta_In) + (Loss * Delta_Out)
         duration = self.deadtime + (self.mass_factor * dt_in) + (self.loss_factor * dt_out)
-        return max(0.0, duration)
-    
         return max(0.0, duration)
 
     def calculate_effective_outdoor_temp(self, forecasts: list[dict], duration_hours: float) -> float:
