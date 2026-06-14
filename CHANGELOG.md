@@ -12,6 +12,7 @@ This release brings stability improvements and bugfixes for the cooling analyzer
 * **Defective Zone Storage Saving**: Enables partial saving for defective zones by preserving existing thermal parameters while safely writing updated non-thermal states (history, diagnostics, settings) to storage.
 * **Defective Error Threshold**: Centralized defective zone error checks using a newly defined configuration constant.
 * **Coast Capping Documentation**: Clarified and documented that the maximum coast limit fallback to profile default coast is a deliberate safety boundary.
+* **Autonomous Optimal Stop Solver**: Fixed the optimal stop solver check to depend on `effective_end` instead of `schedule_end`. This resolves a state-machine latch bug in autonomous mode where predictions would otherwise be ignored by the solver.
 
 ---
 

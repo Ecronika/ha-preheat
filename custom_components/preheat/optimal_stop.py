@@ -217,7 +217,7 @@ class OptimalStopManager:
              return
 
         # 2. Solver Logic (If we have a valid session)
-        if schedule_end:
+        if effective_end:
              # Physics Mode Check
              p_mode = config.get(CONF_PHYSICS_MODE)
              forecasts = config.get("forecasts", [])
@@ -241,7 +241,7 @@ class OptimalStopManager:
              else:
                  # Standard Algebraic Model
                  # Calculate T_out_eff
-                 t_out = forecast_provider(now, schedule_end)
+                 t_out = forecast_provider(now, effective_end)
                  self.forecast_used = t_out
                  
                  duration_min = calculate_coast_duration(
@@ -261,7 +261,7 @@ class OptimalStopManager:
              
              
              # Computed Stop Time
-             computed_stop = schedule_end - timedelta(minutes=duration_min)
+             computed_stop = effective_end - timedelta(minutes=duration_min)
              
              # 3. Decision Logic
              
@@ -271,7 +271,7 @@ class OptimalStopManager:
              self._savings_total = savings
              
              # Remaining savings (from now)
-             remaining = (schedule_end - now).total_seconds() / 60.0
+             remaining = (effective_end - now).total_seconds() / 60.0
              # Clamped by duration (can't save more than the coast duration)
              actual_remaining = min(remaining, duration_min) if remaining > 0 else 0
              self._savings_remaining = actual_remaining
