@@ -57,6 +57,7 @@ from custom_components.preheat.house_collector import HouseArrivalCollector
 from custom_components.preheat.const import (
     VALVE_HEATING_THRESHOLD,
     OS_REASON_NO_TEMPERATURE,
+    NO_TEMP_ERROR_THRESHOLD,
 )
 
 class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
@@ -256,8 +257,8 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
             "now": datetime.now()
         })
         
-        # Loop update 3 times to trigger error state
-        for _ in range(3):
+        # Loop update to trigger error state
+        for _ in range(NO_TEMP_ERROR_THRESHOLD):
             data = await coord._async_update_data()
             
         # Verify no_temperature issue is created after 3 errors
@@ -290,8 +291,8 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
         dur = collector.get_max_predicted_duration()
         self.assertEqual(dur, 200.0)
         
-        # Case B: Defective (errors = 3)
-        coord._consecutive_readiness_errors = 3
+        # Case B: Defective (errors = NO_TEMP_ERROR_THRESHOLD)
+        coord._consecutive_readiness_errors = NO_TEMP_ERROR_THRESHOLD
         dur = collector.get_max_predicted_duration()
         self.assertEqual(dur, 120.0) # default fallback
         
@@ -315,3 +316,108 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
             
         # default_coast for radiator_new is 2.0. So tau_hours should be max(1.0, 2.0) = 2.0.
         self.assertEqual(tau_hours, 2.0)
+
+    # ---------------------------------------------------------
+    # N1: Used tau uncapped
+    # ---------------------------------------------------------
+    async def test_n1_uncapped_tau(self):
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test"
+        entry.options = {}
+        entry.data = {}
+        
+        with patch("custom_components.preheat.coordinator.PreheatingCoordinator._setup_listeners"), \
+             patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
+             coord = PreheatingCoordinator(hass, entry)
+             
+        coord.cooling_analyzer = MagicMock()
+        coord.cooling_analyzer.learned_tau = 24.0
+        coord.cooling_analyzer.confidence = 0.8
+        
+        def get_conf_mock(key, default=None):
+            if key == "heating_profile":
+                return "radiator_new"
+            return default
+        coord._get_conf = MagicMock(side_effect=get_conf_mock)
+        coord.optimal_stop_manager = MagicMock()
+        
+        # Call the optimal stop update
+        is_active, stop_time, stop_reason, savings_total, savings_remaining, tau_hours = \
+            coord._update_optimal_stop_and_savings(
+                ctx={"operative_temp": 20.0, "target_setpoint": 21.0, "outdoor_temp": 10.0, "forecasts": []},
+                now=datetime.now(),
+                sched_decision=MagicMock(session_end=datetime.now() + timedelta(hours=1))
+            )
+            
+        # Verify that tau_hours is 24.0, which is uncapped (12h cap removed)
+        self.assertEqual(tau_hours, 24.0)
+
+    # ---------------------------------------------------------
+    # N2: Defective zone partial save (non-thermal only)
+    # ---------------------------------------------------------
+    async def test_n2_partial_save_no_temperature(self):
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test"
+        entry.options = {}
+        entry.data = {}
+        
+        with patch("custom_components.preheat.coordinator.PreheatingCoordinator._setup_listeners"), \
+             patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
+             coord = PreheatingCoordinator(hass, entry)
+             
+        # Mock pre-existing data in storage
+        mock_stored_data = {
+            "schema_version": 1,
+            "physics_version": 2,
+            "model_cooling_tau": 24.0,
+            "cooling_confidence": 0.8,
+            "tau_revalidated": True,
+            "model_mass_factor": 15.0,
+            "model_loss_factor": 4.5,
+            "sample_count": 5,
+            "avg_error": 0.1,
+            "last_comfort_setpoint": 21.0,
+            "arrival_history_v2": {"1": []},
+            "bootstrap_done": False,
+            "enable_active": False,
+            "diagnostics": {"old_diag": 1},
+            "cumulative_shadow_savings": 1.2
+        }
+        coord._store.async_load = AsyncMock(return_value=mock_stored_data)
+        coord._store.async_save = AsyncMock()
+        
+        # Simulate defective state
+        coord._consecutive_readiness_errors = NO_TEMP_ERROR_THRESHOLD
+        
+        # Update current in-memory non-thermal states
+        coord.planner.to_dict = MagicMock(return_value={"updated_history": True})
+        coord.bootstrap_done = True
+        coord.enable_active = True
+        coord.diagnostics.data = {"new_diag": 2}
+        coord._shadow_metrics = {"cumulative_shadow_savings": 5.5}
+        
+        # Call the save
+        await coord._async_save_data()
+        
+        # Check that async_save was called
+        coord._store.async_save.assert_called_once()
+        saved_dict = coord._store.async_save.call_args[0][0]
+        
+        # Thermal fields must remain exactly as loaded
+        self.assertEqual(saved_dict["model_cooling_tau"], 24.0)
+        self.assertEqual(saved_dict["cooling_confidence"], 0.8)
+        self.assertTrue(saved_dict["tau_revalidated"])
+        self.assertEqual(saved_dict["model_mass_factor"], 15.0)
+        self.assertEqual(saved_dict["model_loss_factor"], 4.5)
+        self.assertEqual(saved_dict["sample_count"], 5)
+        self.assertEqual(saved_dict["avg_error"], 0.1)
+        self.assertEqual(saved_dict["last_comfort_setpoint"], 21.0)
+        
+        # Non-thermal fields must be updated
+        self.assertEqual(saved_dict["arrival_history_v2"], {"updated_history": True})
+        self.assertTrue(saved_dict["bootstrap_done"])
+        self.assertTrue(saved_dict["enable_active"])
+        self.assertEqual(saved_dict["diagnostics"], {"new_diag": 2})
+        self.assertEqual(saved_dict["cumulative_shadow_savings"], 5.5)

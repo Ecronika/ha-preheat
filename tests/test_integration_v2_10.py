@@ -131,7 +131,7 @@ class TestIntegrationV210(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_optimal_stop_clamping_and_gating(self):
-        """Test M1: Clamp tau to 12h and apply confidence gate."""
+        """Test M1: Clamp tau and apply confidence gate."""
         # Enable optimal stop
         self.coordinator.entry.options[CONF_ENABLE_OPTIMAL_STOP] = True
         
@@ -147,13 +147,13 @@ class TestIntegrationV210(unittest.IsolatedAsyncioTestCase):
         # Run _evaluate_start_decision
         self.coordinator._evaluate_start_decision(ctx, pred)
         
-        # Verify clamped tau (12.0) was used
+        # Verify uncapped tau (15.0) was used (N1: 12h limit removed)
         self.coordinator.optimal_stop_manager.update.assert_called_with(
             current_temp=20.0,
             target_temp=21.0,
             schedule_end=None,
             forecast_provider=unittest.mock.ANY,
-            tau_hours=12.0, # Clamped from 15.0 to 12.0
+            tau_hours=15.0, # Passed uncapped
             config=unittest.mock.ANY,
             predicted_end=unittest.mock.ANY
         )

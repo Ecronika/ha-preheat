@@ -269,4 +269,7 @@ OS_REASON_NO_TEMPERATURE: Final = "no_temperature"
 OS_REASON_SETPOINT_INCREASE: Final = "setpoint_increase"
 OS_REASON_SESSION_CHANGED: Final = "session_changed"
 OS_REASON_TOO_COLD: Final = "too_cold"
-OS_REASON_TOO_COLD_SAFETY: Final = "too_cold_safety"
+OS_REASON_TOO_COLD_SAFETY: Final = "too_cold_safety"
+
+# Defective Zone Handling (N3)
+NO_TEMP_ERROR_THRESHOLD: Final = 3  # zyklusbasiert; entspricht bei adaptivem Polling ~3–15 min Grace

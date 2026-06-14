@@ -88,6 +88,7 @@ from .const import (
     CONF_SCHEDULE_ENTITY,
     VALVE_HEATING_THRESHOLD,
     OS_REASON_NO_TEMPERATURE,
+    NO_TEMP_ERROR_THRESHOLD,
     # V3 Provider Constants
     PROVIDER_SCHEDULE,
     PROVIDER_LEARNED,
@@ -357,6 +358,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if key == CONF_INITIAL_GAIN and "default_mass" in profile:
              return profile["default_mass"]
         if key == CONF_MAX_COAST_HOURS and "default_coast" in profile:
+             # N4: Binding to default_coast is a conscious conservative safety boundary (not a bug)
              return profile.get("default_coast", DEFAULT_MAX_COAST_HOURS)
 
         # Hardcoded Best Practices (Removal of Expert Tweaks)
@@ -558,10 +560,23 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
     async def _async_save_data(self) -> None:
         """Save learned data to storage."""
-        if self._consecutive_readiness_errors >= 3:
-            _LOGGER.debug("Skipping save: zone has no temperature data")
-            return
         try:
+            if self._consecutive_readiness_errors >= NO_TEMP_ERROR_THRESHOLD:
+                stored_data = await self._store.async_load()
+                if stored_data is None:
+                    stored_data = {}
+                # N2: only update non-thermal fields when there is no temperature data
+                stored_data["schema_version"] = 1
+                stored_data["physics_version"] = self.extra_store_data.get("physics_version", 2)
+                stored_data[ATTR_ARRIVAL_HISTORY] = self.planner.to_dict()
+                stored_data["bootstrap_done"] = self.bootstrap_done
+                stored_data["enable_active"] = self.enable_active
+                stored_data["diagnostics"] = self.diagnostics.data
+                stored_data["cumulative_shadow_savings"] = self._shadow_metrics.get("cumulative_shadow_savings", 0.0)
+                
+                await self._store.async_save(stored_data)
+                return
+
             data = self._get_data_for_storage()
             await self._store.async_save(data)
         except Exception as err:
@@ -977,7 +992,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             ctx: Context = await self._collect_context()
             if not ctx["is_sensor_ready"]:
                  self._consecutive_readiness_errors += 1
-                 is_no_temp = (self._consecutive_readiness_errors >= 3)
+                 is_no_temp = (self._consecutive_readiness_errors >= NO_TEMP_ERROR_THRESHOLD)
                  if is_no_temp:
                      self.optimal_stop_manager._reason = OS_REASON_NO_TEMPERATURE
                      self.diagnostics._create_issue("no_temperature")
@@ -986,7 +1001,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                  is_grace = (now_ts - self._startup_time).total_seconds() < STARTUP_GRACE_SEC
                  
                  msg = f"Update Cycle Error [{self.device_name}]: Sensor Timeout / Unavailable"
-                 if is_grace or self._consecutive_readiness_errors < 3:
+                 if is_grace or self._consecutive_readiness_errors < NO_TEMP_ERROR_THRESHOLD:
                       _LOGGER.debug(msg)
                  else:
                       _LOGGER.warning(msg)
@@ -1178,7 +1193,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         default_coast = profile_data.get("default_coast", 4.0)
         
         tau_hours = max(self.cooling_analyzer.learned_tau, default_coast)
-        tau_hours = min(tau_hours, 12.0)  # Plausibilitäts-Clamp
         if self.cooling_analyzer.confidence < GATE_MIN_TAU_CONF:
             tau_hours = 0.0  # Konfidenz-Gate -> kein Coast
 
@@ -1611,7 +1625,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     async def _stop_preheat(self, end_temp: float, target: float, outdoor: float, aborted: bool = False) -> None:
         if not self._preheat_active: return
         
-        if self._consecutive_readiness_errors >= 3:
+        if self._consecutive_readiness_errors >= NO_TEMP_ERROR_THRESHOLD:
             _LOGGER.warning("Skipping model/deadtime learning in _stop_preheat: zone has no temperature")
             self._preheat_active = False
             self._preheat_started_at = None
@@ -1695,7 +1709,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         return 10.0
 
     async def _update_comfort_learning(self, current_setpoint: float, is_occupied: bool) -> None:
-        if self._consecutive_readiness_errors >= 3:
+        if self._consecutive_readiness_errors >= NO_TEMP_ERROR_THRESHOLD:
             return
         if not is_occupied or not self.session_manager.is_occupied:
             return

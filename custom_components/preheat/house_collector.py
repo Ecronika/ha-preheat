@@ -15,6 +15,7 @@ from .const import (
     CONF_GLOBAL_PRESENCE,
     CONF_ARRIVAL_COMFORT_BIAS,
     CONF_EVENING_COMFORT_WINDOW,
+    NO_TEMP_ERROR_THRESHOLD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -266,7 +267,7 @@ class HouseArrivalCollector:
                 coord = entry.runtime_data
                 if coord and hasattr(coord, "data") and coord.data:
                     # Skip if zone has no temperature
-                    if getattr(coord, "_consecutive_readiness_errors", 0) >= 3:
+                    if getattr(coord, "_consecutive_readiness_errors", 0) >= NO_TEMP_ERROR_THRESHOLD:
                         continue
                     max_dur = max(max_dur, coord.data.predicted_duration)
         return max_dur if max_dur > 0.0 else 120.0 # Default fallback to 2 hours

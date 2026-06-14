@@ -1,3 +1,20 @@
+## v2.11.3 (2026-06-14) - Hardening & Bugfixes 🔧
+**Patch Release**
+
+This release brings stability improvements and bugfixes for the cooling analyzer, optimal stop calculations, and defective zone diagnostics.
+
+### 🐛 Bug Fixes & Improvements
+* **Heating Detection & Ghost-Heating-Guard**: Correctly classifies active heating based on physical valve thresholds (>= 5.0%) and HVAC state. Adds a Ghost-Heating-Guard to prevent model calibration on software-only boost cycles that have no physical heat input, protecting the learning process.
+* **Safe alt-tau Revalidation**: Validates loaded cooling time constant (tau) on startup against realistic physical bounds [0.5, 48.0] hours. Preserves high winter models instead of resetting them. Implausible values outside bounds are clamped to the profile default and their confidence is halved. Suppresses revalidation warnings on new installations.
+* **Time-Based Analyzer Gates & Rate Cap**: Implements time-based cooling segment gates (>= 60 minutes and >= 8 points) instead of point counts to support adaptive 5-minute polling without starving confidence. Drops/splits segments with a cooling rate > 0.5 K/min to filter out window-open interference.
+* **Defective Zone Resiliency**: Suspends learning/saving and creates a repair warning issue if a zone fails to supply temperature readings for 3 consecutive updates. Excludes defective zones from house aggregate preheat duration predictions to prevent delays, and floors optimal stop calculations to the default profile coast.
+* **Uncapped Optimal Stop Tau**: Removed the 12-hour limit on the used tau parameter in optimal stop calculations, allowing longer learned time constants to improve coasting efficiency. The actual coast duration remains safely capped by the configured maximum coast limit.
+* **Defective Zone Storage Saving**: Enables partial saving for defective zones by preserving existing thermal parameters while safely writing updated non-thermal states (history, diagnostics, settings) to storage.
+* **Defective Error Threshold**: Centralized defective zone error checks using a newly defined configuration constant.
+* **Coast Capping Documentation**: Clarified and documented that the maximum coast limit fallback to profile default coast is a deliberate safety boundary.
+
+---
+
 ## v2.11.2 (2026-06-13) - Maintenance & Hardening 🔧
 **Patch Release**
 
