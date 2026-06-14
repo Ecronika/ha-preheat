@@ -481,7 +481,6 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
         # Verify added UI link attributes
         self.assertEqual(attrs["climate_entity"], "climate.living_room")
         self.assertEqual(attrs["operative_sensor"], "sensor.living_room_temp")
-        self.assertEqual(attrs["trm_sensor"], "sensor.outdoor_temp")
         self.assertEqual(attrs["integration_version"], VERSION)
 
         # Verify other attributes remain correct

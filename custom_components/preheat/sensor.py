@@ -113,7 +113,6 @@ class PreheatStatusSensor(PreheatBaseSensor):
             # --- NEU (2.11.3): Verknüpfungen für das UI (Smart Setpoint Card) ---
             "climate_entity": self.coordinator._get_conf(CONF_CLIMATE),
             "operative_sensor": self.coordinator._get_conf(CONF_TEMPERATURE),
-            "trm_sensor": self.coordinator._get_conf(CONF_OUTDOOR_TEMP),
             "integration_version": VERSION,
         }
 

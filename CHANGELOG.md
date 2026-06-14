@@ -13,7 +13,7 @@ This release brings stability improvements and bugfixes for the cooling analyzer
 * **Defective Error Threshold**: Centralized defective zone error checks using a newly defined configuration constant.
 * **Coast Capping Documentation**: Clarified and documented that the maximum coast limit fallback to profile default coast is a deliberate safety boundary.
 * **Autonomous Optimal Stop Solver**: Fixed the optimal stop solver check to depend on `effective_end` instead of `schedule_end`. This resolves a state-machine latch bug in autonomous mode where predictions would otherwise be ignored by the solver.
-* **UI Auto-Discovery Attributes**: Status sensor now exposes `climate_entity`, `operative_sensor`, `trm_sensor`, and `integration_version` as attributes for UI Auto-Discovery by the Smart Setpoint Card.
+* **UI Auto-Discovery Attributes**: Status sensor now exposes `climate_entity`, `operative_sensor`, and `integration_version` as attributes for UI Auto-Discovery by the Smart Setpoint Card.
 * **Robust Outdoor Temperature**: Restored the dedicated outdoor sensor configuration in the config flow (taking precedence over weather forecasts). Model learning of the loss-factor is automatically paused during outdoor source blackouts, and a repair notification is shown.
 
 ---
