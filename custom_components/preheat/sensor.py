@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from homeassistant.const import UnitOfTemperature
-from .const import DOMAIN, VERSION, CONF_CLIMATE, CONF_TEMPERATURE, CONF_OUTDOOR_TEMP
+from .const import DOMAIN, VERSION, CONF_CLIMATE, CONF_TEMPERATURE
 from .coordinator import PreheatingCoordinator, PreheatData
 
 async def async_setup_entry(
