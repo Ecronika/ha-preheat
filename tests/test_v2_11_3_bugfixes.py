@@ -421,3 +421,76 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(saved_dict["enable_active"])
         self.assertEqual(saved_dict["diagnostics"], {"new_diag": 2})
         self.assertEqual(saved_dict["cumulative_shadow_savings"], 5.5)
+
+    # ---------------------------------------------------------
+    # UI link attributes on PreheatStatusSensor
+    # ---------------------------------------------------------
+    async def test_ui_link_attributes(self):
+        from custom_components.preheat.sensor import PreheatStatusSensor
+        from custom_components.preheat.const import (
+            CONF_CLIMATE,
+            CONF_TEMPERATURE,
+            CONF_OUTDOOR_TEMP,
+            VERSION,
+        )
+
+        coordinator = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+        entry.title = "Test Zone"
+
+        # Mock coordinator data and physics
+        data = MagicMock()
+        data.target_setpoint = 21.0
+        data.operative_temp = 20.0
+        data.predicted_duration = 15.5
+        data.window_open = False
+        data.last_comfort_setpoint = 21.5
+        data.deadtime = 10.0
+        data.decision_trace = "trace"
+        data.detected_modes = {}
+        data.next_start_time = None
+        data.next_arrival = None
+        data.next_departure = None
+        data.optimal_stop_time = None
+
+        physics = MagicMock()
+        physics.get_confidence = MagicMock(return_value=0.85)
+        physics.avg_error = 0.25
+        physics.sample_count = 10
+        physics.health_score = 90
+
+        coordinator.data = data
+        coordinator.physics = physics
+
+        # Mock _get_conf to return test entities
+        conf_map = {
+            CONF_CLIMATE: "climate.living_room",
+            CONF_TEMPERATURE: "sensor.living_room_temp",
+            CONF_OUTDOOR_TEMP: "sensor.outdoor_temp",
+        }
+        coordinator._get_conf = MagicMock(side_effect=lambda key, default=None: conf_map.get(key, default))
+
+        # Instantiate sensor
+        sensor = PreheatStatusSensor(coordinator, entry)
+
+        # Retrieve attributes
+        attrs = sensor.extra_state_attributes
+
+        # Verify added UI link attributes
+        self.assertEqual(attrs["climate_entity"], "climate.living_room")
+        self.assertEqual(attrs["operative_sensor"], "sensor.living_room_temp")
+        self.assertEqual(attrs["trm_sensor"], "sensor.outdoor_temp")
+        self.assertEqual(attrs["integration_version"], VERSION)
+
+        # Verify other attributes remain correct
+        self.assertEqual(attrs["target_temp"], 21.0)
+        self.assertEqual(attrs["current_temp"], 20.0)
+        self.assertEqual(attrs["predicted_duration"], 15.5)
+        self.assertEqual(attrs["confidence"], 0.85)
+        self.assertEqual(attrs["avg_error"], 0.25)
+        self.assertEqual(attrs["sample_count"], 10)
+        self.assertEqual(attrs["window_open"], False)
+        self.assertEqual(attrs["learned_setpoint"], 21.5)
+        self.assertEqual(attrs["deadtime_min"], 10.0)
+        self.assertEqual(attrs["health_score"], 90)

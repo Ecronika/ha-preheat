@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from homeassistant.const import UnitOfTemperature
-from .const import DOMAIN, VERSION
+from .const import DOMAIN, VERSION, CONF_CLIMATE, CONF_TEMPERATURE, CONF_OUTDOOR_TEMP
 from .coordinator import PreheatingCoordinator, PreheatData
 
 async def async_setup_entry(
@@ -110,6 +110,11 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "next_arrival": data.next_arrival.isoformat() if data.next_arrival else None,
             "next_departure": data.next_departure.isoformat() if data.next_departure else None,
             "optimal_stop_time": data.optimal_stop_time.isoformat() if data.optimal_stop_time else None,
+            # --- NEU (2.11.3): Verknüpfungen für das UI (Smart Setpoint Card) ---
+            "climate_entity": self.coordinator._get_conf(CONF_CLIMATE),
+            "operative_sensor": self.coordinator._get_conf(CONF_TEMPERATURE),
+            "trm_sensor": self.coordinator._get_conf(CONF_OUTDOOR_TEMP),
+            "integration_version": VERSION,
         }
 
 class NextEventSensor(PreheatBaseSensor):

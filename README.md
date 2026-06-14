@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.11.1)
+# Intelligent Preheating for Home Assistant (v2.11.3)
 
 **Turn your heating into a Predictive Smart System.**
 
@@ -69,6 +69,7 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 ### 🔍 Transparency & Diagnostics
 *   **15+ Repair Issues**: Built-in health checks alert you to stale sensors, misconfigurations, or learning problems.
 *   **Decision Trace**: Provides detailed Diagnostics, Confidence scores, and "Reason" attributes so you know *why* it acted.
+*   **UI Integration**: Status sensor exposes `climate_entity`, `operative_sensor`, `trm_sensor`, and `integration_version` as attributes for UI Auto-Discovery by the Smart Setpoint Card.
 *   **🌎 Localized**: Available in English and German.
 
 ---
