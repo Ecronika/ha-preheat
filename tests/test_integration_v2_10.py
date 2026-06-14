@@ -178,9 +178,9 @@ class TestIntegrationV210(unittest.IsolatedAsyncioTestCase):
 
     async def test_alt_tau_revalidation(self):
         """Test M2: Revalidate alt-tau on load and reset if implausible."""
-        # Scenario A: Load unlearned high alt-tau (e.g. 24.0) with confidence 0.68
+        # Scenario A: Load implausible high alt-tau (e.g. 55.0) with confidence 0.68
         mock_stored_data = {
-            "model_cooling_tau": 24.0,
+            "model_cooling_tau": 55.0,
             "cooling_confidence": 0.68,
             "tau_revalidated": False
         }
@@ -188,12 +188,27 @@ class TestIntegrationV210(unittest.IsolatedAsyncioTestCase):
         
         await self.coordinator.async_load_data()
         
-        # Should be reset to profile's default_coast (2.0 for default profile) and confidence 0.0
+        # Should be reset to profile's default_coast (2.0 for default profile) and confidence halved (0.34)
         self.assertEqual(self.coordinator.cooling_analyzer.learned_tau, 2.0)
-        self.assertEqual(self.coordinator.cooling_analyzer.confidence, 0.0)
+        self.assertEqual(self.coordinator.cooling_analyzer.confidence, 0.34)
         self.assertTrue(self.coordinator.tau_revalidated)
         
-        # Scenario B: Stored data is already revalidated
+        # Scenario B: Load plausible high alt-tau (e.g. 24.0) with confidence 0.68
+        mock_stored_data_plausible = {
+            "model_cooling_tau": 24.0,
+            "cooling_confidence": 0.68,
+            "tau_revalidated": False
+        }
+        self.coordinator._store.async_load = AsyncMock(return_value=mock_stored_data_plausible)
+        
+        await self.coordinator.async_load_data()
+        
+        # Should not reset since 24.0 is within [0.5, 48.0]
+        self.assertEqual(self.coordinator.cooling_analyzer.learned_tau, 24.0)
+        self.assertEqual(self.coordinator.cooling_analyzer.confidence, 0.68)
+        self.assertTrue(self.coordinator.tau_revalidated)
+
+        # Scenario C: Stored data is already revalidated
         mock_stored_data_reval = {
             "model_cooling_tau": 15.0,
             "cooling_confidence": 0.8,

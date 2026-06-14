@@ -9,6 +9,8 @@ from typing import NamedTuple
 
 from homeassistant.util import dt as dt_util
 
+from .const import MIN_SEGMENT_MINUTES, MIN_SEGMENT_POINTS
+
 _LOGGER = logging.getLogger(__name__)
 
 class CoolingSegment(NamedTuple):
@@ -32,13 +34,22 @@ class CoolingAnalyzer:
         self.confidence = 0.0  # 0.0 - 1.0
         self.sample_count = 0
         
-    def add_data_point(self, dt: datetime, t_in: float, t_out: float, is_heating: bool, window_open: bool = False):
+    def add_data_point(
+        self,
+        dt: datetime,
+        t_in: float,
+        t_out: float,
+        is_heating: bool,
+        window_open: bool = False,
+        valid_cooling: bool | None = None
+    ):
         """Streaming input of data points."""
         # If heating or window open, we shouldn't use this for cooling analysis *directly*,
         # but we need to track segments. 
         # Actually, if heating=True, the cooling segment ends.
         
-        valid_cooling = (not is_heating) and (not window_open)
+        if valid_cooling is None:
+            valid_cooling = (not is_heating) and (not window_open)
         self._buffer.append({
             "dt": dt,
             "t_in": t_in,
@@ -129,6 +140,13 @@ class CoolingAnalyzer:
             
         return {"status": "low_confidence"}
 
+    def _is_segment_valid(self, segment: list[dict]) -> bool:
+        """Check if segment satisfies duration and point gates."""
+        if not segment:
+            return False
+        duration = (segment[-1]["dt"] - segment[0]["dt"]).total_seconds() / 60.0
+        return duration >= MIN_SEGMENT_MINUTES and len(segment) >= MIN_SEGMENT_POINTS
+
     def _extract_segments(self) -> list[list[dict]]:
         """Slice buffer into continuous valid cooling blocks."""
         segments = []
@@ -136,14 +154,32 @@ class CoolingAnalyzer:
         
         for pt in self._buffer:
             if pt["valid"]:
-                current_segment.append(pt)
+                if current_segment:
+                    prev = current_segment[-1]
+                    dt_min = (pt["dt"] - prev["dt"]).total_seconds() / 60.0
+                    
+                    # Check time gap and temperature rate cap (<= 0.5 K/min)
+                    if dt_min < 1.0 or dt_min > 60.0:
+                        if self._is_segment_valid(current_segment):
+                            segments.append(current_segment)
+                        current_segment = [pt]
+                    else:
+                        rate = (prev["t_in"] - pt["t_in"]) / dt_min
+                        if rate > 0.5 or rate < -0.5:
+                            if self._is_segment_valid(current_segment):
+                                segments.append(current_segment)
+                            current_segment = [pt]
+                        else:
+                            current_segment.append(pt)
+                else:
+                    current_segment.append(pt)
             else:
-                if len(current_segment) > 60: # Min 60 mins (assuming 1 pt/min or similar)
+                if self._is_segment_valid(current_segment):
                     segments.append(current_segment)
                 current_segment = []
                 
         # Trailing segment
-        if len(current_segment) > 60:
+        if self._is_segment_valid(current_segment):
              segments.append(current_segment)
              
         return segments
@@ -186,7 +222,7 @@ class CoolingAnalyzer:
             except ValueError:
                 continue
                 
-        if len(x_data) < 20: return None, 0, 0, 0
+        if len(x_data) < MIN_SEGMENT_POINTS: return None, 0, 0, 0
         
         # Robust Regression: Trim Outliers (Top/Bottom 10% of residuals? Or just raw ?)
         # Hard to trim residuals before fitting.
@@ -221,8 +257,9 @@ class CoolingAnalyzer:
              temp_errors.append(abs(actual_delta - pred_delta))
              
         temp_mae = statistics.median(temp_errors) if temp_errors else 10.0
+        covered_minutes = (segment[-1]["dt"] - segment[0]["dt"]).total_seconds() / 60.0
         
-        return tau, r2, temp_mae, len(x_data)
+        return tau, r2, temp_mae, covered_minutes
 
     def _linear_regression(self, x, y):
         """Simple OLS."""
@@ -246,12 +283,12 @@ class CoolingAnalyzer:
         
         return slope, intercept, r2
 
-    def _calc_confidence(self, samples, r2, mae):
+    def _calc_confidence(self, covered_minutes, r2, mae):
         """
-        C = min(samples/80, 1.0) * clamp((R2-0.6)/0.3) * clamp((0.2-MAE)/0.2)
+        C = min(covered_minutes/120, 1.0) * clamp((R2-0.6)/0.3) * clamp((0.2-MAE)/0.2)
         """
         # Samples (minutes)
-        c_samples = min(samples / 80.0, 1.0)
+        c_samples = min(covered_minutes / 120.0, 1.0)
         
         # R2
         c_r2 = max(0.0, min(1.0, (r2 - 0.6) / 0.3))

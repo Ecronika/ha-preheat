@@ -429,6 +429,10 @@
     "config_sanity": {
       "title": "Konfigurations-Fehler ({name})",
       "description": "Es wurde ein Problem mit der Konfiguration der Zone {name} festgestellt: {detail}."
+    },
+    "no_temperature": {
+      "title": "Keine Temperaturdaten ({name})",
+      "description": "Die Zone hat keine validen Temperaturdaten. Das Lernen ist ausgesetzt."
     }
   }
 }

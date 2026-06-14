@@ -265,6 +265,9 @@ class HouseArrivalCollector:
             if hasattr(entry, "runtime_data"):
                 coord = entry.runtime_data
                 if coord and hasattr(coord, "data") and coord.data:
+                    # Skip if zone has no temperature
+                    if getattr(coord, "_consecutive_readiness_errors", 0) >= 3:
+                        continue
                     max_dur = max(max_dur, coord.data.predicted_duration)
         return max_dur if max_dur > 0.0 else 120.0 # Default fallback to 2 hours
 

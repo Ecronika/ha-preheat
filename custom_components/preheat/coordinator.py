@@ -86,6 +86,8 @@ from .const import (
     CONF_STOP_TOLERANCE,
     CONF_MAX_COAST_HOURS,
     CONF_SCHEDULE_ENTITY,
+    VALVE_HEATING_THRESHOLD,
+    OS_REASON_NO_TEMPERATURE,
     # V3 Provider Constants
     PROVIDER_SCHEDULE,
     PROVIDER_LEARNED,
@@ -426,15 +428,20 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 )
                 
                 # V2.5 Load Cooling Data
-                loaded_tau = data.get("model_cooling_tau", 4.0)
-                loaded_conf = data.get("cooling_confidence", 0.0)
-                self.tau_revalidated = data.get("tau_revalidated", False)
-                
-                if not self.tau_revalidated:
-                    if loaded_tau >= 12.0:
-                        _LOGGER.info("Revalidating alt-tau: loaded tau %.2fh is implausibly high, resetting to profile default", loaded_tau)
-                        loaded_tau = profile_data.get("default_coast", 4.0)
-                        loaded_conf = 0.0
+                if "model_cooling_tau" in data:
+                    loaded_tau = data["model_cooling_tau"]
+                    loaded_conf = data.get("cooling_confidence", 0.0)
+                    self.tau_revalidated = data.get("tau_revalidated", False)
+                    
+                    if not self.tau_revalidated:
+                        if not (0.5 <= loaded_tau <= 48.0):
+                            _LOGGER.info("Revalidating alt-tau: loaded tau %.2fh is outside sanity bounds [0.5, 48.0], clamping to profile default", loaded_tau)
+                            loaded_tau = profile_data.get("default_coast", 4.0)
+                            loaded_conf = loaded_conf * 0.5
+                        self.tau_revalidated = True
+                else:
+                    loaded_tau = profile_data.get("default_coast", 4.0)
+                    loaded_conf = 0.0
                     self.tau_revalidated = True
                 
                 self.cooling_analyzer.learned_tau = loaded_tau
@@ -551,6 +558,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
     async def _async_save_data(self) -> None:
         """Save learned data to storage."""
+        if self._consecutive_readiness_errors >= 3:
+            _LOGGER.debug("Skipping save: zone has no temperature data")
+            return
         try:
             data = self._get_data_for_storage()
             await self._store.async_save(data)
@@ -967,6 +977,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             ctx: Context = await self._collect_context()
             if not ctx["is_sensor_ready"]:
                  self._consecutive_readiness_errors += 1
+                 is_no_temp = (self._consecutive_readiness_errors >= 3)
+                 if is_no_temp:
+                     self.optimal_stop_manager._reason = OS_REASON_NO_TEMPERATURE
+                     self.diagnostics._create_issue("no_temperature")
+                 
                  now_ts = dt_util.utcnow()
                  is_grace = (now_ts - self._startup_time).total_seconds() < STARTUP_GRACE_SEC
                  
@@ -975,9 +990,23 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                       _LOGGER.debug(msg)
                  else:
                       _LOGGER.warning(msg)
-                 return PreheatData(False, None, None, 20.0, None, self._last_predicted_duration, 0, 0, False)
+                 return PreheatData(
+                     preheat_active=False,
+                     next_start_time=None,
+                     operative_temp=None,
+                     target_setpoint=20.0,
+                     next_arrival=None,
+                     predicted_duration=self._last_predicted_duration,
+                     mass_factor=0.0,
+                     loss_factor=0.0,
+                     learning_active=False,
+                     stop_reason=OS_REASON_NO_TEMPERATURE if is_no_temp else None,
+                     coast_tau=self.cooling_analyzer.learned_tau,
+                     tau_confidence=self.cooling_analyzer.confidence
+                 )
 
             self._consecutive_readiness_errors = 0
+            self.diagnostics._delete_issue("no_temperature")
             prediction: Prediction = await self._run_physics_simulation(ctx)
             decision: Decision = self._evaluate_start_decision(ctx, prediction)
             await self._execute_control_actions(ctx, decision)
@@ -1048,6 +1077,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         target_setpoint = await self._get_target_setpoint()
         is_ready = (op_temp > INVALID_TEMP)
         
+        hvac_action = None
+        hvac_mode = None
+        climate_ent = self._get_conf(CONF_CLIMATE)
+        if climate_ent:
+            st = self.hass.states.get(climate_ent)
+            if st:
+                hvac_mode = st.state
+                hvac_action = st.attributes.get("hvac_action")
 
         forecasts = None
         if self.weather_service:
@@ -1060,7 +1097,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "is_sensor_ready": is_ready, "forecasts": forecasts, "preheat_active": self._preheat_active,
             "has_confident_house": has_confident_house, "house_confidence": house_conf,
             "house_next_event": house_next_event, "zone_next_event": zone_next_event,
-            "has_house_fallback": has_house_fallback, "house_source": house_source
+            "has_house_fallback": has_house_fallback, "house_source": house_source,
+            "hvac_action": hvac_action, "hvac_mode": hvac_mode
         }
 
     async def _run_physics_simulation(self, ctx: Context) -> Prediction:
@@ -1135,7 +1173,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     pass
             return ctx["outdoor_temp"] if ctx["outdoor_temp"] is not None else 10.0
 
-        tau_hours = self.cooling_analyzer.learned_tau
+        profile_key = self._get_conf(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
+        profile_data = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
+        default_coast = profile_data.get("default_coast", 4.0)
+        
+        tau_hours = max(self.cooling_analyzer.learned_tau, default_coast)
         tau_hours = min(tau_hours, 12.0)  # Plausibilitäts-Clamp
         if self.cooling_analyzer.confidence < GATE_MIN_TAU_CONF:
             tau_hours = 0.0  # Konfidenz-Gate -> kein Coast
@@ -1504,16 +1546,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                   await self._stop_preheat(ctx["operative_temp"], t, o)
 
     def _build_preheat_data(self, ctx: Context, pred: Prediction, dec: Decision) -> PreheatData:
-        # Extra Metadata
-        hvac_action = None
-        hvac_mode = None
-        climate_ent = self._get_conf(CONF_CLIMATE)
-        if climate_ent:
-            st = self.hass.states.get(climate_ent)
-            if st:
-                hvac_mode = st.state
-                hvac_action = st.attributes.get("hvac_action")
-
         p_res = getattr(self.planner, 'last_pattern_result', None)
 
         return PreheatData(
@@ -1537,8 +1569,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             schedule_summary=self.planner.get_schedule_summary(),
             departure_summary=self.planner.get_departure_schedule_summary(),
             next_departure=dec["effective_departure"],
-            hvac_action=hvac_action,
-            hvac_mode=hvac_mode,
+            hvac_action=ctx["hvac_action"],
+            hvac_mode=ctx["hvac_mode"],
             optimal_stop_active=self.optimal_stop_manager.is_active and self._get_conf(CONF_ENABLE_OPTIMAL_STOP, False),
             optimal_stop_time=self.optimal_stop_manager.stop_time,
             stop_reason=self.optimal_stop_manager._reason,
@@ -1578,6 +1610,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
     async def _stop_preheat(self, end_temp: float, target: float, outdoor: float, aborted: bool = False) -> None:
         if not self._preheat_active: return
+        
+        if self._consecutive_readiness_errors >= 3:
+            _LOGGER.warning("Skipping model/deadtime learning in _stop_preheat: zone has no temperature")
+            self._preheat_active = False
+            self._preheat_started_at = None
+            self._start_temp = None
+            self.hass.bus.async_fire(f"{DOMAIN}_stopped", {"name": self.device_name})
+            return
         
         duration = 0
         if self._preheat_started_at:
@@ -1655,6 +1695,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         return 10.0
 
     async def _update_comfort_learning(self, current_setpoint: float, is_occupied: bool) -> None:
+        if self._consecutive_readiness_errors >= 3:
+            return
         if not is_occupied or not self.session_manager.is_occupied:
             return
         
@@ -1746,14 +1788,37 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              await self.diagnostics.check_all(ctx, self.physics, self.weather_service, pred)
 
         # 4. Cooling Analyzer Learning (M2)
-        if ctx["operative_temp"] > INVALID_TEMP:
-            t_out = ctx["outdoor_temp"] if ctx["outdoor_temp"] is not None else 10.0
+        if ctx["operative_temp"] > INVALID_TEMP and ctx["outdoor_temp"] is not None:
+            valve = self._get_valve_position()
+            hvac_action = ctx.get("hvac_action")
+            
+            is_heating = (
+                self._preheat_active
+                or (valve is not None and valve >= VALVE_HEATING_THRESHOLD)
+                or (hvac_action == "heating")
+            )
+            
+            # Ghost-Heating-Guard
+            is_ghost_heating = False
+            if valve is not None and valve < VALVE_HEATING_THRESHOLD and hvac_action in ("idle", "off"):
+                if self._preheat_active:
+                    is_ghost_heating = True
+                    
+            if is_ghost_heating:
+                is_heating = False
+                valid_cooling = False
+            else:
+                valid_cooling = (not is_heating) and (not ctx["is_window_open"])
+                
+            # Feed to analyzer
+            # Note: Ghost-Heating-Guard prevents learning boost cycles without physical heat input as cooling
             self.cooling_analyzer.add_data_point(
                 dt=ctx["now"],
                 t_in=ctx["operative_temp"],
-                t_out=t_out,
-                is_heating=self._preheat_active,
-                window_open=ctx["is_window_open"]
+                t_out=ctx["outdoor_temp"],
+                is_heating=is_heating,
+                window_open=ctx["is_window_open"],
+                valid_cooling=valid_cooling
             )
             
             # Periodically analyze (every 60 minutes)

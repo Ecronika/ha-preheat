@@ -360,6 +360,10 @@
     "config_sanity": {
       "title": "Configuration Sanity Warning ({name})",
       "description": "An issue with the configuration of zone {name} was detected: {detail}."
+    },
+    "no_temperature": {
+      "title": "No Temperature Data ({name})",
+      "description": "The zone has no valid temperature data. All learning is suspended."
     }
   }
 }

@@ -17,7 +17,17 @@ from .const import (
     CONF_MAX_COAST_HOURS, 
     CONF_STOP_TOLERANCE, 
     CONF_PHYSICS_MODE, 
-    PHYSICS_ADVANCED
+    PHYSICS_ADVANCED,
+    OS_REASON_INIT,
+    OS_REASON_WAITING,
+    OS_REASON_COASTING,
+    OS_REASON_SAVINGS_TOO_SMALL,
+    OS_REASON_NO_SESSION,
+    OS_REASON_NO_TEMPERATURE,
+    OS_REASON_SETPOINT_INCREASE,
+    OS_REASON_SESSION_CHANGED,
+    OS_REASON_TOO_COLD,
+    OS_REASON_TOO_COLD_SAFETY
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,7 +79,7 @@ class OptimalStopManager:
         
         # State
         self._active = False
-        self._reason = "init"
+        self._reason = OS_REASON_INIT
         self._stop_time: datetime | None = None
         self._savings_total = 0.0
         self._savings_remaining = 0.0
@@ -131,7 +141,7 @@ class OptimalStopManager:
                 if self._active:
                     _LOGGER.info("Optimal Stop RESET: Target temp increased (%.1f -> %.1f).", self._last_target_temp, target_temp)
                     self._active = False
-                    self._reason = "setpoint_increase"
+                    self._reason = OS_REASON_SETPOINT_INCREASE
                     self._last_target_temp = target_temp
                     return
              elif target_temp < (self._last_target_temp - 0.5):
@@ -166,7 +176,7 @@ class OptimalStopManager:
             if delta > 5400: # 90 Minutes
                  _LOGGER.info("Optimal Stop RESET: Session End jumped forward by %.1fh. New session detected.", delta / 3600)
                  self._active = False
-                 self._reason = "session_changed"
+                 self._reason = OS_REASON_SESSION_CHANGED
                  # We continue processing to allow re-latching on the new session if applicable
         
         if effective_end is None:
@@ -179,10 +189,10 @@ class OptimalStopManager:
                 if (now - self._schedule_off_since).total_seconds() > LATCH_RESET_DEBOUNCE_SEC:
                     _LOGGER.info("Optimal Stop RESET: Schedule/Prediction OFF for > %ds", LATCH_RESET_DEBOUNCE_SEC)
                     self._active = False
-                    self._reason = "no_session"
+                    self._reason = OS_REASON_NO_SESSION
                     self._schedule_off_since = None
             else:
-                 self._reason = "no_session"
+                 self._reason = OS_REASON_NO_SESSION
                  self._schedule_off_since = None
             
             # Stop processing if no session
@@ -201,9 +211,9 @@ class OptimalStopManager:
              if self._active:
                  _LOGGER.warning("Optimal Stop SAFETY BREAK: Too cold (%.1f < %.1f)", current_temp, floor-0.2)
                  self._active = False
-                 self._reason = "too_cold_safety"
+                 self._reason = OS_REASON_TOO_COLD_SAFETY
              else:
-                 self._reason = "too_cold"
+                 self._reason = OS_REASON_TOO_COLD
              return
 
         # 2. Solver Logic (If we have a valid session)
@@ -272,23 +282,22 @@ class OptimalStopManager:
                  
                  # Also check Minimum Savings threshold
                  if duration_min < MIN_SAVINGS_THRESHOLD_MIN:
-                     self._reason = "savings_too_small"
+                     self._reason = OS_REASON_SAVINGS_TOO_SMALL
                      return
                  
                  if now >= computed_stop:
                      _LOGGER.info("Optimal Stop ACTIVATED. Saving %.1f min. Stop Time: %s", duration_min, computed_stop)
                      self._active = True
-                     self._reason = "coasting"
+                     self._reason = OS_REASON_COASTING
                      self._stop_time = computed_stop
                  else:
-                     self._reason = "waiting"
+                     self._reason = OS_REASON_WAITING
                      self._stop_time = computed_stop # Informational
             
              else:
                  # Already Active (Latched)
                  # Update savings info, but generally stay active unless Safety Break hits
-                 self._reason = "coasting"
+                 self._reason = OS_REASON_COASTING
                  # Optional: Update stop time if it drifts significantly?
                  # Optional: Update stop time if it drifts significantly (Hysteresis)
                  pass
-

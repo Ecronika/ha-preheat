@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.11.2"
+VERSION = "2.11.3"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -253,3 +253,20 @@ LEARNING_STALL_EXPIRY_SEC: Final = 1209600  # 14 days
 CONF_GLOBAL_PRESENCE: Final = "global_presence_source"
 CONF_ARRIVAL_COMFORT_BIAS: Final = "arrival_comfort_bias"
 CONF_EVENING_COMFORT_WINDOW: Final = "evening_comfort_window"
+
+# --- V2.11.3 Constants ---
+VALVE_HEATING_THRESHOLD: Final = 5.0  # %
+MIN_SEGMENT_MINUTES: Final = 60.0      # Minutes
+MIN_SEGMENT_POINTS: Final = 8          # Points
+
+# Optimal Stop Reasons (T5)
+OS_REASON_INIT: Final = "init"
+OS_REASON_WAITING: Final = "waiting"
+OS_REASON_COASTING: Final = "coasting"
+OS_REASON_SAVINGS_TOO_SMALL: Final = "savings_too_small"
+OS_REASON_NO_SESSION: Final = "no_session"
+OS_REASON_NO_TEMPERATURE: Final = "no_temperature"
+OS_REASON_SETPOINT_INCREASE: Final = "setpoint_increase"
+OS_REASON_SESSION_CHANGED: Final = "session_changed"
+OS_REASON_TOO_COLD: Final = "too_cold"
+OS_REASON_TOO_COLD_SAFETY: Final = "too_cold_safety"
