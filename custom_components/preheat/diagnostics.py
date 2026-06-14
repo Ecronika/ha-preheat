@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, TYPE_CHECKING, Coroutine
+from typing import Any, TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -268,8 +268,7 @@ class DiagnosticsManager:
              self.data["inhibit_started_ts"] = None
              self._delete_issue("inhibit_stuck") 
              
-        # Check external window sensors
-        ws_ent = self._get_conf("window_sensor") # Not a standard conf yet, but maybe inhibit?
+
         
         # 1b. Sanity Temp (Sensor Value)
         temp_val = ctx["operative_temp"]

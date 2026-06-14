@@ -260,7 +260,7 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
         
         # Loop update to trigger error state
         for _ in range(NO_TEMP_ERROR_THRESHOLD):
-            data = await coord._async_update_data()
+            await coord._async_update_data()
             
         # Verify no_temperature issue is created after 3 errors
         coord.diagnostics._create_issue.assert_called_with("no_temperature")
@@ -678,3 +678,75 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
         coord._last_real_outdoor_ts = now - timedelta(minutes=31)
         coord._update_outdoor_availability_issue(now)
         coord.diagnostics._create_issue.assert_called_with("outdoor_source_unavailable")
+
+    async def test_decision_trace_expansion(self):
+        """Verify that the decision trace is fully populated with gate inputs, invalid reasons, and optimal stop details."""
+        from custom_components.preheat.coordinator import PreheatingCoordinator
+        from custom_components.preheat.providers import ProviderDecision
+        from custom_components.preheat.const import (
+            KEY_PROVIDERS_INVALID, KEY_GATE_INPUTS, PROVIDER_SCHEDULE, PROVIDER_LEARNED
+        )
+
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test"
+        entry.options = {}
+        entry.data = {}
+
+        with patch("custom_components.preheat.coordinator.PreheatingCoordinator._setup_listeners"), \
+             patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
+             coord = PreheatingCoordinator(hass, entry)
+
+        coord.optimal_stop_manager = MagicMock()
+        coord.optimal_stop_manager._used_prediction = True
+
+        sched_dec = ProviderDecision(
+            should_stop=False,
+            session_end=None,
+            is_valid=False,
+            is_shadow=False,
+            invalid_reason="no_schedule_entity"
+        )
+        
+        learned_dec = ProviderDecision(
+            should_stop=True,
+            session_end=datetime.now(),
+            is_valid=True,
+            is_shadow=True,
+            invalid_reason=None,
+            gate_inputs={"savings": 15.0, "tau_confidence": 0.9, "pattern_confidence": 0.8}
+        )
+
+        ctx = {
+            "now": datetime.now(),
+            "target_setpoint": 21.0,
+            "operative_temp": 20.0
+        }
+
+        coord._build_decision_trace(
+            ctx=ctx,
+            now=datetime.now(),
+            start_source="test",
+            selected_provider=PROVIDER_LEARNED,
+            sched_decision=sched_dec,
+            learned_decision=learned_dec,
+            gates_failed=[],
+            has_confident_house=False,
+            house_conf=0.0,
+            house_next_event=None,
+            is_optimal_stop_active=True,
+            stop_time=datetime.now(),
+            savings_total=10.0,
+            savings_remaining=5.0,
+            stop_reason="coasting",
+            blocked=False,
+            blocked_reasons=[],
+            tau_hours=3.5
+        )
+
+        trace = coord.decision_trace
+        self.assertIsNotNone(trace)
+        self.assertEqual(trace[KEY_PROVIDERS_INVALID][PROVIDER_SCHEDULE], "no_schedule_entity")
+        self.assertIsNone(trace[KEY_PROVIDERS_INVALID][PROVIDER_LEARNED])
+        self.assertEqual(trace[KEY_GATE_INPUTS]["savings"], 15.0)
+        self.assertEqual(trace["optimal_stop"]["used_prediction"], True)

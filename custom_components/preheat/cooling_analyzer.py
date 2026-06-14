@@ -7,7 +7,6 @@ import statistics
 from datetime import datetime, timedelta
 from typing import NamedTuple
 
-from homeassistant.util import dt as dt_util
 
 from .const import MIN_SEGMENT_MINUTES, MIN_SEGMENT_POINTS
 
@@ -234,11 +233,6 @@ class CoolingAnalyzer:
         if slope >= 0: return None, 0, 0, 0 # Heating or steady
         
         tau = -1.0 / slope
-        
-        # Calculate MAE
-        # prediction = slope*x + intercept
-        errors = [abs(y - (slope*x + intercept)) for x, y in zip(x_data, y_data)]
-        mae = statistics.median(errors) if errors else 1.0
         
         # Transform MAE back to Temp domain? 
         # ln(dt) error of 0.1 => dt error of ~10%. 

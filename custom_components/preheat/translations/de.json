@@ -65,7 +65,6 @@
           "ema_alpha": "Lerngeschwindigkeit (Alpha)",
           "initial_gain": "Start-Aufheizfaktor (min/K)",
           "buffer_minutes": "Sicherheitspuffer (Minuten)",
-          "earliest_start_minutes": "Fr\u00fchester Start (Minuten ab Mitternacht)",
           "comfort_min_temp": "Minimale Zieltemperatur",
           "comfort_max_temp": "Maximale Zieltemperatur",
           "comfort_fallback_temp": "Fallback Zieltemperatur",

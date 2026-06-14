@@ -3,15 +3,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
 
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .math_preheat import (
     calculate_coast_duration, 
-    calculate_coast_duration_euler,
-    calc_forecast_mean_or_p90_placeholder
+    calculate_coast_duration_euler
 )
 from .const import (
     CONF_MAX_COAST_HOURS, 
@@ -23,7 +21,6 @@ from .const import (
     OS_REASON_COASTING,
     OS_REASON_SAVINGS_TOO_SMALL,
     OS_REASON_NO_SESSION,
-    OS_REASON_NO_TEMPERATURE,
     OS_REASON_SETPOINT_INCREASE,
     OS_REASON_SESSION_CHANGED,
     OS_REASON_TOO_COLD,
@@ -92,6 +89,7 @@ class OptimalStopManager:
         self.session_end: datetime | None = None
         self.target_floor: float | None = None
         self.forecast_used: float | None = None
+        self._used_prediction = False
         
     @property
     def is_active(self) -> bool:
@@ -110,7 +108,8 @@ class OptimalStopManager:
             "savings_total_min": round(self._savings_total, 1),
             "savings_remaining_min": round(self._savings_remaining, 1),
             "target_floor": round(self.target_floor, 1) if self.target_floor else None,
-            "forecast_used": round(self.forecast_used, 1) if self.forecast_used else None
+            "forecast_used": round(self.forecast_used, 1) if self.forecast_used else None,
+            "used_prediction": self._used_prediction
         }
 
     def update(
@@ -161,6 +160,8 @@ class OptimalStopManager:
                   effective_end = predicted_end
                   used_prediction = True
                   # _LOGGER.debug("Using Predicted End for Optimal Stop: %s", effective_end)
+                  
+        self._used_prediction = used_prediction
         
         # v2.8 Midnight Wrapping Heuristic (Disable if at midnight)
         if effective_end:

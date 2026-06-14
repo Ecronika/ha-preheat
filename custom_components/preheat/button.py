@@ -6,7 +6,6 @@ from functools import cached_property
 from typing import TYPE_CHECKING
 
 from homeassistant.components.button import (
-    ButtonDeviceClass,
     ButtonEntity,
     ButtonEntityDescription,
 )

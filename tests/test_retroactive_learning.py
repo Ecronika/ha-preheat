@@ -85,8 +85,8 @@ class TestRetroactiveLearning(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(p.stop)
         
         # Patch STATE_ON/OFF in coordinator.py because they might be polluted by earlier mocked imports
-        p_on = patch("custom_components.preheat.coordinator.STATE_ON", "on")
-        p_off = patch("custom_components.preheat.coordinator.STATE_OFF", "off")
+        p_on = patch("custom_components.preheat.coordinator.STATE_ON", "on", create=True)
+        p_off = patch("custom_components.preheat.coordinator.STATE_OFF", "off", create=True)
         p_on.start()
         p_off.start()
         self.addCleanup(p_on.stop)
@@ -138,8 +138,8 @@ class TestRetroactiveLearning(unittest.IsolatedAsyncioTestCase):
         mock_util.as_local.side_effect = lambda x: x
         self.addCleanup(p.stop)
         
-        p_on = patch("custom_components.preheat.coordinator.STATE_ON", "on")
-        p_off = patch("custom_components.preheat.coordinator.STATE_OFF", "off")
+        p_on = patch("custom_components.preheat.coordinator.STATE_ON", "on", create=True)
+        p_off = patch("custom_components.preheat.coordinator.STATE_OFF", "off", create=True)
         p_on.start()
         p_off.start()
         self.addCleanup(p_on.stop)

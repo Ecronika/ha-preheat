@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-import logging
-from datetime import datetime, timedelta
 # import numpy as np # Avoid heavy dependency
 import math
 from typing import Callable

@@ -171,10 +171,13 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
         # Comfort = P15. Balanced = P25. Economy = P50.
         house.comfort_bias = "comfort"
         p15_val = get_percentile(pm_wd, 0.15) # idx = 0 -> 1000
+        self.assertEqual(p15_val, 1000)
         house.comfort_bias = "balanced"
         p25_val = get_percentile(pm_wd, 0.25) # idx = 0 -> 1000
+        self.assertEqual(p25_val, 1000)
         house.comfort_bias = "economy"
         p50_val = get_percentile(pm_wd, 0.50) # idx = 1 -> 1000
+        self.assertEqual(p50_val, 1000)
         
         # Test fallback evening window if confidence is low (< 0.7)
         # Evening spread is 300, so evening confidence is 0.0.

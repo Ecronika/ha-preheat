@@ -5,8 +5,6 @@ import asyncio
 from datetime import datetime, timedelta
 import logging
 
-from typing import Any
-
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import event as event_helper
 from homeassistant.util import dt as dt_util
@@ -138,12 +136,10 @@ class WeatherService:
                 if isinstance(item["datetime"], datetime):
                     dt = item["datetime"]
                 else:
-                    # DEBUG
-                    # print(f"DEBUG: Parsing {item['datetime']}", file=sys.stderr)
                     dt = dt_util.parse_datetime(str(item["datetime"]))
                 
                 if dt is None: 
-                    print("DEBUG: dt is None", file=sys.stderr)
+                    _LOGGER.debug("Skipping forecast item: unparseable datetime %s", item.get("datetime"))
                     continue
                 
                 # Convert to UTC (Robust for naive datetimes)

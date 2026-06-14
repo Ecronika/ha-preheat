@@ -24,7 +24,6 @@ from .const import (
     HEATING_PROFILES,
     PROFILE_RADIATOR_NEW,
     CONF_BUFFER_MIN,
-    CONF_EARLIEST_START,
     CONF_ARRIVAL_WINDOW_START,
     CONF_ARRIVAL_WINDOW_END,
     DEFAULT_BUFFER_MIN,
@@ -58,12 +57,6 @@ OPTION_SETTINGS = {
              selector.NumberSelectorConfig(min=0, max=60, mode="box", unit_of_measurement="min")
         ),
         "default": DEFAULT_BUFFER_MIN # Overridden by Profile Check
-    },
-    CONF_EARLIEST_START: {
-        "selector": selector.NumberSelector(
-            selector.NumberSelectorConfig(min=0, max=1440, step=15, unit_of_measurement="min", mode="box")
-        ),
-        "default": 180
     },
     CONF_ARRIVAL_WINDOW_START: {
         "selector": selector.TimeSelector(),

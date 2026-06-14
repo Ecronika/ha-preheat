@@ -18,8 +18,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from homeassistant.const import UnitOfTemperature
-from .const import DOMAIN, VERSION, CONF_CLIMATE, CONF_TEMPERATURE
-from .coordinator import PreheatingCoordinator, PreheatData
+from .const import DOMAIN, VERSION, CONF_CLIMATE, CONF_TEMPERATURE, ATTR_DECISION_TRACE
+from .coordinator import PreheatingCoordinator
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -104,7 +104,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "learned_setpoint": data.last_comfort_setpoint,
             "deadtime_min": round(data.deadtime, 1),
             "health_score": physics.health_score,
-            "decision_trace": data.decision_trace,
+            ATTR_DECISION_TRACE: data.decision_trace,
             "pattern_data": data.detected_modes,
             "next_start_time": data.next_start_time.isoformat() if data.next_start_time else None,
             "next_arrival": data.next_arrival.isoformat() if data.next_arrival else None,

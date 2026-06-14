@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import logging
-from collections import defaultdict, Counter
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Literal
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -305,10 +304,6 @@ class PatternDetector:
         # So maybe P75 or P90?
         # Plan says: "Quantiles (P50/P90)". 
         # Let's return P50 (Expected) but calculate confidence based on spread.
-        
-        # Median (P50)
-        p50_idx = int(0.5 * (count - 1))
-        p50 = valid_minutes[p50_idx]
         
         # P90
         p90_idx = int(0.9 * (count - 1))

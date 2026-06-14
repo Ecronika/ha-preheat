@@ -124,7 +124,6 @@ class TestConfigFlow(unittest.IsolatedAsyncioTestCase):
         self.flow.async_create_entry.assert_called_once()
         call_args = self.flow.async_create_entry.call_args[1]
         data = call_args["data"]
-        options = call_args["options"]
             
         # Options flow handles optimal stop preference, but Config Flow handles initial setup.
         # Action 2.3: Optimal Stop enable moved to Options Flow or Defaults?

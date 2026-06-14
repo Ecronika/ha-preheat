@@ -63,7 +63,6 @@
           "ema_alpha": "Learning Rate (Alpha)",
           "initial_gain": "Initial Gain (min/K)",
           "buffer_minutes": "Safety Buffer (Minutes)",
-          "earliest_start_minutes": "Earliest Start (Minutes from midnight)",
           "comfort_min_temp": "Minimum Comfort Temp",
           "comfort_max_temp": "Maximum Comfort Temp",
           "comfort_fallback_temp": "Fallback Comfort Temp",

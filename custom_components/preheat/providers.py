@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import logging
 from typing import Any
 
-from homeassistant.core import HomeAssistant, State
+from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -25,20 +25,16 @@ from .const import (
     REASON_UNAVAILABLE,
     REASON_OFF,
     REASON_NO_NEXT_EVENT,
-    REASON_PARSE_ERROR,
-    REASON_LOW_CONFIDENCE,
     REASON_BLOCKED_BY_GATES,
     REASON_INSUFFICIENT_DATA,
     
     GATE_FAIL_SAVINGS,
     GATE_FAIL_TAU,
     GATE_FAIL_PATTERN,
-    GATE_FAIL_LATCH,
 )
 
 from .optimal_stop import OptimalStopManager, SessionResolver
 from .planner import PreheatPlanner
-from .math_preheat import calculate_risk_metric  # Helper for forecast
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -127,7 +123,6 @@ class ScheduleProvider(SessionEndProvider):
         - tau_hours: float
         - physics_deadtime: float
         """
-        now = context["now"]
         sched_entity = self._get_conf(CONF_SCHEDULE_ENTITY)
         
         # 1. Validity Checks (Legacy Match)
@@ -199,11 +194,9 @@ class LearnedDepartureProvider(SessionEndProvider):
         # Extract Inputs
         savings = context.get("potential_savings", 0.0) # From Sim/Calc
         tau_conf = context.get("tau_confidence", 0.0)
-        pattern_conf = context.get("pattern_confidence", 0.0)
         
         # Get Session Count (Arrivals as proxy for maturity)
         # Get Session Count (Arrivals as proxy for maturity)
-        local_now = dt_util.as_local(context["now"])
         
         # Determine "Session Weekday" (Bucket)
         # If we have a Schedule (Ground Truth), use its end date to determine the session day.
@@ -262,17 +255,18 @@ class LearnedDepartureProvider(SessionEndProvider):
                           _, predicted_conf = pred_result
 
         # Gate Checks (v2.7 Shadow Logic)
+        gate_inputs["savings"] = savings
+        gate_inputs["tau_confidence"] = tau_conf
+        gate_inputs["pattern_confidence"] = predicted_conf
+
         if savings < GATE_MIN_SAVINGS_MIN:
             gates_failed.append(GATE_FAIL_SAVINGS)
-            gate_inputs["savings"] = savings
             
         if tau_conf < GATE_MIN_TAU_CONF:
             gates_failed.append(GATE_FAIL_TAU)
-            gate_inputs["tau_confidence"] = tau_conf
             
         if predicted_conf < GATE_MIN_PATTERN_CONF:
             gates_failed.append(GATE_FAIL_PATTERN)
-            gate_inputs["pattern_confidence"] = predicted_conf
 
         # Validity Logic
         valid = (len(gates_failed) == 0) and (predicted_end is not None)

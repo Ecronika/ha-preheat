@@ -125,7 +125,6 @@ CONF_MAX_PREHEAT_HOURS: Final = "max_preheat_hours"
 CONF_OFF_ONLY_WHEN_WARM: Final = "off_only_when_warm"
 CONF_ARRIVAL_WINDOW_START: Final = "arrival_window_start"
 CONF_ARRIVAL_WINDOW_END: Final = "arrival_window_end"
-CONF_EARLIEST_START: Final = "earliest_start_minutes"
 CONF_ONLY_ON_WORKDAYS: Final = "only_on_workdays"
 # V2.8
 CONF_DEBOUNCE_MIN: Final = "occupancy_debounce_minutes"
@@ -151,7 +150,6 @@ PHYSICS_ADVANCED: Final = "advanced"
 # Defaults
 DEFAULT_EMA_ALPHA: Final = 0.3
 DEFAULT_ARRIVAL_MIN: Final = 300
-DEFAULT_EARLIEST_START: Final = 180
 DEFAULT_BUFFER_MIN: Final = 10
 DEFAULT_DEBOUNCE_MIN: Final = 15
 DEFAULT_COMFORT_MIN: Final = 19.0

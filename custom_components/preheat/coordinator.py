@@ -1,24 +1,20 @@
 """Coordinator for Preheat integration."""
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta, date, time, timezone
+from datetime import datetime, timedelta, date, timezone
 import logging
 from typing import Any, TYPE_CHECKING
-import math
 
 
-from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import storage
 from homeassistant.core import HomeAssistant, callback
 
 from homeassistant.helpers.issue_registry import async_create_issue, async_delete_issue, IssueSeverity
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
-from homeassistant.const import STATE_ON, STATE_OFF
+from homeassistant.const import STATE_ON
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -32,25 +28,19 @@ from .const import (
     CONF_OCCUPANCY,
     CONF_TEMPERATURE,
     CONF_CLIMATE,
-    CONF_SETPOINT,
     CONF_OUTDOOR_TEMP,
     CONF_WEATHER_ENTITY,
     CONF_WORKDAY,
     CONF_CALENDAR_ENTITY,
     CONF_ONLY_ON_WORKDAYS,
-    CONF_LOCK,
-    CONF_PRESET_MODE,
-    CONF_EXPERT_MODE,
     CONF_INITIAL_GAIN,
     CONF_EMA_ALPHA,
     CONF_BUFFER_MIN,
     CONF_DONT_START_IF_WARM,
-    CONF_EARLIEST_START,
     # CONF_START_GRACE, # Unused
 
     CONF_AIR_TO_OPER_BIAS,
     CONF_MAX_PREHEAT_HOURS,
-    CONF_OFF_ONLY_WHEN_WARM,
     CONF_ARRIVAL_WINDOW_START,
     CONF_ARRIVAL_WINDOW_END,
     CONF_VALVE_POSITION,
@@ -64,7 +54,6 @@ from .const import (
     DEFAULT_COMFORT_FALLBACK,
     # PRESETS, # Replaced by Profiles logic in _get_conf
     DEFAULT_ARRIVAL_WINDOW_START,
-    DEFAULT_STOP_TOLERANCE,
     DEFAULT_MAX_COAST_HOURS,
     DEFAULT_ARRIVAL_WINDOW_END,
     DEFAULT_DEBOUNCE_MIN,
@@ -85,7 +74,6 @@ from .const import (
     CONF_ENABLE_OPTIMAL_STOP,
     CONF_STOP_TOLERANCE,
     CONF_MAX_COAST_HOURS,
-    CONF_SCHEDULE_ENTITY,
     VALVE_HEATING_THRESHOLD,
     OS_REASON_NO_TEMPERATURE,
     NO_TEMP_ERROR_THRESHOLD,
@@ -94,7 +82,6 @@ from .const import (
     PROVIDER_LEARNED,
     PROVIDER_MANUAL,
     PROVIDER_NONE,
-    ATTR_DECISION_TRACE,
     SCHEMA_VERSION,
     KEY_EVALUATED_AT,
     KEY_PROVIDER_SELECTED,
@@ -106,18 +93,6 @@ from .const import (
     GATE_MIN_SAVINGS_MIN,
     GATE_MIN_TAU_CONF,
     GATE_MIN_PATTERN_CONF,
-    REASON_UNAVAILABLE,
-    REASON_UNKNOWN,
-    REASON_OFF,
-    REASON_NO_NEXT_EVENT,
-    REASON_PARSE_ERROR,
-    REASON_END_TOO_SOON,
-    REASON_LOW_CONFIDENCE,
-    REASON_BLOCKED_BY_GATES,
-    REASON_INSUFFICIENT_DATA,
-    REASON_EXTERNAL_INHIBIT,
-    # Architecture Constants
-    DIAG_STALE_SENSOR_SEC,
     FROST_PROTECTION_TEMP,
     FROST_HYSTERESIS,
     STARTUP_GRACE_SEC,
@@ -131,9 +106,8 @@ from .patterns import MIN_CLUSTER_POINTS
 from .physics import ThermalPhysics, ThermalModelData
 from .history_buffer import RingBuffer, DeadtimeAnalyzer, HistoryPoint
 from .weather_service import WeatherService
-from .optimal_stop import OptimalStopManager, SessionResolver
+from .optimal_stop import OptimalStopManager
 from .cooling_analyzer import CoolingAnalyzer
-from . import math_preheat
 from .providers import (
     ScheduleProvider,
     LearnedDepartureProvider,
@@ -540,7 +514,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         data_planner = self.planner.to_dict()
         
         return {
-            "schema_version": 1,
+            "schema_version": SCHEMA_VERSION,
             "physics_version": self.extra_store_data.get("physics_version", 2),
             ATTR_ARRIVAL_HISTORY: data_planner,
             ATTR_MODEL_MASS: data_physics["mass_factor"],
@@ -568,7 +542,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 if stored_data is None:
                     stored_data = {}
                 # N2: only update non-thermal fields when there is no temperature data
-                stored_data["schema_version"] = 1
+                stored_data["schema_version"] = SCHEMA_VERSION
                 stored_data["physics_version"] = self.extra_store_data.get("physics_version", 2)
                 stored_data[ATTR_ARRIVAL_HISTORY] = self.planner.to_dict()
                 stored_data["bootstrap_done"] = self.bootstrap_done
@@ -1404,8 +1378,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         }
 
         self.decision_trace = {
-            "evaluated_at": now.isoformat(),
-            "schema_version": 1,
+            KEY_EVALUATED_AT: now.isoformat(),
+            "schema_version": SCHEMA_VERSION,
             "start_source": start_source,
             KEY_PROVIDER_SELECTED: selected_provider,
             KEY_PROVIDER_CANDIDATES: {
@@ -1418,6 +1392,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 }
             },
             KEY_GATES_FAILED: gates_failed,
+            KEY_PROVIDERS_INVALID: {
+                PROVIDER_SCHEDULE: sched_decision.invalid_reason,
+                PROVIDER_LEARNED: learned_decision.invalid_reason,
+            },
+            KEY_GATE_INPUTS: learned_decision.gate_inputs,
             "metrics": shadow_metrics,
             "blocked": blocked,
             "blocked_reasons": blocked_reasons,
@@ -1431,6 +1410,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 "stop_reason": stop_reason,
                 "tau_hours": tau_hours,
                 "tau_confidence": self.cooling_analyzer.confidence,
+                "used_prediction": self.optimal_stop_manager._used_prediction,
             }
         }
 

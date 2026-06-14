@@ -54,12 +54,12 @@ This release introduces an architectural refinement to the House Arrival Hub. Th
 This release introduces the House Arrival Hub, a single-instance shared collector that learns global homecoming patterns from pooled zone data and provides a unified arrival prediction.
 
 ### ✨ New Features
-* **House Arrival Hub**: Aggregates arrival history from all zone config entries and applies workday/weekend morning/evening predictors (H1).
-* **Preheat House Device & Global Entities**: Exposes global sensors (`sensor.preheat_house_next_arrival`, `sensor.preheat_house_arrival_confidence`, `sensor.preheat_house_arrival_window`) and binary sensor (`binary_sensor.preheat_house_incoming`) under a dedicated "Preheat House" device (H2).
-* **Prediction & Comfort Customization**: Supports morning (P25) vs. evening (comfort-biased percentile) split and customizable comfort bias ("comfort", "balanced", "economy") (H3).
-* **Fallback Comfort Window**: Adds support for configuring a fallback arrival window (`evening_comfort_window`) if prediction confidence falls below the 70% threshold (H3).
-* **Data-Safe Zero-Wait Bootstrap**: Automatically initializes the global history by pooling existing zone stores on the first run, without resetting or neulernen (H5).
-* **Zone Arbitration Update**: Priority order is resolved as `Schedule > House (confident) > House-Fallback > Zone Learned > None` (H4).
+* **House Arrival Hub**: Aggregates arrival history from all zone config entries and applies workday/weekend morning/evening predictors.
+* **Preheat House Device & Global Entities**: Exposes global sensors (`sensor.preheat_house_next_arrival`, `sensor.preheat_house_arrival_confidence`, `sensor.preheat_house_arrival_window`) and binary sensor (`binary_sensor.preheat_house_incoming`) under a dedicated "Preheat House" device.
+* **Prediction & Comfort Customization**: Supports morning (P25) vs. evening (comfort-biased percentile) split and customizable comfort bias ("comfort", "balanced", "economy").
+* **Fallback Comfort Window**: Adds support for configuring a fallback arrival window (`evening_comfort_window`) if prediction confidence falls below the 70% threshold.
+* **Data-Safe Zero-Wait Bootstrap**: Automatically initializes the global history by pooling existing zone stores on the first run, without resetting or re-learning.
+* **Zone Arbitration Update**: Priority order is resolved as `Schedule > House (confident) > House-Fallback > Zone Learned > None`.
 
 ### 🐛 Fixes
 * **Evening Comfort Window Now Effective**: The evening fallback comfort window (`house_fallback`) now correctly bypasses the 0.7 confidence gate, so schedule-free zones preheat before evening arrivals even with low statistical confidence. Previously the fallback was computed but discarded.
@@ -89,9 +89,9 @@ This release fixes critical bugs regarding master switch control, blocks reporti
 ### 🐛 Fixes & Improvements
 * **Master Switch**: Gated the preheating start check using the `enable_active` switch. Preheating will no longer start under normal conditions if the integration is disabled.
 * **Frost Protection Exception**: Retained the frost protection override so that it still triggers if `operative_temp < 5°C`, even if the integration is disabled (README commitment).
-* **Blocked State Reporting (A4)**: Refined `blocked` / `blocked_reasons` to only represent true blockers (disabled, window open, manual hold) and prevent false positives in schedule-free zones.
+* **Blocked State Reporting**: Refined `blocked` / `blocked_reasons` to only represent true blockers (disabled, window open, manual hold) and prevent false positives in schedule-free zones.
 * **Coast Tau Display**: Fixed the `coast_tau_hours` displaying `0` by properly populating `coast_tau` and `tau_confidence` in coordinator data.
-* **Autonomous Engine Cockpit Card (A5)**: Removed empty placeholders from the trace to keep telemetry clean. Provided a corrected diagnostics template card at `docs/diagnostics/preheat_diagnostics_card.yaml` since the original forum card is incompatible.
+* **Autonomous Engine Cockpit Card**: Removed empty placeholders from the trace to keep telemetry clean. Provided a corrected diagnostics template card at `docs/diagnostics/preheat_diagnostics_card.yaml` since the original forum card is incompatible.
 * **Code Hygiene**: Removed duplicated `_post_update_tasks` definition, redundant `return` in `physics.py`, empty `solve_duration` stub in `math_preheat.py`, duplicate `_last_weather_check` initialization, and cleaned up duplicate imports in the coordinator.
 * **Documentation Honesty**: Updated `README.md` and inline comments to accurately describe features (Optimal Stop, Schedule-Free Start, and Shadow Savings are marked as WIP/planned for v2.10).
 
@@ -143,7 +143,7 @@ This release fixes translation placeholders and improves consistency across all 
 This release marks the completion of the "Autonomous Engine" overhaul. It consolidates 13 beta iterations focusing on **Physics Accuracy**, **Planner Robustness**, and **Bootstrap Speed**.
 
 ### 🌟 Key Highlights
-*   **Physics Fixed**: **Deadtime Learning** is now fully active. The system correctly populates its history buffer during heating, allowing it to learn the exact "Totzeit" (deadtime) of your radiators/floor heating.
+*   **Physics Fixed**: **Deadtime Learning** is now fully active. The system correctly populates its history buffer during heating, allowing it to learn the exact deadtime of your radiators/floor heating.
 *   **Planner V3**: A complete rewrite of the history management logic ("The Planner"). It is now timezone-safe, strictly typed, and self-healing (auto-prunes corrupt data).
 *   **Instant Bootstrap**: Installing this version triggers a **Retroactive History Scan**. It reads your Home Assistant Recorder history to learn your habits *immediately*, eliminating the week-long "Cold Start" phase.
 *   **Eco-Mode Compatible**: The prediction logic now persists your "Comfort Temperature". If you switch your thermostat to Eco/Away, the system still calculates the correct preheat time to reach *Comfort* (instead of dropping to 0 minutes).

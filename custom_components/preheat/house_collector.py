@@ -4,7 +4,6 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 import logging
-from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.storage import Store
