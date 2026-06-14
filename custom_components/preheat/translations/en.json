@@ -255,6 +255,10 @@
       "title": "Missing entity in {name}",
       "description": "The entity `{entity}` configured in zone {name} is unavailable or missing. Please check configuration or the sensor."
     },
+    "outdoor_source_unavailable": {
+      "title": "Outdoor temperature unavailable ({name})",
+      "description": "The configured outdoor sensor / weather entity has not delivered a valid reading for over 30 minutes. The physics model is running on a fallback assumption, and loss-factor learning is paused until a real value returns."
+    },
     "data_migrated": {
       "title": "Migration completed for {name}",
       "description": "Historical data from v1 was converted. Precision may be reduced initially. Use 'Analyze History' button to rebuild from recorder data for better accuracy."

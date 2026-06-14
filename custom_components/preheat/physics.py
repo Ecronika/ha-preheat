@@ -154,7 +154,8 @@ class ThermalPhysics:
 
         return max(0, min(100, score))
 
-    def update_model(self, actual_duration: float, delta_t_in: float, delta_t_out: float, valve_position: float | None = None) -> bool:
+    def update_model(self, actual_duration: float, delta_t_in: float, delta_t_out: float,
+                     valve_position: float | None = None, outdoor_valid: bool = True) -> bool:
         """Update the model based on actual performance."""
         # 1. Reject Noise (Input Guard)
         if delta_t_in < 0.3:
@@ -199,19 +200,15 @@ class ThermalPhysics:
         new_mass = self.mass_factor + delta_mass
         self.mass_factor, mass_stable = self._apply_stable_update("Mass Factor", self.mass_factor, new_mass)
 
-        # Loss connects to Delta_Out
+        # Loss connects to Delta_Out — only learn it when the outdoor reading is real.
         loss_stable = True
         delta_loss = 0.0
-        
-        # GUARD: Only learn loss if significant outdoor delta exists to avoid division by zero/noise
-        if delta_t_out > 0.5: 
-            # Strong Signal
+        if outdoor_valid and delta_t_out > 0.5:
             delta_loss = lr * (error * weight_loss) / delta_t_out
             delta_loss = self._clip_dual(delta_loss, self.loss_factor, 0.30, 2.0)
-        elif delta_t_out > 0.1:
-            # Weak Signal (0.1 < dt_out < 0.5)
-            delta_loss = lr * (error * weight_loss) / max(delta_t_out, 0.5) # Clamp divisor
-            delta_loss *= 0.3 # Dampen update
+        elif outdoor_valid and delta_t_out > 0.1:
+            delta_loss = lr * (error * weight_loss) / max(delta_t_out, 0.5)
+            delta_loss *= 0.3
             delta_loss = self._clip_dual(delta_loss, self.loss_factor, 0.30, 2.0)
             
         if abs(delta_loss) > 0.0001:

@@ -63,6 +63,7 @@ Use the official **Smart Setpoint Controller** Blueprint. It connects this integ
 ### 🔌 Compatibility & Control
 *   **Stand-Alone**: Works with any thermostat entity. No external "Scheduler Component" required.
 *   **Weather Forecast Integration**: Looks ahead at the weather forecast to adjust heating power for incoming cold fronts.
+*   **Outdoor Sensor Precedence**: Supports dedicated outdoor temperature sensors that take precedence over regional weather entities for local microclimate accuracy.
 *   **🪟 Window Detection**: Pauses operation if a rapid temperature drop is detected.
 *   **🔥 Heat Demand Sensor**: `binary_sensor.<zone>_heat_demand` signals when a zone needs active heat supply.
 

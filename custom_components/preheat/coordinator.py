@@ -284,6 +284,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # Caching
         self._cached_outdoor_temp: float = 10.0
         self._last_weather_check: datetime | None = None
+        self._outdoor_is_real: bool = False
+        self._last_real_outdoor_ts: datetime | None = None
         self.weather_service: WeatherService | None = None
         weather_entity = self._get_conf(CONF_WEATHER_ENTITY)
         if weather_entity:
@@ -1089,6 +1091,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             next_event = zone_next_event
             
         outdoor_temp = await self._get_outdoor_temp_current()
+        self._update_outdoor_availability_issue(now)
         target_setpoint = await self._get_target_setpoint()
         is_ready = (op_temp > INVALID_TEMP)
         
@@ -1669,7 +1672,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                      self.physics.update_deadtime(new_deadtime)
                      _LOGGER.info("Deadtime Updated: %.1f min", self.physics.deadtime)
                 
-                success = self.physics.update_model(duration, delta_in, delta_out, valve_pos_avg)
+                success = self.physics.update_model(
+                    duration, delta_in, delta_out, valve_pos_avg,
+                    outdoor_valid=self._outdoor_is_real,
+                )
                 if success:
                     await self._async_save_data()
                     _LOGGER.info("Learning Success: Mass=%.1f, Loss=%.1f", self.physics.mass_factor, self.physics.loss_factor)
@@ -1684,29 +1690,56 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         now = dt_util.utcnow()
         if self._last_weather_check and (now - self._last_weather_check).total_seconds() < 900:
             return self._cached_outdoor_temp
-            
-        # Try Weather Entity
-        weather = self._get_conf(CONF_WEATHER_ENTITY)
-        if weather:
-             state = self.hass.states.get(weather)
-             if state:
-                 try:
-                     self._cached_outdoor_temp = float(state.attributes.get("temperature", 10.0))
-                     self._last_weather_check = now
-                     return self._cached_outdoor_temp
-                 except: pass
-        
-        # Try Sensor
+
+        # 1. Dedicated outdoor sensor takes precedence
+        #    (local microclimate beats the coarse regional forecast spot value)
         sensor = self._get_conf(CONF_OUTDOOR_TEMP)
         if sensor:
-             if state and state.state not in ("unavailable", "unknown"):
-                 try:
-                     self._cached_outdoor_temp = float(state.state)
-                     self._last_weather_check = now
-                     return self._cached_outdoor_temp
-                 except (ValueError, TypeError): pass
-                     
+            state = self.hass.states.get(sensor)
+            if state and state.state not in ("unavailable", "unknown"):
+                try:
+                    self._cached_outdoor_temp = float(state.state)
+                    self._last_weather_check = now
+                    self._outdoor_is_real = True
+                    self._last_real_outdoor_ts = now
+                    return self._cached_outdoor_temp
+                except (ValueError, TypeError):
+                    pass
+
+        # 2. Weather entity attribute (current value).
+        #    Forecast look-ahead is handled separately by WeatherService and is unaffected.
+        weather = self._get_conf(CONF_WEATHER_ENTITY)
+        if weather:
+            state = self.hass.states.get(weather)
+            if state:
+                temp = state.attributes.get("temperature")
+                if temp is not None:
+                    try:
+                        self._cached_outdoor_temp = float(temp)
+                        self._last_weather_check = now
+                        self._outdoor_is_real = True
+                        self._last_real_outdoor_ts = now
+                        return self._cached_outdoor_temp
+                    except (ValueError, TypeError):
+                        pass
+
+        # 3. No valid source -> degraded fallback. NOT a real reading: must not feed learning.
+        #    (No cache write -> we keep retrying every cycle until a source recovers.)
+        self._outdoor_is_real = False
         return 10.0
+
+    OUTDOOR_UNAVAILABLE_SECONDS = 1800  # 30 min
+
+    def _update_outdoor_availability_issue(self, now: datetime) -> None:
+        # If nothing is configured at all, the config-time 'no_outdoor_source' issue covers it.
+        if not (self._get_conf(CONF_OUTDOOR_TEMP) or self._get_conf(CONF_WEATHER_ENTITY)):
+            return
+        if self._outdoor_is_real:
+            self.diagnostics._delete_issue("outdoor_source_unavailable")
+            return
+        last = self._last_real_outdoor_ts
+        if last is None or (now - last).total_seconds() >= self.OUTDOOR_UNAVAILABLE_SECONDS:
+            self.diagnostics._create_issue("outdoor_source_unavailable")
 
     async def _update_comfort_learning(self, current_setpoint: float, is_occupied: bool) -> None:
         if self._consecutive_readiness_errors >= NO_TEMP_ERROR_THRESHOLD:
@@ -1802,7 +1835,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              await self.diagnostics.check_all(ctx, self.physics, self.weather_service, pred)
 
         # 4. Cooling Analyzer Learning (M2)
-        if ctx["operative_temp"] > INVALID_TEMP and ctx["outdoor_temp"] is not None:
+        if ctx["operative_temp"] > INVALID_TEMP and ctx["outdoor_temp"] is not None and self._outdoor_is_real:
             valve = self._get_valve_position()
             hvac_action = ctx.get("hvac_action")
             

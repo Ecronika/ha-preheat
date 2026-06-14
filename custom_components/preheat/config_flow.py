@@ -16,6 +16,7 @@ from .const import (
     CONF_TEMPERATURE,
     CONF_CLIMATE,
     CONF_WEATHER_ENTITY,
+    CONF_OUTDOOR_TEMP,
     CONF_WORKDAY,
     CONF_LOCK,
     CONF_VALVE_POSITION,
@@ -145,7 +146,7 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Keys that expect entities
         keys_to_check = [
             CONF_OCCUPANCY, CONF_CLIMATE, 
-            CONF_TEMPERATURE, CONF_WEATHER_ENTITY
+            CONF_TEMPERATURE, CONF_WEATHER_ENTITY, CONF_OUTDOOR_TEMP
         ]
 
         for key in keys_to_check:
@@ -189,6 +190,9 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_WEATHER_ENTITY, default=vol.UNDEFINED): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="weather")
             ),
+            vol.Optional(CONF_OUTDOOR_TEMP, default=vol.UNDEFINED): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=["sensor", "input_number"], device_class="temperature")
+            ),
         })
         
         # Profile Selection (Setup only)
@@ -229,6 +233,8 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                      data[CONF_TEMPERATURE] = user_input[CONF_TEMPERATURE]
                  if user_input.get(CONF_WEATHER_ENTITY):
                       data[CONF_WEATHER_ENTITY] = user_input[CONF_WEATHER_ENTITY]
+                 if user_input.get(CONF_OUTDOOR_TEMP):
+                      data[CONF_OUTDOOR_TEMP] = user_input[CONF_OUTDOOR_TEMP]
 
                  # Build Options (Explicit Defaults with Profile Logic)
                  selected_profile = user_input.get(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
@@ -279,6 +285,8 @@ class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                      update_data[CONF_TEMPERATURE] = user_input[CONF_TEMPERATURE]
                 if user_input.get(CONF_WEATHER_ENTITY):
                      update_data[CONF_WEATHER_ENTITY] = user_input[CONF_WEATHER_ENTITY]
+                if user_input.get(CONF_OUTDOOR_TEMP):
+                     update_data[CONF_OUTDOOR_TEMP] = user_input[CONF_OUTDOOR_TEMP]
                 
                 return self.async_update_reload_and_abort(entry, data=update_data)
 

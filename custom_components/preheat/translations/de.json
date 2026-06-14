@@ -318,6 +318,10 @@
       "title": "Sensor fehlt in {name}",
       "description": "Die Entit\u00e4t `{entity}`, die in der Zone {name} konfiguriert ist, ist nicht verf\u00fcgbar oder existiert nicht. Bitte \u00fcberpr\u00fcfe die Konfiguration oder den Sensor."
     },
+    "outdoor_source_unavailable": {
+      "title": "Außentemperatur nicht verfügbar ({name})",
+      "description": "Der konfigurierte Außensensor / die Wetter-Entität liefert seit über 30 Minuten keinen gültigen Wert. Das Physikmodell rechnet mit einer Fallback-Annahme; das Lernen des Verlust-Faktors pausiert, bis wieder ein echter Wert vorliegt."
+    },
     "data_migrated": {
       "title": "Migration f\u00fcr {name} abgeschlossen",
       "description": "Historische Daten der v1 wurden konvertiert. Die Genauigkeit kann anfangs reduziert sein. Nutze 'Historie analysieren', um die Daten aus dem Recorder neu aufzubauen."

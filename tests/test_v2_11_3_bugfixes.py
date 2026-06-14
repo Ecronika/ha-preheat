@@ -88,6 +88,7 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
              
         coord.cooling_analyzer = MagicMock()
         coord._preheat_active = True
+        coord._outdoor_is_real = True
         
         # Scenario 1: Normal preheat active, valve is 100%
         coord._get_valve_position = MagicMock(return_value=100.0)
@@ -494,3 +495,187 @@ class TestV2_11_3_Bugfixes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(attrs["learned_setpoint"], 21.5)
         self.assertEqual(attrs["deadtime_min"], 10.0)
         self.assertEqual(attrs["health_score"], 90)
+
+    # ---------------------------------------------------------
+    # Robust Outdoor Temperature Tests
+    # ---------------------------------------------------------
+    async def test_config_flow_outdoor_temp(self):
+        from custom_components.preheat.config_flow import PreheatingConfigFlow
+        from custom_components.preheat.const import CONF_OUTDOOR_TEMP, CONF_CLIMATE, CONF_OCCUPANCY
+        
+        flow = PreheatingConfigFlow()
+        flow.hass = MagicMock()
+        
+        # Test validation success when outdoor temp is present
+        user_input = {
+            CONF_CLIMATE: "climate.living_room",
+            CONF_OCCUPANCY: "binary_sensor.occ",
+            CONF_OUTDOOR_TEMP: "sensor.outdoor_temp",
+        }
+        
+        # Mock validation
+        flow._validate_entity_ids = MagicMock(return_value={})
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
+        flow.async_create_entry = MagicMock(return_value="success")
+        
+        res = await flow.async_step_user(user_input)
+        self.assertEqual(res, "success")
+        
+        # Verify custom entry data saves CONF_OUTDOOR_TEMP
+        data_arg = flow.async_create_entry.call_args[1]["data"]
+        self.assertEqual(data_arg[CONF_OUTDOOR_TEMP], "sensor.outdoor_temp")
+
+    async def test_outdoor_precedence_and_fallback(self):
+        from custom_components.preheat.const import CONF_OUTDOOR_TEMP, CONF_WEATHER_ENTITY
+        
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test"
+        entry.options = {}
+        entry.data = {}
+        
+        with patch("custom_components.preheat.coordinator.PreheatingCoordinator._setup_listeners"), \
+             patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
+             coord = PreheatingCoordinator(hass, entry)
+        
+        # Mock _get_conf to return sensor and weather
+        conf_map = {
+            CONF_OUTDOOR_TEMP: "sensor.outdoor_temp",
+            CONF_WEATHER_ENTITY: "weather.forecast",
+        }
+        coord._get_conf = MagicMock(side_effect=lambda key, default=None: conf_map.get(key, default))
+        
+        # Setup states
+        mock_sensor_state = MagicMock()
+        mock_sensor_state.state = "15.5"
+        mock_weather_state = MagicMock()
+        mock_weather_state.attributes = {"temperature": 18.0}
+        
+        def mock_get_state(entity_id):
+            if entity_id == "sensor.outdoor_temp":
+                return mock_sensor_state
+            if entity_id == "weather.forecast":
+                return mock_weather_state
+            return None
+        hass.states.get = MagicMock(side_effect=mock_get_state)
+        
+        # 1. Sensor takes precedence -> should get 15.5
+        temp = await coord._get_outdoor_temp_current()
+        self.assertEqual(temp, 15.5)
+        self.assertTrue(coord._outdoor_is_real)
+        
+        # 2. Sensor unavailable -> fallback to Weather -> should get 18.0
+        mock_sensor_state.state = "unavailable"
+        coord._last_weather_check = None # Clear cache
+        temp = await coord._get_outdoor_temp_current()
+        self.assertEqual(temp, 18.0)
+        self.assertTrue(coord._outdoor_is_real)
+        
+        # 3. Both unavailable -> should return fallback 10.0 and set real=False
+        mock_weather_state.attributes = {}
+        coord._last_weather_check = None # Clear cache
+        temp = await coord._get_outdoor_temp_current()
+        self.assertEqual(temp, 10.0)
+        self.assertFalse(coord._outdoor_is_real)
+
+    async def test_physics_learning_gating(self):
+        from custom_components.preheat.physics import ThermalPhysics
+        
+        physics = ThermalPhysics()
+        physics.mass_factor = 10.0
+        physics.loss_factor = 2.0
+        physics.learning_rate = 0.5
+        physics.avg_error = 0.0
+        
+        # Case A: outdoor_valid=False -> mass factor should update, loss factor remains unchanged
+        success = physics.update_model(
+            actual_duration=35.0,
+            delta_t_in=1.0,
+            delta_t_out=1.0,
+            valve_position=None,
+            outdoor_valid=False
+        )
+        self.assertTrue(success)
+        self.assertNotEqual(physics.mass_factor, 10.0)
+        self.assertEqual(physics.loss_factor, 2.0)
+        
+        # Case B: outdoor_valid=True -> loss factor should update
+        physics.mass_factor = 10.0 # reset
+        success = physics.update_model(
+            actual_duration=35.0,
+            delta_t_in=1.0,
+            delta_t_out=1.0,
+            valve_position=None,
+            outdoor_valid=True
+        )
+        self.assertTrue(success)
+        self.assertNotEqual(physics.loss_factor, 2.0)
+
+    async def test_cooling_analyzer_gating(self):
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test"
+        entry.options = {}
+        entry.data = {}
+        
+        with patch("custom_components.preheat.coordinator.PreheatingCoordinator._setup_listeners"), \
+             patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
+             coord = PreheatingCoordinator(hass, entry)
+             
+        coord.cooling_analyzer = MagicMock()
+        
+        # Test Case 1: _outdoor_is_real is True -> add_data_point called
+        coord._outdoor_is_real = True
+        ctx = {
+            "now": datetime.now(),
+            "operative_temp": 20.0,
+            "outdoor_temp": 10.0,
+            "is_window_open": False,
+            "is_occupied": False,
+            "target_setpoint": 21.0,
+        }
+        dec = {"start_time": None}
+        pred = {"predicted_duration": 0}
+        await coord._post_update_tasks(ctx, dec, pred)
+        coord.cooling_analyzer.add_data_point.assert_called_once()
+        
+        # Test Case 2: _outdoor_is_real is False -> add_data_point not called
+        coord.cooling_analyzer.reset_mock()
+        coord._outdoor_is_real = False
+        await coord._post_update_tasks(ctx, dec, pred)
+        coord.cooling_analyzer.add_data_point.assert_not_called()
+
+    async def test_outdoor_availability_issue(self):
+        from custom_components.preheat.const import CONF_OUTDOOR_TEMP
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test"
+        entry.options = {}
+        entry.data = {}
+        
+        with patch("custom_components.preheat.coordinator.PreheatingCoordinator._setup_listeners"), \
+             patch("custom_components.preheat.coordinator.PreheatingCoordinator.async_load_data"):
+             coord = PreheatingCoordinator(hass, entry)
+             
+        coord.diagnostics = MagicMock()
+        coord._get_conf = MagicMock(return_value="sensor.outdoor_temp")
+        
+        # Scenario A: Real is True -> delete issue
+        coord._outdoor_is_real = True
+        coord._update_outdoor_availability_issue(datetime.now())
+        coord.diagnostics._delete_issue.assert_called_with("outdoor_source_unavailable")
+        
+        # Scenario B: Real is False, but 30 min has not elapsed -> no issue created yet
+        coord.diagnostics.reset_mock()
+        coord._outdoor_is_real = False
+        now = datetime.now()
+        coord._last_real_outdoor_ts = now - timedelta(minutes=15)
+        coord._update_outdoor_availability_issue(now)
+        coord.diagnostics._create_issue.assert_not_called()
+        
+        # Scenario C: Real is False, 30 min has elapsed -> create issue
+        coord.diagnostics.reset_mock()
+        coord._last_real_outdoor_ts = now - timedelta(minutes=31)
+        coord._update_outdoor_availability_issue(now)
+        coord.diagnostics._create_issue.assert_called_with("outdoor_source_unavailable")
