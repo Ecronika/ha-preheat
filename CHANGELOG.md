@@ -1,3 +1,10 @@
+## v2.11.4 (2026-06-16) - next_start_time Forecast Fix 🔧
+**Patch Release**
+
+This release fixes the `next_start_time` sensor to show the planned preheat start time in advance as a forecast instead of only displaying it when triggered.
+
+---
+
 ## v2.11.3 (2026-06-14) - Hardening & Bugfixes 🔧
 **Patch Release**
 

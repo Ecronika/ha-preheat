@@ -1545,9 +1545,19 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     def _build_preheat_data(self, ctx: Context, pred: Prediction, dec: Decision) -> PreheatData:
         p_res = getattr(self.planner, 'last_pattern_result', None)
 
+        # Vorschau des nächsten Vorheiz-Starts (display-only, ohne Steuerungseinfluss).
+        # dec["start_time"] bleibt unverändert (Polling/Trigger), wir leiten nur einen
+        # Anzeigewert ab, wenn aktuell noch kein Trigger ansteht.
+        forecast_start = dec["start_time"]
+        if forecast_start is None and dec.get("start_source", "none") != "none":
+            evt = ctx["next_event"]
+            dur = pred["predicted_duration"]
+            if evt is not None and dur and dur > 0:
+                forecast_start = evt - timedelta(minutes=dur)
+
         return PreheatData(
             preheat_active=self._preheat_active,
-            next_start_time=dec["start_time"],
+            next_start_time=forecast_start,
             operative_temp=ctx["operative_temp"],
             target_setpoint=ctx["target_setpoint"],
             next_arrival=ctx["next_event"],

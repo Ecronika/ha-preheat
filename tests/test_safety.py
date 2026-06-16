@@ -316,15 +316,14 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         self.coordinator._get_operative_temperature = AsyncMock(return_value=20.0)
         self.coordinator._get_target_setpoint = AsyncMock(return_value=21.0)
         self.coordinator._get_outdoor_temp_current = AsyncMock(return_value=10.0)
-        
-        # Run Update
+                # Run Update
         data = await self.coordinator._async_update_data()
         
         # Assertions
         # Should NOT start preheat (disabled)
         self.coordinator._start_preheat.assert_not_called()
         self.assertFalse(data.preheat_active)
-        self.assertIsNone(data.next_start_time)
+        self.assertEqual(data.next_start_time, event_dt - timedelta(minutes=60))
         
         # Trace assertions
         trace = data.decision_trace
@@ -366,7 +365,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         # Should NOT start preheat (window open)
         self.coordinator._start_preheat.assert_not_called()
         self.assertFalse(data.preheat_active)
-        self.assertIsNone(data.next_start_time)
+        self.assertEqual(data.next_start_time, event_dt - timedelta(minutes=60))
         
         # Trace assertions
         trace = data.decision_trace
