@@ -224,3 +224,32 @@ class TestV2_11_4_Forecast(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(outcome["timing_error_min"], -20.0)
         # Duration error: actual duration 45 mins - predicted 30 mins = 15.0 mins
         self.assertEqual(outcome["duration_error_min"], 15.0)
+
+    def test_preheat_status_sensor_unrecorded_attributes(self):
+        """Verify PreheatStatusSensor has unrecorded attributes and exposes last_outcome."""
+        from custom_components.preheat.sensor import PreheatStatusSensor
+        from custom_components.preheat.const import ATTR_DECISION_TRACE
+
+        # Verify class-level unrecorded attributes
+        self.assertEqual(
+            PreheatStatusSensor._unrecorded_attributes,
+            frozenset({"last_outcome", ATTR_DECISION_TRACE, "pattern_data"})
+        )
+
+        # Mock coordinator state
+        self.coord.data = PreheatData(
+            preheat_active=False,
+            next_start_time=None,
+            operative_temp=20.0,
+            target_setpoint=21.0,
+            next_arrival=None,
+            predicted_duration=20.0,
+            mass_factor=0.0,
+            loss_factor=0.0,
+            learning_active=False
+        )
+        self.coord.diagnostics.data = {"last_outcome": {"comfort_hit": True, "temp_gap_k": 0.1}}
+        sensor = PreheatStatusSensor(self.coord, self.entry)
+        attrs = sensor.extra_state_attributes
+        
+        self.assertEqual(attrs["last_outcome"], {"comfort_hit": True, "temp_gap_k": 0.1})

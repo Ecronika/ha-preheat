@@ -78,6 +78,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
     _attr_translation_key = "status"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["idle", "preheating"]
+    _unrecorded_attributes = frozenset({"last_outcome", ATTR_DECISION_TRACE, "pattern_data"})
 
     @property
     def unique_id(self) -> str:
@@ -104,6 +105,10 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "learned_setpoint": data.last_comfort_setpoint,
             "deadtime_min": round(data.deadtime, 1),
             "health_score": physics.health_score,
+            "last_outcome": (
+                self.coordinator.diagnostics.data.get("last_outcome")
+                if getattr(self.coordinator, "diagnostics", None) else None
+            ),
             ATTR_DECISION_TRACE: data.decision_trace,
             "pattern_data": data.detected_modes,
             "next_start_time": data.next_start_time.isoformat() if data.next_start_time else None,
