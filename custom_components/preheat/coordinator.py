@@ -121,6 +121,7 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 4 
 STORAGE_KEY_TEMPLATE = "preheat.{}"
+POLL_LEAD_MIN = 10  # 1-min-Polling-Fenster (Minuten) vor dem geplanten Start; nur Trigger-Präzision
 
 @dataclass(frozen=True)
 class PreheatData:
@@ -1542,22 +1543,27 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                   o = ctx["outdoor_temp"] if ctx["outdoor_temp"] else 10.0
                   await self._stop_preheat(ctx["operative_temp"], t, o)
 
-    def _build_preheat_data(self, ctx: Context, pred: Prediction, dec: Decision) -> PreheatData:
-        p_res = getattr(self.planner, 'last_pattern_result', None)
+    def _planned_start(self, ctx: Context, pred: Prediction, dec: Decision) -> datetime | None:
+        """Anzeige-/Abtast-Wert des nächsten Vorheiz-Starts (display-only, ohne Steuerungseinfluss).
 
-        # Vorschau des nächsten Vorheiz-Starts (display-only, ohne Steuerungseinfluss).
-        # dec["start_time"] bleibt unverändert (Polling/Trigger), wir leiten nur einen
-        # Anzeigewert ab, wenn aktuell noch kein Trigger ansteht.
-        forecast_start = dec["start_time"]
-        if forecast_start is None and dec.get("start_source", "none") != "none":
+        - Während aktivem Vorheizen: tatsächliche Startzeit eingefroren (kein Mitticken).
+        - Sonst: Vorschau next_event - predicted_duration, sobald eine gültige Quelle existiert.
+        """
+        if self._preheat_active:
+            return self._preheat_started_at
+        if dec.get("start_source", "none") != "none":
             evt = ctx["next_event"]
             dur = pred["predicted_duration"]
             if evt is not None and dur and dur > 0:
-                forecast_start = evt - timedelta(minutes=dur)
+                return evt - timedelta(minutes=dur)
+        return None
+
+    def _build_preheat_data(self, ctx: Context, pred: Prediction, dec: Decision) -> PreheatData:
+        p_res = getattr(self.planner, 'last_pattern_result', None)
 
         return PreheatData(
             preheat_active=self._preheat_active,
-            next_start_time=forecast_start,
+            next_start_time=self._planned_start(ctx, pred, dec),
             operative_temp=ctx["operative_temp"],
             target_setpoint=ctx["target_setpoint"],
             next_arrival=ctx["next_event"],
@@ -1813,7 +1819,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     async def _post_update_tasks(self, ctx: Context, decision: Decision, pred: Prediction) -> None:
         """Run tasks after main update loop (non-critical)."""
         # 1. Update Polling
-        self._update_polling_interval(decision["start_time"], ctx["is_occupied"])
+        self._update_polling_interval(self._planned_start(ctx, pred, decision), ctx["is_occupied"])
         
         # 2. Comfort Learning
         await self._update_comfort_learning(ctx["target_setpoint"], ctx["is_occupied"])
@@ -1889,12 +1895,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if self._preheat_active or is_occupied or self._window_open_detected:
             new_interval = timedelta(minutes=1)
         
-        # 4. Approaching Start (< 2 hours)
+        # 4. Approaching Start (< POLL_LEAD_MIN min)
         elif next_start:
             # Check time delta
             now = dt_util.utcnow()
             diff = (next_start - now).total_seconds()
-            if 0 < diff < 7200: # 2 hours
+            if 0 < diff < POLL_LEAD_MIN * 60:
                  new_interval = timedelta(minutes=1)
                  
         # Update if changed

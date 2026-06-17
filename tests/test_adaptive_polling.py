@@ -134,10 +134,10 @@ class TestAdaptivePolling(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.coord.update_interval, timedelta(minutes=1))
         self.coord._window_open_detected = False # Reset
         
-        # 5. Approaching Start (< 2 hours)
-        # 1 hour away
+        # 5. Approaching Start (< 10 minutes)
+        # 5 minutes away
         now = datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc)
-        start = datetime(2025, 1, 1, 13, 0, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, 12, 5, tzinfo=timezone.utc)
         
         with patch("custom_components.preheat.coordinator.dt_util.utcnow", return_value=now):
             data_soon = PreheatData(
@@ -148,8 +148,8 @@ class TestAdaptivePolling(unittest.IsolatedAsyncioTestCase):
             self.coord._update_polling_interval(data_soon.next_start_time, data_soon.is_occupied)
             self.assertEqual(self.coord.update_interval, timedelta(minutes=1))
             
-            # 3 hours away -> Idle (5 min)
-            start_far = datetime(2025, 1, 1, 15, 0, tzinfo=timezone.utc)
+            # 15 minutes away -> Idle (5 min)
+            start_far = datetime(2025, 1, 1, 12, 15, tzinfo=timezone.utc)
             data_far = PreheatData(
                 preheat_active=False, next_start_time=start_far, operative_temp=20, target_setpoint=21, 
                 next_arrival=None, predicted_duration=0, mass_factor=20, loss_factor=5, learning_active=True,

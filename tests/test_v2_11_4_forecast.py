@@ -96,11 +96,13 @@ class TestV2_11_4_Forecast(unittest.TestCase):
         data = self.coord._build_preheat_data(ctx, pred, dec)
         self.assertEqual(data.next_start_time, next_event - timedelta(minutes=60))
 
-        # Case 2: dec["start_time"] is already set (real trigger fired) -> should take precedence
+        # Case 2: during active preheating -> should show the frozen started_at time
         trigger_time = datetime(2026, 6, 16, 13, 50, 0, tzinfo=timezone.utc)
-        dec["start_time"] = trigger_time
+        self.coord._preheat_active = True
+        self.coord._preheat_started_at = trigger_time
         data = self.coord._build_preheat_data(ctx, pred, dec)
         self.assertEqual(data.next_start_time, trigger_time)
+        self.coord._preheat_active = False # Reset
 
         # Case 3: predicted_duration is 0 (already warm) -> next_start_time is None
         pred["predicted_duration"] = 0.0
