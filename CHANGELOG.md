@@ -1,9 +1,16 @@
-## v2.11.4 (2026-06-16) - next_start_time Forecast Fix 🔧
+## v2.11.4 (2026-06-17) - Outcome-Scoring & Hardening 🔧
 **Patch Release**
 
-This release fixes the `next_start_time` sensor to show the planned preheat start time in advance as a forecast instead of only displaying it when triggered.
+This release implements outcome performance monitoring, fixes preheat start state resetting, and introduces display-only sensor forecast optimizations.
 
----
+### ✨ New Features & Performance Diagnostics
+* **Preheat Outcome Scoring**: Computes and logs detailed performance metrics (including comfort hits, temperature gap, overshoot, timing errors, and duration errors) upon preheating completion, storing them under `last_outcome` and `outcome_history` in diagnostics data.
+* **Live Attribute Exposure (Recorder-Free)**: Exposes `last_outcome` as a live attribute on the status sensor (`sensor.*_status`), while introducing `_unrecorded_attributes` to exclude it, `decision_trace`, and `pattern_data` from Home Assistant SQL database recorder history, reducing disk writes.
+
+### 🐛 Bug Fixes & Refinements
+* **Preheat Re-Entry Guard**: Introduced a guard in `_start_preheat` to prevent active runs from resetting started-at times, initial temperatures, and event schedules, resolving log/event spam and ensuring correct duration calculations.
+* **next_start_time Forecast Fix**: Corrected the `next_start_time` sensor to show the planned preheat start time in advance as a forecast instead of only displaying it when triggered.
+* **frozen_start Helper & Polling Correction**: Frozen `next_start_time` during active preheating to show the true start timestamp, and aligned the polling window start (POLL_LEAD_MIN) with the 1-minute high-frequency polling window.
 
 ## v2.11.3 (2026-06-14) - Hardening & Bugfixes 🔧
 **Patch Release**
