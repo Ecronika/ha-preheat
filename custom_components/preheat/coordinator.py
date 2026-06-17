@@ -122,6 +122,8 @@ _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 4 
 STORAGE_KEY_TEMPLATE = "preheat.{}"
 POLL_LEAD_MIN = 10  # 1-min-Polling-Fenster (Minuten) vor dem geplanten Start; nur Trigger-Präzision
+COMFORT_TOL_K = 0.3        # Toleranz für "Komfort getroffen"
+OUTCOME_HISTORY_MAX = 20   # rollierende Event-Historie
 
 @dataclass(frozen=True)
 class PreheatData:
@@ -243,6 +245,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._preheat_active: bool = False
         self._frost_active: bool = False # Safety override (v2.9.1)
         self._last_opt_active: bool = False # Track edge for events
+        self._preheat_target_event: datetime | None = None
+        self._preheat_predicted_duration: float = 0.0
         self.enable_active: bool = True # Master Switch
         self._last_comfort_setpoint: float | None = None
         
@@ -1534,14 +1538,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     async def _execute_control_actions(self, ctx: Context, dec: Decision) -> None:
         """Execute the decision."""
         if dec["should_start"]:
-             if dec["frost_override"]: _LOGGER.info("Frost Protection Active")
-             await self._start_preheat(ctx["operative_temp"])
+            was_active = self._preheat_active
+            if dec["frost_override"]: _LOGGER.info("Frost Protection Active")
+            await self._start_preheat(ctx["operative_temp"])
+            if not was_active:                       # nur beim echten Start
+                self._preheat_target_event = ctx["next_event"]
+                self._preheat_predicted_duration = self._last_predicted_duration
         else:
-             # If currently active, we might need to stop
-             if self._preheat_active and not self.hold_active:
-                  t = ctx["target_setpoint"]
-                  o = ctx["outdoor_temp"] if ctx["outdoor_temp"] else 10.0
-                  await self._stop_preheat(ctx["operative_temp"], t, o)
+            if self._preheat_active and not self.hold_active:
+                t = ctx["target_setpoint"]
+                o = ctx["outdoor_temp"] if ctx["outdoor_temp"] else 10.0
+                await self._stop_preheat(ctx["operative_temp"], t, o)
 
     def _planned_start(self, ctx: Context, pred: Prediction, dec: Decision) -> datetime | None:
         """Anzeige-/Abtast-Wert des nächsten Vorheiz-Starts (display-only, ohne Steuerungseinfluss).
@@ -1615,6 +1622,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
 
     async def _start_preheat(self, operative_temp: float) -> None:
+        if self._preheat_active:
+            return  # bereits aktiv – Startzustand nicht überschreiben
         self._preheat_active = True
         self._preheat_started_at = dt_util.utcnow()
         self._start_temp = operative_temp
@@ -1646,6 +1655,38 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 self.diagnostics.data["last_learning_attempt_ts"] = dt_util.utcnow().timestamp()
                 await self._async_save_data()
                 delta_in = end_temp - self._start_temp
+                
+                # --- Outcome-Scoring (display-/diagnostics-only) ---
+                temp_gap_k = end_temp - target                    # <0 = Unterschreitung am Ende
+                comfort_hit = temp_gap_k >= -COMFORT_TOL_K
+
+                # Overshoot & Zeitpunkt der Zielerreichung aus dem RingBuffer
+                overshoot_k = 0.0
+                timing_error_min = None
+                pts = self.history_buffer.get_all()
+                start_ts = self._preheat_started_at.timestamp() if self._preheat_started_at else None
+                if start_ts is not None:
+                    window = [p for p in pts if p.timestamp >= start_ts]
+                    if window:
+                        overshoot_k = max(0.0, max(p.temp for p in window) - target)
+                        crossed = next((p for p in window if p.temp >= target - COMFORT_TOL_K), None)
+                        if crossed is not None and self._preheat_target_event is not None:
+                            timing_error_min = (crossed.timestamp - self._preheat_target_event.timestamp()) / 60.0
+
+                predicted = self._preheat_predicted_duration
+                outcome = {
+                    "ts": dt_util.utcnow().isoformat(),
+                    "comfort_hit": comfort_hit,
+                    "temp_gap_k": round(temp_gap_k, 2),
+                    "overshoot_k": round(overshoot_k, 2),
+                    "timing_error_min": round(timing_error_min, 1) if timing_error_min is not None else None,
+                    "duration_error_min": round(duration - predicted, 1) if predicted else None,
+                }
+                _LOGGER.info("Preheat OUTCOME: %s", outcome)
+                hist = self.diagnostics.data.setdefault("outcome_history", [])
+                hist.append(outcome)
+                del hist[:-OUTCOME_HISTORY_MAX]
+                self.diagnostics.data["last_outcome"] = outcome
                 delta_out = target - outdoor # Approx average delta
                 
                 # Valve Sensor Check (Average over the heating period)

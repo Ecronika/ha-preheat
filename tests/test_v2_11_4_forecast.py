@@ -55,7 +55,7 @@ from custom_components.preheat.coordinator import PreheatingCoordinator, Preheat
 from custom_components.preheat.const import VERSION
 import json
 
-class TestV2_11_4_Forecast(unittest.TestCase):
+class TestV2_11_4_Forecast(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.hass = MagicMock()
@@ -137,3 +137,90 @@ class TestV2_11_4_Forecast(unittest.TestCase):
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest = json.load(f)
         self.assertEqual(manifest["version"], "2.11.4")
+
+    async def test_start_preheat_reentry_guard(self):
+        """Verify that calling _start_preheat twice does not overwrite starting variables."""
+        self.coord._preheat_active = False
+        self.coord._preheat_started_at = None
+        self.coord._start_temp = None
+
+        # First call
+        now_dt = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        with patch("custom_components.preheat.coordinator.dt_util.utcnow", return_value=now_dt):
+            self.hass.async_create_task = MagicMock()
+            self.coord.hass = self.hass
+            self.coord.device_name = "Test Zone"
+            await self.coord._start_preheat(20.0)
+
+        self.assertTrue(self.coord._preheat_active)
+        self.assertEqual(self.coord._preheat_started_at, now_dt)
+        self.assertEqual(self.coord._start_temp, 20.0)
+
+        # Second call with different temp and time
+        later_dt = datetime(2026, 6, 17, 12, 5, 0, tzinfo=timezone.utc)
+        with patch("custom_components.preheat.coordinator.dt_util.utcnow", return_value=later_dt):
+            await self.coord._start_preheat(22.0)
+
+        # Values must remain unchanged
+        self.assertEqual(self.coord._preheat_started_at, now_dt)
+        self.assertEqual(self.coord._start_temp, 20.0)
+
+    async def test_outcome_scoring_on_preheat_stop(self):
+        """Verify that ending a preheat session correctly calculates outcome scoring."""
+        self.coord._preheat_active = False
+        self.coord.diagnostics.data = {}
+        self.coord.device_name = "Test Zone"
+
+        next_event = datetime(2026, 6, 17, 12, 0, 0, tzinfo=timezone.utc)
+        self.coord._last_predicted_duration = 30.0
+
+        ctx = {
+            "operative_temp": 18.0,
+            "next_event": next_event,
+            "outdoor_temp": 10.0,
+            "target_setpoint": 21.0,
+            "is_window_open": False,
+        }
+        dec = {
+            "should_start": True,
+            "frost_override": False,
+            "start_time": None,
+            "effective_departure": None,
+            "start_source": "house",
+        }
+
+        # Mock start
+        await self.coord._execute_control_actions(ctx, dec)
+
+        self.assertEqual(self.coord._preheat_target_event, next_event)
+        self.assertEqual(self.coord._preheat_predicted_duration, 30.0)
+
+        # Mock start time 45 minutes ago (duration = 45 mins)
+        start_time = next_event - timedelta(minutes=45)
+        self.coord._preheat_started_at = start_time
+
+        # Mock points in history buffer
+        from custom_components.preheat.history_buffer import HistoryPoint
+        self.coord.history_buffer._buffer = [
+            HistoryPoint(start_time.timestamp(), 18.0, 100.0, True),
+            HistoryPoint((start_time + timedelta(minutes=25)).timestamp(), 21.0, 100.0, True), # Crossed 21.0 target at 11:40 (-20 mins timing error)
+            HistoryPoint((start_time + timedelta(minutes=45)).timestamp(), 21.5, 0.0, False)
+        ]
+
+        # Stop preheat
+        self.coord.physics.update_model = MagicMock(return_value=True)
+        self.coord._outdoor_is_real = True
+        self.coord._get_valve_position = MagicMock(return_value=0.0)
+
+        with patch("custom_components.preheat.coordinator.dt_util.utcnow", return_value=next_event):
+            await self.coord._stop_preheat(end_temp=21.5, target=21.0, outdoor=10.0, aborted=False)
+
+        outcome = self.coord.diagnostics.data.get("last_outcome")
+        self.assertIsNotNone(outcome)
+        self.assertTrue(outcome["comfort_hit"])
+        self.assertEqual(outcome["temp_gap_k"], 0.5)
+        self.assertEqual(outcome["overshoot_k"], 0.5)
+        # Crossed at 11:40 (20 mins before 12:00) -> timing error = -20.0
+        self.assertEqual(outcome["timing_error_min"], -20.0)
+        # Duration error: actual duration 45 mins - predicted 30 mins = 15.0 mins
+        self.assertEqual(outcome["duration_error_min"], 15.0)
