@@ -1,4 +1,7 @@
-## Unreleased
+## v2.12.1 (2026-11-08) - Service Fix 🔧
+**Patch Release**
+
+This release repairs the `preheat.reset_model` and `preheat.recompute` services, which failed on every call in v2.12.0, and makes service targeting safe for device/area targets.
 
 ### 🐛 Bug Fixes
 * **`preheat.reset_model` / `preheat.recompute` services failed** with `'SelectedEntities' object can't be awaited`, regardless of the target: the synchronous HA helper `async_extract_referenced_entity_ids()` was awaited. Target resolution now uses `homeassistant.helpers.target` (the `homeassistant.helpers.service` variant is deprecated and will be removed in HA 2026.8; it remains as fallback for older cores).
