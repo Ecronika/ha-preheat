@@ -268,7 +268,8 @@ class HouseArrivalCollector:
                     # Skip if zone has no temperature
                     if getattr(coord, "_consecutive_readiness_errors", 0) >= NO_TEMP_ERROR_THRESHOLD:
                         continue
-                    max_dur = max(max_dur, coord.data.predicted_duration)
+                    lead = getattr(coord.data, "lead_time", 0.0) or 0.0
+                    max_dur = max(max_dur, coord.data.predicted_duration, lead)
         return max_dur if max_dur > 0.0 else 120.0 # Default fallback to 2 hours
 
     async def async_bootstrap(self) -> None:

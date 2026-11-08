@@ -57,6 +57,7 @@ from .const import (
     DEFAULT_MAX_COAST_HOURS,
     DEFAULT_ARRIVAL_WINDOW_END,
     DEFAULT_DEBOUNCE_MIN,
+    DEFAULT_BUFFER_MIN,
     DEFAULT_MAX_HOURS,
 
     ATTR_MODEL_MASS,
@@ -144,6 +145,7 @@ class PreheatData:
     last_comfort_setpoint: float | None = None
     deadtime: float = 0.0 # V3
     is_occupied: bool = False # V2.9
+    lead_time: float = 0.0  # predicted_duration + buffer (capped), minutes before arrival
     
     # Scheduled Stop
     next_departure: datetime | None = None
@@ -238,6 +240,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # State
         self._preheat_started_at: datetime | None = None
         self._start_temp: float | None = None
+        self._start_buffer: float = 0.0  # buffer minutes included in the current preheat run
         # self._occupancy_on_since: datetime | None = None # Moved to SessionManager
         self._preheat_active: bool = False
         self._frost_active: bool = False # Safety override (v2.9.1)
@@ -347,6 +350,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # 3. Fallback to code defaults
         return default
 
+
+    def _get_buffer_minutes(self) -> float:
+        """Configured comfort buffer in minutes (profile default, clamped to 0..60)."""
+        try:
+            value = float(self._get_conf(CONF_BUFFER_MIN, DEFAULT_BUFFER_MIN))
+        except (TypeError, ValueError):
+            value = float(DEFAULT_BUFFER_MIN)
+        return max(0.0, min(60.0, value))
 
     async def async_load_data(self) -> None:
         """Load learned data from storage."""
@@ -1153,10 +1164,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         capped_duration = min(predicted_duration, max_preheat)
         
         self._last_predicted_duration = capped_duration
+
+        # Comfort buffer: reach the target this many minutes before the arrival.
+        # No buffer if no heating is needed at all; total lead is capped by max_preheat_hours.
+        buffer_min = self._get_buffer_minutes()
+        lead_time = min(capped_duration + buffer_min, max_preheat) if capped_duration > 0 else 0.0
         
         return {
             "predicted_duration": capped_duration, 
             "uncapped_duration": uncapped_duration,
+            "buffer_min": buffer_min,
+            "lead_time": lead_time,
             "delta_in": delta_in, "delta_out": delta_out, 
             "prognosis": "ok", "weather_available": weather_avail,
             "limit_exceeded": (uncapped_duration > max_preheat)
@@ -1310,17 +1328,18 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         start_time: datetime | None
     ) -> tuple[bool, datetime | None, datetime | None, bool, list[str]]:
         """Evaluate blocks (disabled, window open, manual hold) and Optimal Stop suppression."""
+        lead = pred.get("lead_time", pred["predicted_duration"])
         potential_demand = False
         if not frost_override and ctx["next_event"] is not None:
             minutes_to_start = (ctx["next_event"] - now).total_seconds() / 60.0
-            if minutes_to_start <= pred["predicted_duration"]:
+            if minutes_to_start <= lead:
                 potential_demand = True
 
         normal_start_triggered = False
         effective_departure = None
         if not frost_override and final_decision:
             evt = ctx["next_event"]
-            dur = pred["predicted_duration"]
+            dur = lead
 
             if evt:
                 minutes_to_start = (evt - now).total_seconds() / 60.0
@@ -1510,6 +1529,19 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             start_time
         )
 
+        # 6b. Planned start (exposed as next_start_time): arrival - (duration + buffer)
+        lead = pred.get("lead_time", pred["predicted_duration"])
+        evt = ctx["next_event"]
+        planned_start = None
+        if frost_override:
+            planned_start = now
+        elif final_decision and evt is not None and lead > 0 and self.enable_active and not self.hold_active:
+            planned = evt - timedelta(minutes=lead)
+            # Start time reached but suppressed (window open / optimal stop) -> no planned start
+            if planned > now or should_start:
+                planned_start = planned
+        applied_buffer = 0.0 if frost_override else max(0.0, lead - pred["predicted_duration"])
+
         # 7. Build Decision Trace
         self._build_decision_trace(
             ctx,
@@ -1539,14 +1571,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "blocked_by": blocked_reasons,
             "frost_override": frost_override,
             "effective_departure": effective_departure,
-            "start_source": start_source
+            "start_source": start_source,
+            "planned_start": planned_start,
+            "applied_buffer": applied_buffer,
         }
 
     async def _execute_control_actions(self, ctx: Context, dec: Decision) -> None:
         """Execute the decision."""
         if dec["should_start"]:
              if dec["frost_override"]: _LOGGER.info("Frost Protection Active")
-             await self._start_preheat(ctx["operative_temp"])
+             await self._start_preheat(ctx["operative_temp"], dec.get("applied_buffer", 0.0))
         else:
              # If currently active, we might need to stop
              if self._preheat_active and not self.hold_active:
@@ -1559,7 +1593,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
         return PreheatData(
             preheat_active=self._preheat_active,
-            next_start_time=dec["start_time"],
+            next_start_time=dec.get("planned_start"),
             operative_temp=ctx["operative_temp"],
             target_setpoint=ctx["target_setpoint"],
             next_arrival=ctx["next_event"],
@@ -1573,6 +1607,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             valve_signal=ctx["valve_position"],
             last_comfort_setpoint=self._last_comfort_setpoint,
             deadtime=self.physics.deadtime,
+            lead_time=pred.get("lead_time", pred["predicted_duration"]),
             
             # Review Fixes v2
             schedule_summary=self.planner.get_schedule_summary(),
@@ -1610,10 +1645,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
          return None
 
 
-    async def _start_preheat(self, operative_temp: float) -> None:
+    async def _start_preheat(self, operative_temp: float, buffer_min: float = 0.0) -> None:
         self._preheat_active = True
         self._preheat_started_at = dt_util.utcnow()
         self._start_temp = operative_temp
+        self._start_buffer = buffer_min
         self.hass.bus.async_fire(f"{DOMAIN}_started", {"name": self.device_name})
         _LOGGER.info("Preheat STARTED. Temp: %.1f", operative_temp)
 
@@ -1625,6 +1661,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             self._preheat_active = False
             self._preheat_started_at = None
             self._start_temp = None
+            self._start_buffer = 0.0
             self.hass.bus.async_fire(f"{DOMAIN}_stopped", {"name": self.device_name})
             return
         
@@ -1664,8 +1701,11 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                      self.physics.update_deadtime(new_deadtime)
                      _LOGGER.info("Deadtime Updated: %.1f min", self.physics.deadtime)
                 
+                # The comfort buffer is deliberate extra lead time, not heat-up time:
+                # exclude it so the model does not learn the buffer into mass/loss.
+                learn_duration = max(0.0, duration - self._start_buffer)
                 success = self.physics.update_model(
-                    duration, delta_in, delta_out, valve_pos_avg,
+                    learn_duration, delta_in, delta_out, valve_pos_avg,
                     outdoor_valid=self._outdoor_is_real,
                 )
                 if success:
@@ -1675,6 +1715,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._preheat_active = False
         self._preheat_started_at = None
         self._start_temp = None
+        self._start_buffer = 0.0
         self.hass.bus.async_fire(f"{DOMAIN}_stopped", {"name": self.device_name})
 
     async def _get_outdoor_temp_current(self) -> float:
@@ -1821,7 +1862,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     async def _post_update_tasks(self, ctx: Context, decision: Decision, pred: Prediction) -> None:
         """Run tasks after main update loop (non-critical)."""
         # 1. Update Polling
-        self._update_polling_interval(decision["start_time"], ctx["is_occupied"])
+        self._update_polling_interval(decision.get("planned_start"), ctx["is_occupied"])
         
         # 2. Comfort Learning
         await self._update_comfort_learning(ctx["target_setpoint"], ctx["is_occupied"])

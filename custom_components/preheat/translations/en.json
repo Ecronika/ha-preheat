@@ -36,7 +36,7 @@
     "error": {
       "invalid_occupancy_sensor": "Invalid occupancy sensor selected",
       "invalid_temperature_sensor": "Invalid temperature sensor selected",
-      "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
+      "buffer_too_high": "Safety buffer exceeds 60 minutes - value too high",
       "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk",
       "required_for_optimal_stop": "Schedule entity is required when Optimal Stop is enabled."
     },
@@ -91,7 +91,7 @@
     },
     "error": {
       "invalid_time_format": "Invalid time format (must be HH:MM:SS)",
-      "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
+      "buffer_too_high": "Safety buffer exceeds 60 minutes - value too high",
       "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk",
       "required_for_optimal_stop": "Schedule entity is required when Optimal Stop is enabled."
     }

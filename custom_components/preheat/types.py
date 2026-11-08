@@ -32,6 +32,8 @@ class Prediction(TypedDict):
     """Results of the physics simulation."""
     predicted_duration: float      # Final used duration (minutes)
     uncapped_duration: float       # Theoretical duration (minutes)
+    buffer_min: float              # Configured comfort buffer (minutes)
+    lead_time: float               # predicted_duration + buffer, capped by max_preheat_hours
     
     delta_in: float  # Target - Internal Temp
     delta_out: float # Target - External Temp (effective)
@@ -50,3 +52,5 @@ class Decision(TypedDict):
     blocked_by: list[str]
     frost_override: bool
     start_source: str # Additive v2.10.0
+    planned_start: datetime | None  # next_event - lead_time (exposed as next_start_time)
+    applied_buffer: float           # buffer minutes contained in this start

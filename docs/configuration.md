@@ -45,7 +45,7 @@ These options are configured only on the automatically created **Preheat System*
 These options are configured on each individual zone entry:
 
 *   **Heating Profile**: Change your heating type if needed (Radiator, Floor, AC).
-*   **Buffer (Minutes)**: Add extra minutes to the calculated start time for safety. Default: Profile-based.
+*   **Buffer (Minutes)**: Start this many minutes earlier than the calculated heat-up time, so the target is reached before the arrival (start = arrival − (predicted duration + buffer)). The total lead time is capped by *Max Preheat Duration*; no buffer is added if the room is already warm. The buffer is excluded when the model learns from a preheat run. Range 0–60. Default: Profile-based.
 *   **Earliest Start Time**: Prevent the heating from starting at 03:00 AM if you don't wake up until 07:00. Default: `180 min` (3 hours before target).
 *   **Arrival Window**: Define when the system should expect arrivals (Start/End times).
 *   **Comfort Fallback**: The default target temperature if no setpoint can be determined. Default: `21°C`.

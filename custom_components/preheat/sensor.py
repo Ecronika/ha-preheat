@@ -97,6 +97,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "target_temp": data.target_setpoint,
             "current_temp": data.operative_temp,
             "predicted_duration": round(data.predicted_duration, 1),
+            "lead_time": round(data.lead_time, 1),
             "confidence": physics.get_confidence(),
             "avg_error": round(physics.avg_error, 2),
             "sample_count": physics.sample_count,
