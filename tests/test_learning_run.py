@@ -120,18 +120,20 @@ class TestPreheatRun(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.coord._preheat_active)
         self.assertIsNone(self.coord._target_reached_at)
 
-    async def test_target_not_reached_learns_full_run(self):
+    async def test_target_not_reached_learns_extrapolated_full_rise(self):
         self.coord.physics = MagicMock()
+        self.coord.physics.deadtime = 15.0
         self.coord.physics.update_model.return_value = False
 
         await self._cycle(18.0, True)
         self.clock.advance(90)
         await self._cycle(20.0, True)
-        await self._cycle(20.0, False)
+        await self._cycle(20.0, False)   # arrival 1 K below target
 
         args = self.coord.physics.update_model.call_args.args
-        self.assertAlmostEqual(args[0], 90.0)
-        self.assertAlmostEqual(args[1], 2.0)
+        # 15 min deadtime + 75 min for 2 K -> 15 + 75 * 3/2 for the full 3 K
+        self.assertAlmostEqual(args[0], 127.5)
+        self.assertAlmostEqual(args[1], 3.0)
 
     async def test_zero_degrees_outdoor_is_not_replaced_by_fallback(self):
         self.coord.physics = MagicMock()

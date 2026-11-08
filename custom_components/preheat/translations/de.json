@@ -397,6 +397,14 @@
       "title": "Externe Sperre / Fenster offen > 24h ({name})",
       "description": "Das System wird durch einen externen Sensor (Fensterkontakt oder Sperr-Schalter) seit \u00fcber 24 Stunden blockiert.\n\n**L\u00f6sung:** Pr\u00fcfen Sie Ihre Fenstersensoren oder die Externe Sperr-Entit\u00e4t."
     },
+    "mass_at_upper_bound": {
+      "title": "Heizt langsamer als das Profil erlaubt ({name})",
+      "description": "Der thermische Massefaktor der Zone {name} wurde {count} Lernl\u00e4ufe in Folge gegen die Obergrenze des Heizprofils ({value} min/K) gedr\u00fcckt. Der Raum heizt langsamer auf, als das gew\u00e4hlte Heizprofil zul\u00e4sst \u2013 das Vorheizen startet deshalb zu sp\u00e4t.\n\n**Abhilfe:** Ein tr\u00e4geres Heizprofil f\u00fcr diese Zone w\u00e4hlen (z. B. 'Heizk\u00f6rper (Alt / Guss)' oder ein Fu\u00dfbodenheizungs-Profil) und danach 'Thermisches Modell zur\u00fccksetzen' dr\u00fccken. Au\u00dferdem pr\u00fcfen, ob das Ventil beim Vorheizen tats\u00e4chlich voll \u00f6ffnet."
+    },
+    "mass_at_lower_bound": {
+      "title": "Heizt schneller als das Profil erlaubt ({name})",
+      "description": "Der thermische Massefaktor der Zone {name} wurde {count} Lernl\u00e4ufe in Folge gegen die Untergrenze des Heizprofils ({value} min/K) gedr\u00fcckt. Entweder heizt der Raum schneller auf, als das gew\u00e4hlte Heizprofil zul\u00e4sst, oder das Modell ist verlernt.\n\n**Abhilfe:** Pr\u00fcfen, ob das Heizprofil zur Zone passt, und 'Thermisches Modell zur\u00fccksetzen' dr\u00fccken. Wenn das Vorheizen regelm\u00e4\u00dfig das Ziel verfehlt, Temperatursensor und Komfortpuffer pr\u00fcfen."
+    },
     "learning_stalled": {
       "title": "Thermisches Lernen stagniert ({name})",
       "description": "Das Modell hat seit \u00fcber 7 Tagen keine neuen Lern-Samples gesammelt, obwohl das System aktiv war.\n\n**M\u00f6gliche Ursachen:**\n- Temperaturdifferenz (Delta T) beim Heizen ist zu gering (< 0.5K).\n- Ventil meldet keine Position (falls konfiguriert).\n- System heizt real nicht, obwohl angefordert."

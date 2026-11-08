@@ -34,7 +34,8 @@ from .const import (
     DIAG_MAX_VALVE_POS,
     CONF_MAX_PREHEAT_HOURS,
     DEFAULT_MAX_HOURS,
-    LEARNING_STALL_EXPIRY_SEC
+    LEARNING_STALL_EXPIRY_SEC,
+    MASS_BOUND_STREAK_LIMIT
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -58,6 +59,8 @@ class DiagnosticsManager:
             "last_check_ts": 0.0,
             "stale_sensor_counter": 0, # Added initialization
             "last_learning_attempt_ts": 0.0,
+            "mass_bound_streak": 0,  # consecutive learning runs pushing past a profile bound
+            "mass_bound_side": None,  # "lower" / "upper"
         }
 
     def load_data(self, data: dict[str, Any]) -> None:
@@ -96,6 +99,19 @@ class DiagnosticsManager:
         issue_uid = f"{issue_id}_{self.entry.entry_id}"
         async_delete_issue(self.hass, DOMAIN, issue_uid)
 
+    def note_model_update(self, physics: ThermalPhysics) -> None:
+        """Called after each successful model update: count consecutive updates that
+        tried to push the mass factor past the same profile bound."""
+        side = physics.last_mass_clamped
+        if side and side == self.data.get("mass_bound_side"):
+            self.data["mass_bound_streak"] = self.data.get("mass_bound_streak", 0) + 1
+        elif side:
+            self.data["mass_bound_side"] = side
+            self.data["mass_bound_streak"] = 1
+        else:
+            self.data["mass_bound_side"] = None
+            self.data["mass_bound_streak"] = 0
+
     def _get_conf(self, key: str, default: Any = None) -> Any:
         # Proxy to coordinator for config access
         return self.coordinator._get_conf(key, default)
@@ -110,12 +126,23 @@ class DiagnosticsManager:
     async def _diag_physics(self, ctx: Context, physics: ThermalPhysics, weather_service: WeatherService | None, pred: Prediction) -> None:
         """Check physics sanity."""
         # 1. Railing Check
-        mass = physics.mass_factor
         loss = physics.loss_factor
-        if mass <= 5.0 or mass >= 240.0:
-             self._create_issue("physics_railing_mass", translation_key="physics_railing", translation_placeholders={"metric": "Mass Factor"})
+        # Mass: warn when learning keeps pushing past the heating profile's bound (the value
+        # is clamped there, so the profile likely does not match the room or learning is off).
+        # Replaces the old absolute 5/240 check, which could never fire inside profile bounds.
+        self._delete_issue("physics_railing_mass")
+        side = self.data.get("mass_bound_side")
+        streak = self.data.get("mass_bound_streak", 0)
+        if side and streak >= MASS_BOUND_STREAK_LIMIT:
+            value = f"{physics.mass_factor:.1f}"
+            if side == "upper":
+                self._create_issue("mass_at_bound", translation_key="mass_at_upper_bound",
+                                   translation_placeholders={"value": value, "count": str(streak)})
+            else:
+                self._create_issue("mass_at_bound", translation_key="mass_at_lower_bound",
+                                   translation_placeholders={"value": value, "count": str(streak)})
         else:
-             self._delete_issue("physics_railing_mass")
+            self._delete_issue("mass_at_bound")
              
         if loss <= 1.0 or loss >= 20.0:
              self._create_issue("physics_railing_loss", translation_key="physics_railing", translation_placeholders={"metric": "Loss Factor"})

@@ -59,6 +59,8 @@ from .const import (
     DEFAULT_DEBOUNCE_MIN,
     DEFAULT_BUFFER_MIN,
     TARGET_REACHED_TOLERANCE,
+    MIN_EXTRAPOLATION_RISE,
+    MAX_EXTRAPOLATION_FACTOR,
     DEFAULT_MAX_HOURS,
 
     ATTR_MODEL_MASS,
@@ -1670,6 +1672,24 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self.hass.bus.async_fire(f"{DOMAIN}_started", {"name": self.device_name})
         _LOGGER.info("Preheat STARTED. Temp: %.1f", operative_temp)
 
+    def _extrapolate_missed_run(self, run_minutes: float, achieved: float, required: float) -> tuple[float, float]:
+        """Return (duration, rise) to learn from a run that ended below the target.
+
+        Learning "run_minutes for the achieved rise" only confirms the too-short
+        prediction that caused the miss. Instead, extrapolate linearly (after the
+        deadtime) how long the full rise to the target would have taken.
+        """
+        if required <= achieved or achieved < MIN_EXTRAPOLATION_RISE:
+            return run_minutes, achieved
+        rise = min(required, achieved * MAX_EXTRAPOLATION_FACTOR)
+        dead = min(self.physics.deadtime, run_minutes)
+        duration = dead + (run_minutes - dead) * rise / achieved
+        _LOGGER.info(
+            "[%s] Target missed by %.1f K: learning extrapolated %.0f min for %.1f K (run %.0f min, achieved %.1f K)",
+            self.device_name, required - achieved, duration, rise, run_minutes, achieved,
+        )
+        return duration, rise
+
     def _end_run(self) -> None:
         """Clear run state and notify."""
         self._preheat_active = False
@@ -1700,15 +1720,18 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
                 # Learn the heat-up time: from start until the target was reached.
                 # The rest of the run (holding the target until arrival, incl. the comfort
-                # buffer) is not heat-up time. If the target was never reached, the whole
-                # run produced only the achieved rise.
+                # buffer) is not heat-up time.
                 if self._target_reached_at is not None:
                     learn_end = self._target_reached_at
                     delta_in = self._target_reached_temp - self._start_temp
+                    duration = max(0.0, (learn_end - self._preheat_started_at).total_seconds() / 60)
                 else:
                     learn_end = now
-                    delta_in = end_temp - self._start_temp
-                duration = max(0.0, (learn_end - self._preheat_started_at).total_seconds() / 60)
+                    duration, delta_in = self._extrapolate_missed_run(
+                        max(0.0, (now - self._preheat_started_at).total_seconds() / 60),
+                        end_temp - self._start_temp,
+                        target - self._start_temp,
+                    )
                 delta_out = target - outdoor # Approx average delta
                 
                 # Valve Sensor Check (Average over the heat-up period)
@@ -1737,6 +1760,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     outdoor_valid=self._outdoor_is_real,
                 )
                 if success:
+                    self.diagnostics.note_model_update(self.physics)
                     await self._async_save_data()
                     _LOGGER.info("Learning Success: Mass=%.1f, Loss=%.1f", self.physics.mass_factor, self.physics.loss_factor)
         

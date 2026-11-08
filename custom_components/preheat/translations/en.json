@@ -334,6 +334,14 @@
       "title": "External Inhibit / Window Open > 24h ({name})",
       "description": "The system is inhibited by an external sensor (Window Contact or Inhibit Switch) for over 24 hours.\n\n**Fix:** Check your window sensors or the External Inhibit entity."
     },
+    "mass_at_upper_bound": {
+      "title": "Heating slower than the profile allows ({name})",
+      "description": "The thermal mass factor of zone {name} was pushed against the upper limit of its heating profile ({value} min/K) in {count} learning runs in a row. The room heats up more slowly than the selected heating profile permits, so preheating starts too late.\n\n**What to do:** Select a slower heating profile for this zone (e.g. 'Radiator (Old / Cast Iron)' or a floor heating profile), then press 'Reset Thermal Model'. Also check whether the valve actually opens fully during preheating."
+    },
+    "mass_at_lower_bound": {
+      "title": "Heating faster than the profile allows ({name})",
+      "description": "The thermal mass factor of zone {name} was pushed against the lower limit of its heating profile ({value} min/K) in {count} learning runs in a row. Either the room heats up faster than the selected heating profile permits, or the model was mis-learned.\n\n**What to do:** Check whether the heating profile matches this zone and press 'Reset Thermal Model'. If preheating regularly misses the target, check the temperature sensor and the comfort buffer."
+    },
     "learning_stalled": {
       "title": "Thermal Learning Stalled ({name})",
       "description": "The thermal model has not collected any new samples in over 7 days, despite the system being active.\n\n**Possible Causes:**\n- Temperature difference (Delta T) is too small (< 0.5K) during heating.\n- Valve is not reporting position (if configured).\n- System is not actually heating when requested."
