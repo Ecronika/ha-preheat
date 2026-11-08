@@ -158,6 +158,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> b
     coordinator.house_collector = hass.data[DOMAIN]["house"]
     
     await coordinator.async_load_data()
+    # Remove persistent repair issues left behind by checks of earlier versions
+    coordinator.diagnostics.cleanup_legacy_issues()
     await coordinator.async_config_entry_first_refresh()
     
     entry.runtime_data = coordinator

@@ -67,6 +67,9 @@ class DiagnosticsManager:
         """Load persistent diagnostics data."""
         if data:
             self.data.update(data)
+        # Consecutive-check counter is only meaningful within a run; older versions never
+        # reset it, so a persisted value would raise stale_sensor on the first stale check.
+        self.data["stale_sensor_counter"] = 0
 
     def _create_issue(self, issue_id: str, is_persistent: bool = False, **kwargs) -> None:
         """Helper to create HA repair issues."""
@@ -99,6 +102,35 @@ class DiagnosticsManager:
         issue_uid = f"{issue_id}_{self.entry.entry_id}"
         async_delete_issue(self.hass, DOMAIN, issue_uid)
 
+    # Issue IDs raised by earlier versions whose checks no longer exist (or were renamed).
+    # Persistent issues survive restarts, so they must be removed explicitly.
+    LEGACY_ISSUE_IDS = (
+        "physics_limit",          # old absolute mass/loss limits (physics_limit_mass_min/max, ...)
+        "physics_railing",        # shared railing issue (split, then replaced by mass_at_bound)
+        "physics_railing_mass",   # replaced by mass_at_bound (v2.12.0)
+        "limit_exceeded",         # renamed to duration_limit_exceeded
+        "sensor_unit",            # renamed to sensor_unit_mismatch
+        "missing_schedule",
+        "weather_setup_failed",
+    )
+
+    def cleanup_legacy_issues(self) -> None:
+        """Remove repair issues of checks that no longer exist. Called once on setup."""
+        for issue_id in self.LEGACY_ISSUE_IDS:
+            self._delete_issue(issue_id)
+
+    @staticmethod
+    def _last_seen(state) -> datetime | None:
+        """Last time the entity reported, even with an unchanged value.
+
+        `last_updated` only moves when the state or attributes change; `last_reported`
+        (HA >= 2024.3) also moves when the same value is written again (e.g. KNX cyclic
+        sending, a stable room temperature).
+        """
+        stamps = [t for t in (getattr(state, "last_reported", None), state.last_updated)
+                  if isinstance(t, datetime)]
+        return max(stamps) if stamps else None
+
     def note_model_update(self, physics: ThermalPhysics) -> None:
         """Called after each successful model update: count consecutive updates that
         tried to push the mass factor past the same profile bound."""
@@ -130,7 +162,6 @@ class DiagnosticsManager:
         # Mass: warn when learning keeps pushing past the heating profile's bound (the value
         # is clamped there, so the profile likely does not match the room or learning is off).
         # Replaces the old absolute 5/240 check, which could never fire inside profile bounds.
-        self._delete_issue("physics_railing_mass")
         side = self.data.get("mass_bound_side")
         streak = self.data.get("mass_bound_streak", 0)
         if side and streak >= MASS_BOUND_STREAK_LIMIT:
@@ -149,8 +180,6 @@ class DiagnosticsManager:
         else:
              self._delete_issue("physics_railing_loss")
              
-        # Cleanup legacy shared issue
-        self._delete_issue("physics_railing")
 
         # 2. Duration Limit (Restored)
         if pred["limit_exceeded"]:
@@ -205,12 +234,16 @@ class DiagnosticsManager:
                 age_hours = (now - start_dt).total_seconds() / 3600.0
                 if age_hours > 4.0:
                      self._create_issue("forecast_stale", translation_placeholders={"detail": f"Age {age_hours:.1f}h"})
+                else:
+                     self._delete_issue("forecast_stale")
 
                 # Forecast Short (End < Now + 4h)
                 end_dt = datetime.fromisoformat(ctx["forecasts"][-1]["datetime"])
                 horizon = (end_dt - now).total_seconds() / 3600.0
                 if horizon < 4.0: # Minimum safe horizon
                      self._create_issue("forecast_short", translation_placeholders={"horizon": f"{horizon:.1f}h"})
+                else:
+                     self._delete_issue("forecast_short")
             except (ValueError, IndexError, TypeError):
                  pass
 
@@ -219,6 +252,11 @@ class DiagnosticsManager:
                  self._create_issue("weather_quality", translation_placeholders={"type": weather_service.forecast_type_used})
             else:
                  self._delete_issue("weather_quality")
+        else:
+            # No forecast data to judge (missing forecasts are reported by weather_no_forecast)
+            self._delete_issue("forecast_stale")
+            self._delete_issue("forecast_short")
+            self._delete_issue("weather_quality")
         
         # 5. Advanced / Missing Weather
         is_adv = (self._get_conf(CONF_PHYSICS_MODE) == PHYSICS_ADVANCED)
@@ -226,43 +264,40 @@ class DiagnosticsManager:
         
         if is_adv and not w_ent:
              self._create_issue("adv_no_weather")
+        else:
+             self._delete_issue("adv_no_weather")
         
         if w_ent and not ctx["forecasts"] and weather_service:
              # Weather entity configured but no forecasts returned
              self._create_issue("weather_no_forecast", translation_placeholders={"entity": w_ent})
+        else:
+             self._delete_issue("weather_no_forecast")
 
     async def _diag_sensors(self, ctx: Context, physics: ThermalPhysics, weather_service: WeatherService | None, pred: Prediction) -> None:
         """Check sensor health."""
         now = dt_util.utcnow()
-        # 1. Stale Temperature Sensor (>6h)
-        temp_entity = self._get_conf(CONF_TEMPERATURE)
-        sensor_found = False
-        
-        if temp_entity:
-            s_state = self.hass.states.get(temp_entity)
-            if s_state:
-                sensor_found = True
-                if s_state.last_updated:
-                    age = (now - s_state.last_updated).total_seconds()
-                    if age > DIAG_STALE_SENSOR_SEC: # 6 hours
-                         self.data.setdefault("stale_sensor_counter", 0)
-                         self.data["stale_sensor_counter"] += 1
-                         if self.data["stale_sensor_counter"] > 1:
-                             self._create_issue("stale_sensor", translation_placeholders={"entity": temp_entity}, is_persistent=True)
+        # 1. Stale Temperature Sensor (no report for > 6h)
+        # Judge the entity that currently delivers the temperature: the dedicated sensor,
+        # or the climate entity as fallback. unavailable/unknown is not "stale" (that is
+        # covered by the no_temperature issue).
+        source = None
+        for entity_id in (self._get_conf(CONF_TEMPERATURE), self._get_conf(CONF_CLIMATE)):
+            if not entity_id:
+                continue
+            st = self.hass.states.get(entity_id)
+            if st and st.state not in ("unavailable", "unknown"):
+                source = (entity_id, st)
+                break
 
-        if not sensor_found:
-             # Check Fallback (Climate)
-             clim_entity = self._get_conf(CONF_CLIMATE)
-             if clim_entity:
-                 c_state = self.hass.states.get(clim_entity)
-                 if c_state:
-                      if c_state.last_updated:
-                          age = (now - c_state.last_updated).total_seconds()
-                          if age > DIAG_STALE_SENSOR_SEC:
-                               self.data.setdefault("stale_sensor_counter", 0)
-                               self.data["stale_sensor_counter"] += 1
-                               if self.data["stale_sensor_counter"] > 1:
-                                  self._create_issue("stale_sensor", translation_placeholders={"entity": clim_entity}, is_persistent=True)
+        last_seen = self._last_seen(source[1]) if source else None
+        if last_seen is not None and (now - last_seen).total_seconds() > DIAG_STALE_SENSOR_SEC:
+            self.data["stale_sensor_counter"] = self.data.get("stale_sensor_counter", 0) + 1
+            if self.data["stale_sensor_counter"] > 1:  # confirmed on a second check
+                self._create_issue("stale_sensor", translation_placeholders={"entity": source[0]})
+        else:
+            # Fresh report (or nothing to judge): reset and clear
+            self.data["stale_sensor_counter"] = 0
+            self._delete_issue("stale_sensor")
 
         # 2. Valve Saturation
         # Access coordinator state directly
@@ -274,6 +309,8 @@ class DiagnosticsManager:
                  delta = target - op_temp
                  if valve is not None and valve > DIAG_MAX_VALVE_POS and delta > 2.0:
                       self._create_issue("valve_saturation")
+                 else:
+                      self._delete_issue("valve_saturation")
                       
         # 3. Occupancy Stale (> 3 days)
         occ_entity = self._get_conf(CONF_OCCUPANCY)
@@ -283,6 +320,8 @@ class DiagnosticsManager:
                  age_d = (now - s.last_updated).total_seconds() / 86400
                  if age_d > 3.0:
                       self._create_issue("occupancy_stale", translation_placeholders={"entity": occ_entity})
+                 else:
+                      self._delete_issue("occupancy_stale")
                       
         # 4b. Inhibit Stuck (> 24h)
         is_inhib = self.coordinator._external_inhibit or self.coordinator._window_open_detected
@@ -300,14 +339,15 @@ class DiagnosticsManager:
         # 1b. Sanity Temp (Sensor Value)
         temp_val = ctx["operative_temp"]
         if temp_val is not None:
+             out_val = ctx["outdoor_temp"]
              if temp_val < -10.0 or temp_val > 45.0:
                   # Implausible Indoor Temp
                   self._create_issue("sanity_temp", translation_placeholders={"detail": f"{temp_val}°C Implausible"})
-             else:
+             elif out_val is not None and temp_val < 10.0 and out_val > 20.0:
                   # Check Swap: Indoor < 10 AND Outdoor > 20 (Strong indication of swap)
-                  out_val = ctx["outdoor_temp"]
-                  if out_val and temp_val < 10.0 and out_val > 20.0:
-                       self._create_issue("sanity_temp", translation_placeholders={"detail": "Indoor/Outdoor Swapped?"})
+                  self._create_issue("sanity_temp", translation_placeholders={"detail": "Indoor/Outdoor Swapped?"})
+             else:
+                  self._delete_issue("sanity_temp")
 
     async def _diag_config(self, ctx: Context, physics: ThermalPhysics, weather_service: WeatherService | None, pred: Prediction) -> None:
         """Check configuration sanity."""
@@ -315,35 +355,36 @@ class DiagnosticsManager:
         
         # 1. Zombie Schedule
         sched_entity = self._get_conf(CONF_SCHEDULE_ENTITY)
-        if sched_entity:
-             state = self.hass.states.get(sched_entity)
-             if state and state.state == "on":
-                  next_ev = state.attributes.get("next_event")
-                  if not next_ev:
-                       self._create_issue("zombie_schedule", translation_placeholders={"entity": sched_entity})
+        sched_state = self.hass.states.get(sched_entity) if sched_entity else None
+        if sched_state and sched_state.state == "on" and not sched_state.attributes.get("next_event"):
+             self._create_issue("zombie_schedule", translation_placeholders={"entity": sched_entity})
+        else:
+             self._delete_issue("zombie_schedule")
                        
         # 2. Sanity Check
         target = ctx["target_setpoint"]
         if target and (target > 35.0 or target < 5.0):
              self._create_issue("config_sanity", translation_placeholders={"detail": f"Target {target}C unplausible"})
+        else:
+             self._delete_issue("config_sanity")
              
         # 3. Sensor Unit Mismatch
         t_ent = self._get_conf(CONF_TEMPERATURE)
-        if t_ent:
-             s = self.hass.states.get(t_ent)
-             if s and s.attributes.get("unit_of_measurement") not in ("°C", "C", None):
-                  self._create_issue("sensor_unit_mismatch", translation_placeholders={"entity": t_ent})
+        t_state = self.hass.states.get(t_ent) if t_ent else None
+        if t_state and t_state.attributes.get("unit_of_measurement") not in ("°C", "C", None):
+             self._create_issue("sensor_unit_mismatch", translation_placeholders={"entity": t_ent})
+        else:
+             self._delete_issue("sensor_unit_mismatch")
         
         # 4. Hold Stuck (> 24h)
         # Check External Inhibit (CONF_LOCK)
         lock_ent = self._get_conf(CONF_LOCK)
-        if lock_ent:
-             s = self.hass.states.get(lock_ent)
-             if s and s.state == STATE_ON:
-                  if s.last_changed:
-                       age_h = (now - s.last_changed).total_seconds() / 3600.0
-                       if age_h > 24.0:
-                            self._create_issue("hold_stuck", translation_placeholders={"entity": lock_ent})
+        lock_state = self.hass.states.get(lock_ent) if lock_ent else None
+        if (lock_state and lock_state.state == STATE_ON and lock_state.last_changed
+                and (now - lock_state.last_changed).total_seconds() / 3600.0 > 24.0):
+             self._create_issue("hold_stuck", translation_placeholders={"entity": lock_ent})
+        else:
+             self._delete_issue("hold_stuck")
                             
         # 5. No Outdoor Source
         if not self._get_conf(CONF_WEATHER_ENTITY) and not self._get_conf(CONF_OUTDOOR_TEMP):
@@ -359,11 +400,15 @@ class DiagnosticsManager:
         if total_events > 5 and (capped_count / total_events) > 0.5:
              # > 50% of stops capped
              self._create_issue("coast_capped")
+        else:
+             self._delete_issue("coast_capped")
              
         # 7. Tolerance Sanity
         tol = self._get_conf(CONF_STOP_TOLERANCE, 0.5)
         if tol < 0.1 or tol > 2.0:
              self._create_issue("tolerance_sanity", translation_placeholders={"val": str(tol)})
+        else:
+             self._delete_issue("tolerance_sanity")
 
         # 8. Max Coast High (TRV)
         max_c = self._get_conf(CONF_MAX_COAST_HOURS, 4.0)
@@ -376,5 +421,3 @@ class DiagnosticsManager:
         else:
              self._delete_issue("max_coast_high")
 
-        # Clean up legacy warnings
-        async_delete_issue(self.hass, "preheat", f"missing_schedule_{self.entry.entry_id}")
