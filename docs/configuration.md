@@ -52,7 +52,7 @@ These options are configured on each individual zone entry:
 
 ### 🛑 Optimal Stop
 *   **Enable Optimal Stop**: Activates "Coast-to-Stop" logic to save energy. Turns off the heating early if the room stays warm enough until the schedule ends.
-*   **Schedule Entity**: A `schedule`, `input_datetime`, or `sensor` helper defining when to stop heating (required for Optimal Stop).
+*   **Schedule Entity**: A `schedule` helper defining your comfort periods. While it is **off**, its next ON transition is used as the next preheat target (taking priority over House and learned arrival predictions; days excluded by the holiday calendar or workday settings are skipped). While it is **on**, the end of the current period is used as the session end for Optimal Stop.
 
 ### 🔒 External Control
 *   **External Inhibit (Lock/Window)**: Select a `binary_sensor`, `switch`, or `input_boolean` that blocks preheating when ON (e.g., window sensor to pause heating when open).

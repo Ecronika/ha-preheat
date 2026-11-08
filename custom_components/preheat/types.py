@@ -20,6 +20,8 @@ class Context(TypedDict):
     target_setpoint: float
     next_event: datetime | None
     blocked_dates: set[date]
+    schedule_next_start: datetime | None  # schedule helper OFF -> its next ON transition
+    next_event_source: str                # "schedule" / "house" / "zone" / "none"
     
     # Internal Flags
     is_sensor_ready: bool

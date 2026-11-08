@@ -153,6 +153,7 @@ class TestCoordinatorArbitration(unittest.TestCase):
         
         # Mock Providers
         self.coord.schedule_provider = MagicMock()
+        self.coord.schedule_provider.get_next_start.return_value = None  # no upcoming schedule start
         self.coord.learned_provider = MagicMock()
         
         # Mock internal deps

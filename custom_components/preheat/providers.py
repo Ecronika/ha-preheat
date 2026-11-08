@@ -113,6 +113,33 @@ class ScheduleProvider(SessionEndProvider):
             config=opt_config
         )
 
+    def get_next_start(self, now: datetime) -> datetime | None:
+        """Return the start of the next scheduled session, or None.
+
+        Only while the schedule is OFF: then HA's `next_event` is the next ON transition.
+        While it is ON, `next_event` is the end of the current session (see SessionResolver).
+        """
+        sched_entity = self._get_conf(CONF_SCHEDULE_ENTITY)
+        if not sched_entity:
+            return None
+        state = self.hass.states.get(sched_entity)
+        if not state or state.state != "off":
+            return None
+        raw = state.attributes.get("next_event")
+        if raw is None:
+            return None
+        if isinstance(raw, datetime):
+            event = raw
+        else:
+            try:
+                event = datetime.fromisoformat(str(raw))
+            except ValueError:
+                _LOGGER.debug("Schedule %s: unparsable next_event %r", sched_entity, raw)
+                return None
+        if event.tzinfo is None or event <= now:
+            return None
+        return event
+
     def get_decision(self, context: dict[str, Any]) -> ProviderDecision:
         """
         Context must contain:
@@ -135,9 +162,13 @@ class ScheduleProvider(SessionEndProvider):
             return ProviderDecision(False, None, False, False, invalid_reason=REASON_UNAVAILABLE)
         
         if state.state != "on":
-             # Legacy: If schedule is OFF, we are not in a session.
-             # Manager reset is handled centrally in Coordinator.
-             # self._update_manager_passive(context) # Manager wird in 2.9.x nicht aufgerufen; Aktivierung in v2.10.
+             # Schedule OFF: not in a session. If the coordinator uses the schedule's upcoming
+             # ON transition as the next event, the schedule is the (valid) start source;
+             # there is no session end yet.
+             if context.get("schedule_next_start") is not None:
+                 return ProviderDecision(
+                     should_stop=False, session_end=None, is_valid=True, is_shadow=False,
+                 )
              return ProviderDecision(False, None, False, False, invalid_reason=REASON_OFF)
 
         # 2. Resolve Session End

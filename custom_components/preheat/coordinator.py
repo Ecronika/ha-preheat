@@ -1077,6 +1077,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     search_start_date = datetime.combine(next_day.date(), datetime.min.time(), tzinfo=now.tzinfo)
 
         zone_next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays, blocked_dates=blocked_dates)
+
+        # Explicit schedule helper (OFF -> next_event is the next comfort start) is the user's
+        # authoritative plan and takes priority over House/learned predictions, except on days
+        # excluded by the holiday calendar / workday settings.
+        schedule_next_start = self.schedule_provider.get_next_start(now)
+        if schedule_next_start is not None and self._is_excluded_day(
+            schedule_next_start, now, blocked_dates, allowed_weekdays, search_start_date
+        ):
+            _LOGGER.debug("[%s] Schedule start %s is on an excluded day, ignoring it", self.device_name, schedule_next_start)
+            schedule_next_start = None
         
         house_next_event = None
         house_conf = 0.0
@@ -1087,10 +1097,15 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         has_confident_house = (house_next_event is not None and house_conf >= 0.7)
         has_house_fallback = (house_next_event is not None and house_source == "fallback")
         
-        if has_confident_house or has_house_fallback:
+        if schedule_next_start is not None:
+            next_event = schedule_next_start
+            next_event_source = "schedule"
+        elif has_confident_house or has_house_fallback:
             next_event = house_next_event
+            next_event_source = "house"
         else:
             next_event = zone_next_event
+            next_event_source = "zone" if zone_next_event is not None else "none"
             
         outdoor_temp = await self._get_outdoor_temp_current()
         self._update_outdoor_availability_issue(now)
@@ -1118,8 +1133,25 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "has_confident_house": has_confident_house, "house_confidence": house_conf,
             "house_next_event": house_next_event, "zone_next_event": zone_next_event,
             "has_house_fallback": has_house_fallback, "house_source": house_source,
-            "hvac_action": hvac_action, "hvac_mode": hvac_mode
+            "hvac_action": hvac_action, "hvac_mode": hvac_mode,
+            "schedule_next_start": schedule_next_start, "next_event_source": next_event_source,
         }
+
+    @staticmethod
+    def _is_excluded_day(
+        event: datetime, now: datetime, blocked_dates: set[date],
+        allowed_weekdays: list[int] | None, search_start_date: datetime,
+    ) -> bool:
+        """True if the event falls on a day the user excluded from preheating."""
+        day = event.date()
+        if day in blocked_dates:
+            return True
+        if allowed_weekdays is not None and event.weekday() not in allowed_weekdays:
+            return True
+        # Workday sensor reports today as non-workday (holiday) -> search started tomorrow
+        if day < search_start_date.date():
+            return True
+        return False
 
     async def _run_physics_simulation(self, ctx: Context) -> Prediction:
         """Run thermal physics simulation."""
@@ -1417,6 +1449,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             KEY_EVALUATED_AT: now.isoformat(),
             "schema_version": SCHEMA_VERSION,
             "start_source": start_source,
+            "next_event_source": ctx.get("next_event_source", "none"),
+            "next_event": ctx["next_event"].isoformat() if ctx.get("next_event") else None,
             KEY_PROVIDER_SELECTED: selected_provider,
             KEY_PROVIDER_CANDIDATES: {
                 PROVIDER_SCHEDULE: asdict(sched_decision),

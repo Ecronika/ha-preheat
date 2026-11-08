@@ -122,6 +122,7 @@ class TestIntegrationV210(unittest.IsolatedAsyncioTestCase):
         
         # Mock schedule/learned providers
         self.coordinator.schedule_provider = MagicMock()
+        self.coordinator.schedule_provider.get_next_start.return_value = None  # no upcoming schedule start
         self.coordinator.schedule_provider.get_decision.return_value = ProviderDecision(
             should_stop=False, session_end=None, is_valid=False, is_shadow=False
         )
