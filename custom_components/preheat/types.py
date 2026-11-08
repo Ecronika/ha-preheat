@@ -53,4 +53,3 @@ class Decision(TypedDict):
     frost_override: bool
     start_source: str # Additive v2.10.0
     planned_start: datetime | None  # next_event - lead_time (exposed as next_start_time)
-    applied_buffer: float           # buffer minutes contained in this start

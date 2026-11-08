@@ -58,6 +58,7 @@ from .const import (
     DEFAULT_ARRIVAL_WINDOW_END,
     DEFAULT_DEBOUNCE_MIN,
     DEFAULT_BUFFER_MIN,
+    TARGET_REACHED_TOLERANCE,
     DEFAULT_MAX_HOURS,
 
     ATTR_MODEL_MASS,
@@ -240,7 +241,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # State
         self._preheat_started_at: datetime | None = None
         self._start_temp: float | None = None
-        self._start_buffer: float = 0.0  # buffer minutes included in the current preheat run
+        # Moment/temperature at which the current run reached the target (None = not yet)
+        self._target_reached_at: datetime | None = None
+        self._target_reached_temp: float | None = None
         # self._occupancy_on_since: datetime | None = None # Moved to SessionManager
         self._preheat_active: bool = False
         self._frost_active: bool = False # Safety override (v2.9.1)
@@ -1540,7 +1543,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             # Start time reached but suppressed (window open / optimal stop) -> no planned start
             if planned > now or should_start:
                 planned_start = planned
-        applied_buffer = 0.0 if frost_override else max(0.0, lead - pred["predicted_duration"])
 
         # 7. Build Decision Trace
         self._build_decision_trace(
@@ -1573,20 +1575,29 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             "effective_departure": effective_departure,
             "start_source": start_source,
             "planned_start": planned_start,
-            "applied_buffer": applied_buffer,
         }
 
     async def _execute_control_actions(self, ctx: Context, dec: Decision) -> None:
         """Execute the decision."""
+        self._track_target_reached(ctx["operative_temp"], ctx["target_setpoint"])
         if dec["should_start"]:
              if dec["frost_override"]: _LOGGER.info("Frost Protection Active")
-             await self._start_preheat(ctx["operative_temp"], dec.get("applied_buffer", 0.0))
+             await self._start_preheat(ctx["operative_temp"])
         else:
              # If currently active, we might need to stop
              if self._preheat_active and not self.hold_active:
                   t = ctx["target_setpoint"]
-                  o = ctx["outdoor_temp"] if ctx["outdoor_temp"] else 10.0
+                  o = ctx["outdoor_temp"] if ctx["outdoor_temp"] is not None else 10.0
                   await self._stop_preheat(ctx["operative_temp"], t, o)
+
+    def _track_target_reached(self, operative_temp: float, target: float) -> None:
+        """Remember when the running preheat first reached the target (for learning)."""
+        if not self._preheat_active or self._target_reached_at is not None:
+            return
+        if operative_temp >= target - TARGET_REACHED_TOLERANCE:
+            self._target_reached_at = dt_util.utcnow()
+            self._target_reached_temp = operative_temp
+            _LOGGER.debug("[%s] Preheat target reached at %.1f", self.device_name, operative_temp)
 
     def _build_preheat_data(self, ctx: Context, pred: Prediction, dec: Decision) -> PreheatData:
         p_res = getattr(self.planner, 'last_pattern_result', None)
@@ -1645,45 +1656,64 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
          return None
 
 
-    async def _start_preheat(self, operative_temp: float, buffer_min: float = 0.0) -> None:
+    async def _start_preheat(self, operative_temp: float) -> None:
+        """Start a preheat run. Called every cycle while starting is requested: only the
+        first call opens the run, otherwise start time/temperature would be reset each cycle
+        and the run could never be learned from."""
+        if self._preheat_active:
+            return
         self._preheat_active = True
         self._preheat_started_at = dt_util.utcnow()
         self._start_temp = operative_temp
-        self._start_buffer = buffer_min
+        self._target_reached_at = None
+        self._target_reached_temp = None
         self.hass.bus.async_fire(f"{DOMAIN}_started", {"name": self.device_name})
         _LOGGER.info("Preheat STARTED. Temp: %.1f", operative_temp)
+
+    def _end_run(self) -> None:
+        """Clear run state and notify."""
+        self._preheat_active = False
+        self._preheat_started_at = None
+        self._start_temp = None
+        self._target_reached_at = None
+        self._target_reached_temp = None
+        self.hass.bus.async_fire(f"{DOMAIN}_stopped", {"name": self.device_name})
 
     async def _stop_preheat(self, end_temp: float, target: float, outdoor: float, aborted: bool = False) -> None:
         if not self._preheat_active: return
         
         if self._consecutive_readiness_errors >= NO_TEMP_ERROR_THRESHOLD:
             _LOGGER.warning("Skipping model/deadtime learning in _stop_preheat: zone has no temperature")
-            self._preheat_active = False
-            self._preheat_started_at = None
-            self._start_temp = None
-            self._start_buffer = 0.0
-            self.hass.bus.async_fire(f"{DOMAIN}_stopped", {"name": self.device_name})
+            self._end_run()
             return
         
-        duration = 0
-        if self._preheat_started_at:
-            duration = (dt_util.utcnow() - self._preheat_started_at).total_seconds() / 60
-        
-        if not aborted and self._start_temp is not None:
+        now = dt_util.utcnow()
+        if not aborted and self._start_temp is not None and self._preheat_started_at is not None:
             # LEARN
             
             # Don't learn if Window Open detected recently
             if self._window_open_detected:
                 _LOGGER.info("Skipping learning due to Open Window detected.")
             else:
-                self.diagnostics.data["last_learning_attempt_ts"] = dt_util.utcnow().timestamp()
+                self.diagnostics.data["last_learning_attempt_ts"] = now.timestamp()
                 await self._async_save_data()
-                delta_in = end_temp - self._start_temp
+
+                # Learn the heat-up time: from start until the target was reached.
+                # The rest of the run (holding the target until arrival, incl. the comfort
+                # buffer) is not heat-up time. If the target was never reached, the whole
+                # run produced only the achieved rise.
+                if self._target_reached_at is not None:
+                    learn_end = self._target_reached_at
+                    delta_in = self._target_reached_temp - self._start_temp
+                else:
+                    learn_end = now
+                    delta_in = end_temp - self._start_temp
+                duration = max(0.0, (learn_end - self._preheat_started_at).total_seconds() / 60)
                 delta_out = target - outdoor # Approx average delta
                 
-                # Valve Sensor Check (Average over the heating period)
+                # Valve Sensor Check (Average over the heat-up period)
                 start_ts = self._preheat_started_at.timestamp()
-                end_ts = dt_util.utcnow().timestamp()
+                end_ts = learn_end.timestamp()
                 
                 # Try average first
                 valve_pos_avg = self.history_buffer.get_average_valve(start_ts, end_ts)
@@ -1692,8 +1722,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                 if valve_pos_avg is None:
                      valve_pos_avg = self._get_valve_position_with_fallback("passive")
                 
-                _LOGGER.debug("Learning Check: Valve Avg=%.1f (over %.1f min)", 
-                              valve_pos_avg if valve_pos_avg else 0, duration)
+                _LOGGER.debug("Learning Check: Valve Avg=%.1f (over %.1f min, target reached: %s)",
+                              valve_pos_avg if valve_pos_avg else 0, duration,
+                              self._target_reached_at is not None)
                 
                 # V3: Analyze Deadtime
                 new_deadtime = self.deadtime_analyzer.analyze(self.history_buffer.get_all())
@@ -1701,22 +1732,15 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                      self.physics.update_deadtime(new_deadtime)
                      _LOGGER.info("Deadtime Updated: %.1f min", self.physics.deadtime)
                 
-                # The comfort buffer is deliberate extra lead time, not heat-up time:
-                # exclude it so the model does not learn the buffer into mass/loss.
-                learn_duration = max(0.0, duration - self._start_buffer)
                 success = self.physics.update_model(
-                    learn_duration, delta_in, delta_out, valve_pos_avg,
+                    duration, delta_in, delta_out, valve_pos_avg,
                     outdoor_valid=self._outdoor_is_real,
                 )
                 if success:
                     await self._async_save_data()
                     _LOGGER.info("Learning Success: Mass=%.1f, Loss=%.1f", self.physics.mass_factor, self.physics.loss_factor)
         
-        self._preheat_active = False
-        self._preheat_started_at = None
-        self._start_temp = None
-        self._start_buffer = 0.0
-        self.hass.bus.async_fire(f"{DOMAIN}_stopped", {"name": self.device_name})
+        self._end_run()
 
     async def _get_outdoor_temp_current(self) -> float:
         # Caching logic

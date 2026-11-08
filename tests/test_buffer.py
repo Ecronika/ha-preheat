@@ -119,7 +119,6 @@ class TestComfortBuffer(unittest.IsolatedAsyncioTestCase):
 
         _, dec = await self._decide(make_coordinator({CONF_BUFFER_MIN: 60}), now)
         self.assertTrue(dec["should_start"])
-        self.assertEqual(dec["applied_buffer"], 60.0)
 
         _, dec = await self._decide(make_coordinator({CONF_BUFFER_MIN: 0}), now)
         self.assertFalse(dec["should_start"])
@@ -150,24 +149,6 @@ class TestComfortBuffer(unittest.IsolatedAsyncioTestCase):
         coord.enable_active = False
         _, dec = await self._decide(coord, ARRIVAL - timedelta(hours=3))
         self.assertIsNone(dec["planned_start"])
-
-    async def test_learning_excludes_buffer(self):
-        coord = make_coordinator({CONF_BUFFER_MIN: 60})
-        coord.physics.update_model.return_value = False
-        coord.deadtime_analyzer.analyze = MagicMock(return_value=None)
-        coord.history_buffer.get_average_valve = MagicMock(return_value=80.0)
-        coord._outdoor_is_real = True
-
-        clock = MagicMock()
-        clock.utcnow.side_effect = lambda: datetime.now(timezone.utc)
-        with patch("custom_components.preheat.coordinator.dt_util", clock):
-            await coord._start_preheat(19.0, buffer_min=60.0)
-            coord._preheat_started_at -= timedelta(minutes=116)
-            await coord._stop_preheat(21.0, 21.0, 5.0)
-
-        learned_duration = coord.physics.update_model.call_args.args[0]
-        self.assertAlmostEqual(learned_duration, 56.0, delta=0.5)
-        self.assertEqual(coord._start_buffer, 0.0)
 
     async def test_house_incoming_uses_lead_time(self):
         hass = MagicMock()

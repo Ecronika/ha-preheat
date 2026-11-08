@@ -254,6 +254,8 @@ CONF_EVENING_COMFORT_WINDOW: Final = "evening_comfort_window"
 
 # --- V2.11.3 Constants ---
 VALVE_HEATING_THRESHOLD: Final = 5.0  # %
+# A preheat run counts as "target reached" once the room is within this margin of the setpoint
+TARGET_REACHED_TOLERANCE: Final = 0.2  # K
 MIN_SEGMENT_MINUTES: Final = 60.0      # Minutes
 MIN_SEGMENT_POINTS: Final = 8          # Points
 
