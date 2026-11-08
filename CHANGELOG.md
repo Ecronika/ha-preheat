@@ -1,12 +1,15 @@
-## v2.12.1 (2026-11-08) - Service Fix 🔧
+## v2.12.1 (2026-11-08) - Service & Repair Issue Fixes 🔧
 **Patch Release**
 
-This release repairs the `preheat.reset_model` and `preheat.recompute` services, which failed on every call in v2.12.0, and makes service targeting safe for device/area targets.
+This release repairs the `preheat.reset_model` and `preheat.recompute` services, which failed on every call in v2.12.0, makes service targeting safe for device/area targets, and stops false or stuck repair issues.
 
 ### 🐛 Bug Fixes
 * **`preheat.reset_model` / `preheat.recompute` services failed** with `'SelectedEntities' object can't be awaited`, regardless of the target: the synchronous HA helper `async_extract_referenced_entity_ids()` was awaited. Target resolution now uses `homeassistant.helpers.target` (the `homeassistant.helpers.service` variant is deprecated and will be removed in HA 2026.8; it remains as fallback for older cores).
 * **Device/area/floor/label targets**: entities referenced indirectly were ignored. Worse, such a target then counted as "no target" and the service acted on **all** zones. Indirect references are now resolved, and a target that matches no Preheat zone does nothing (with a log warning) instead of falling back to all zones.
 * **`preheat.recompute` without target** crashed on the "Preheat System" entry (no coordinator); it is now skipped like in `reset_model`.
+* **False "stale sensor" repairs**: The check used `last_updated`, which only changes when the value changes. Sensors that report regularly with an unchanged value (KNX cyclic sending, stable rooms, heating off) were flagged as stale after 6 h. Liveness is now measured with `last_reported` (falls back to `last_updated` on older cores); `unavailable`/`unknown` is not treated as stale (the no-temperature issue covers it), and the climate fallback is judged when the dedicated sensor is unavailable.
+* **Repair issues never cleared**: `stale_sensor` and 12 other issues (`occupancy_stale`, `valve_saturation`, `sanity_temp`, `forecast_stale`, `forecast_short`, `adv_no_weather`, `weather_no_forecast`, `zombie_schedule`, `config_sanity`, `sensor_unit_mismatch`, `hold_stuck`, `coast_capped`, `tolerance_sanity`) were created but never deleted. Each now clears itself as soon as its condition is gone. `stale_sensor` is no longer persistent, and its check counter resets on fresh reports and on load (it only ever grew before, so every later gap raised the issue immediately).
+* **Orphaned issues from removed checks**: On setup, repair issues of checks that no longer exist are removed (`physics_limit` incl. `physics_limit_mass_min`/`_max`, `physics_railing`, `physics_railing_mass`, `limit_exceeded`, `sensor_unit`, `missing_schedule`, `weather_setup_failed`).
 
 ---
 

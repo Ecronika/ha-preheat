@@ -161,7 +161,8 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
         default_state.state = "unknown"
         default_state.last_changed = dt_util.utcnow() # Default to now (mocked)
         self.hass.states.get.return_value = default_state
-                # Patch internals
+        
+        # Patch internals
         with patch("custom_components.preheat.coordinator.PreheatPlanner") as MockPlanner, \
              patch("custom_components.preheat.coordinator.Store"), \
              patch("custom_components.preheat.coordinator.OptimalStopManager") as MockOSM, \
@@ -487,7 +488,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
                   
                   mock_issue.assert_any_call(
                       self.hass, DOMAIN, f"stale_sensor_{self.entry.entry_id}",
-                      is_fixable=False, is_persistent=True, severity=ANY, 
+                      is_fixable=False, is_persistent=False, severity=ANY, 
                       translation_key="stale_sensor", translation_placeholders=ANY
                   )
 
