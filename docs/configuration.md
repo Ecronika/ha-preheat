@@ -45,14 +45,14 @@ These options are configured only on the automatically created **Preheat System*
 These options are configured on each individual zone entry:
 
 *   **Heating Profile**: Change your heating type if needed (Radiator, Floor, AC).
-*   **Buffer (Minutes)**: Add extra minutes to the calculated start time for safety. Default: Profile-based.
+*   **Buffer (Minutes)**: Start this many minutes earlier than the calculated heat-up time, so the target is reached before the arrival (start = arrival − (predicted duration + buffer)). The total lead time is capped by *Max Preheat Duration*; no buffer is added if the room is already warm. The buffer is excluded when the model learns from a preheat run. Range 0–60. Default: Profile-based.
 *   **Earliest Start Time**: Prevent the heating from starting at 03:00 AM if you don't wake up until 07:00. Default: `180 min` (3 hours before target).
 *   **Arrival Window**: Define when the system should expect arrivals (Start/End times).
 *   **Comfort Fallback**: The default target temperature if no setpoint can be determined. Default: `21°C`.
 
 ### 🛑 Optimal Stop
 *   **Enable Optimal Stop**: Activates "Coast-to-Stop" logic to save energy. Turns off the heating early if the room stays warm enough until the schedule ends.
-*   **Schedule Entity**: A `schedule`, `input_datetime`, or `sensor` helper defining when to stop heating (required for Optimal Stop).
+*   **Schedule Entity**: A `schedule` helper defining your comfort periods. While it is **off**, its next ON transition is used as the next preheat target (taking priority over House and learned arrival predictions; days excluded by the holiday calendar or workday settings are skipped). While it is **on**, the end of the current period is used as the session end for Optimal Stop.
 
 ### 🔒 External Control
 *   **External Inhibit (Lock/Window)**: Select a `binary_sensor`, `switch`, or `input_boolean` that blocks preheating when ON (e.g., window sensor to pause heating when open).

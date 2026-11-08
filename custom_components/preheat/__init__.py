@@ -39,8 +39,9 @@ async def async_setup_services(hass: HomeAssistant):
         """Reset thermal model."""
         for entry_id in await _get_target_entries(hass, call):
              if entry := hass.config_entries.async_get_entry(entry_id):
-                 if hasattr(entry, "runtime_data"):
-                     entry.runtime_data.reset_model()
+                 # The system entry's runtime_data is the house collector (no thermal model)
+                 if hasattr(entry, "runtime_data") and hasattr(entry.runtime_data, "reset_model"):
+                     await entry.runtime_data.reset_model()
 
     hass.services.async_register(DOMAIN, "recompute", handle_recompute)
     hass.services.async_register(DOMAIN, "reset_model", handle_reset_model)

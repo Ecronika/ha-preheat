@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "preheat"
-VERSION = "2.11.3"
+VERSION = "2.12.0"
 
 # --- Heating Profiles (V3) ---
 CONF_HEATING_PROFILE: Final = "heating_profile"
@@ -254,6 +254,13 @@ CONF_EVENING_COMFORT_WINDOW: Final = "evening_comfort_window"
 
 # --- V2.11.3 Constants ---
 VALVE_HEATING_THRESHOLD: Final = 5.0  # %
+# A preheat run counts as "target reached" once the room is within this margin of the setpoint
+TARGET_REACHED_TOLERANCE: Final = 0.2  # K
+# Runs that end below the target: extrapolate the heat-up time to the full rise for learning
+MIN_EXTRAPOLATION_RISE: Final = 0.3  # K, minimum achieved rise for a usable extrapolation
+MAX_EXTRAPOLATION_FACTOR: Final = 4.0  # learned rise is at most 4x the achieved rise
+# Repair warning when the mass factor stays at a heating-profile bound for this many learning runs
+MASS_BOUND_STREAK_LIMIT: Final = 5
 MIN_SEGMENT_MINUTES: Final = 60.0      # Minutes
 MIN_SEGMENT_POINTS: Final = 8          # Points
 

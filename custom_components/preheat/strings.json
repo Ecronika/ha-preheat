@@ -36,7 +36,7 @@
     "error": {
       "invalid_occupancy_sensor": "Invalid occupancy sensor selected",
       "invalid_temperature_sensor": "Invalid temperature sensor selected",
-      "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
+      "buffer_too_high": "Safety buffer exceeds 60 minutes - value too high",
       "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk",
       "required_for_optimal_stop": "Schedule entity is required when Optimal Stop is enabled."
     },
@@ -88,7 +88,7 @@
     },
     "error": {
       "invalid_time_format": "Invalid time format (must be HH:MM:SS)",
-      "buffer_too_high": "Safety buffer exceeds 120 minutes - value too high",
+      "buffer_too_high": "Safety buffer exceeds 60 minutes - value too high",
       "max_duration_too_high": "Maximum preheat duration over 12 hours poses safety risk",
       "required_for_optimal_stop": "Schedule entity is required when Optimal Stop is enabled."
     }
@@ -327,6 +327,14 @@
     "inhibit_stuck": {
       "title": "Inhibit/Window > 24h ({name})",
       "description": "System inhibited by Window/External Sensor for > 24h."
+    },
+    "mass_at_upper_bound": {
+      "title": "Heating slower than the profile allows ({name})",
+      "description": "The thermal mass factor of zone {name} was pushed against the upper limit of its heating profile ({value} min/K) in {count} learning runs in a row. The room heats up more slowly than the selected heating profile permits, so preheating starts too late.\n\n**What to do:** Select a slower heating profile for this zone (e.g. 'Radiator (Old / Cast Iron)' or a floor heating profile), then press 'Reset Thermal Model'. Also check whether the valve actually opens fully during preheating."
+    },
+    "mass_at_lower_bound": {
+      "title": "Heating faster than the profile allows ({name})",
+      "description": "The thermal mass factor of zone {name} was pushed against the lower limit of its heating profile ({value} min/K) in {count} learning runs in a row. Either the room heats up faster than the selected heating profile permits, or the model was mis-learned.\n\n**What to do:** Check whether the heating profile matches this zone and press 'Reset Thermal Model'. If preheating regularly misses the target, check the temperature sensor and the comfort buffer."
     },
     "learning_stalled": {
       "title": "Learning Stalled ({name})",

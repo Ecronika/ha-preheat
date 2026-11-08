@@ -57,6 +57,8 @@ class ThermalPhysics:
                  learning_rate: float = DEFAULT_LEARNING_RATE) -> None:
         """Initialize with existing data or defaults."""
         self.learning_rate = learning_rate
+        self.last_mass_clamped: str | None = None  # "lower"/"upper" if the last update hit a bound
+        self._profile_data = profile_data
         
         # Load Defaults from Profile or Constants
         self.min_mass = 1.0
@@ -82,9 +84,10 @@ class ThermalPhysics:
             d_time = getattr(data, "deadtime", 0.0)
             self.deadtime = d_time if d_time is not None else 0.0
             
-            # V3 Migration logic:
-            if self.deadtime == 0.0 and profile_data and data.sample_count < 5:
-                # Assuming new or un-tuned system, apply profile default
+            # A deadtime of exactly 0.0 means "never measured" (the analyzer never reports 0
+            # and the EMA cannot reach it), regardless of how many samples mass/loss have.
+            # Use the profile default instead of silently dropping the deadtime term.
+            if self.deadtime == 0.0 and profile_data:
                 self.deadtime = initial_deadtime
         else:
             self.mass_factor = initial_mass
@@ -92,6 +95,20 @@ class ThermalPhysics:
             self.sample_count = 0
             self.avg_error = 0.0
             self.deadtime = initial_deadtime
+
+    def reset(self, profile_data: dict | None = None) -> None:
+        """Reset learned parameters to the (given or initial) heating profile defaults."""
+        if profile_data is not None:
+            self._profile_data = profile_data
+        profile = self._profile_data or {}
+
+        self.min_mass = profile.get("mass_factor_min", 1.0)
+        self.max_mass = profile.get("mass_factor_max", 120.0)
+        self.mass_factor = profile.get("default_mass", DEFAULT_MASS_FACTOR)
+        self.loss_factor = profile.get("default_loss", DEFAULT_LOSS_FACTOR)
+        self.deadtime = profile.get("deadtime", 0.0)
+        self.sample_count = 0
+        self.avg_error = 0.0
 
     def calculate_duration(self, delta_t_internal: float, delta_t_external: float) -> float:
         """
@@ -215,7 +232,13 @@ class ThermalPhysics:
             new_loss = self.loss_factor + delta_loss
             self.loss_factor, loss_stable = self._apply_stable_update("Loss Factor", self.loss_factor, new_loss)
 
-        # Enforce bounds
+        # Enforce bounds. Remember whether this update wanted to go past a profile bound
+        # (merely sitting at a bound with ~0 error is fine: loss/deadtime may carry the fit).
+        self.last_mass_clamped = None
+        if self.mass_factor < self.min_mass * 0.99:
+            self.last_mass_clamped = "lower"
+        elif self.mass_factor > self.max_mass * 1.01:
+            self.last_mass_clamped = "upper"
         self.mass_factor = max(self.min_mass, min(self.max_mass, self.mass_factor))
         # Loss can go to 0.0 if perfectly insulated/warm
         self.loss_factor = max(0.0, min(50.0, self.loss_factor))

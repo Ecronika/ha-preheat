@@ -1,3 +1,37 @@
+## v2.12.0 (2026-11-08) - Learning & Scheduling Fixes 🧠
+**Minor Release**
+
+This release fixes the thermal learning so that it actually learns from automatic preheats and converges on the real heat-up time, makes the schedule helper drive the next preheat, and applies the comfort buffer that was configurable but never used.
+
+> [!IMPORTANT]
+> **Behaviour changes after updating**
+> * The thermal model now really learns from every automatic preheat. Mass, loss and deadtime will move noticeably over the first days (each step is still limited to 20 %). Zones whose model was mis-learned before can be reset with the **Reset Thermal Model** button, which works again.
+> * Zones with a stored deadtime of 0 get the heating profile's deadtime, so predicted durations increase accordingly (e.g. +15 min for modern radiators).
+> * `next_start_time` / *Next Preheat Start* now shows the **planned** start in advance (arrival − duration − buffer) instead of only the moment the preheat starts. `binary_sensor.<zone>_preheat_needed` and adaptive polling follow this planned start.
+> * Preheating starts earlier by the configured **Buffer** (profile default 5–30 min).
+> * With a schedule helper configured, its next comfort start takes priority over House and learned predictions.
+
+### 🧠 Thermal Learning
+* **Learning From Automatic Preheats**: While a preheat was running, `_start_preheat()` ran every cycle and reset the start time and start temperature (and re-fired `preheat_started`) each minute. At the stop the run looked ~1 minute long with ~0 K rise and was discarded, so the model effectively never learned from automatic preheats. A run is now opened only once (also for the force-preheat button).
+* **Learn Heat-Up Time Instead of Time to Arrival**: The model learns from the time until the room reached the target (within 0.2 K), not from the whole run up to the arrival. Previously a room that heated faster than predicted reached the target early, held it and produced zero error, so the model could only correct upwards. The valve average is taken over the heat-up phase only.
+* **Missed Target: Learn the Full Heat-Up**: When a run ends below the target, the model learns an extrapolated duration for the full rise (linear after the deadtime, at most 4× the achieved rise, only if ≥ 0.3 K was achieved). Learning "x minutes for the small achieved rise" largely confirmed the too-short prediction that caused the miss; in simulation the remaining gap at arrival now shrinks below 0.1 K within ~5 runs instead of ~20.
+* **Deadtime Falls Back to Profile**: A stored deadtime of 0 (never measured) is replaced by the heating profile's deadtime on load, regardless of the sample count (previously only below 5 samples).
+* **Fresh Install Uses Heating Profile**: Without stored data, the model started from generic defaults (mass 10 min/K, deadtime 0, bounds 1–120) regardless of the selected heating profile. New zones now start from the profile's mass, deadtime, mass bounds and default coast time.
+* **0 °C Outdoor at Stop**: An outdoor temperature of exactly 0 °C was replaced by the 10 °C fallback when a run was stopped, skewing the learned loss factor.
+
+### 📅 Scheduling & Start Time
+* **Schedule Helper Drives the Next Preheat** ([#5](https://github.com/Ecronika/ha-preheat/issues/5)): While the configured `schedule` helper was off, its upcoming ON transition was ignored, so *Next Arrival* / *Next Preheat Start* stayed unknown until a learned pattern existed. An OFF schedule's future `next_event` is now the zone's next event and the schedule is the start source, taking priority over House and learned predictions (documented order *Schedule > House > Learned*). Days blocked by the holiday calendar or workday settings fall back to the previous selection. ON-state behaviour (session end for Optimal Stop) is unchanged.
+* **Comfort Buffer Applied**: The `Buffer (minutes)` option and the profile buffer defaults were never used. The start is now `next arrival − (predicted duration + buffer)`, capped by `max_preheat_hours`; no buffer is added when the room is already warm. The buffer does not enter model learning, is included in the House Hub `incoming` lead time, and is exposed as `lead_time` on the status sensor.
+* **Planned Start Exposed**: `next_start_time` shows the planned start in advance, which also makes adaptive polling's "start within 2 h" sprint work.
+
+### 🛠️ Fixes & Diagnostics
+* **Reset Thermal Model**: The button and the `preheat.reset_model` service crashed with an `AttributeError` (`ThermalPhysics.reset()` did not exist). The reset restores mass, loss, deadtime and mass bounds of the currently configured heating profile and clears sample count and average error. The service now awaits the reset, skips the "Preheat System" entry, and entities refresh immediately.
+* **Repair Warning: Mass Factor Stuck at Profile Limit**: New repair issue when learning pushes the mass factor against the same heating-profile bound in 5 consecutive learning runs (suggests a different profile and a model reset). Replaces the old absolute 5/240 min/K check, which could never trigger inside the profile bounds. Sitting at a bound while predictions are accurate does not warn.
+* **Decision Trace**: Now includes `next_event_source` (`schedule` / `house` / `zone`) and `next_event`.
+* **Buffer Error Message**: The English validation message said 120 minutes; the limit is 60.
+
+---
+
 ## v2.11.3 (2026-06-14) - Hardening & Bugfixes 🔧
 **Patch Release**
 
