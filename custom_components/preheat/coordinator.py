@@ -1759,11 +1759,17 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
     async def reset_model(self) -> None:
         """Reset thermal model parameters to profile defaults."""
-        self.physics.reset()
+        profile_key = self._get_conf(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
+        profile_data = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
+        self.physics.reset(profile_data)
         await self._async_save_data()
-        _LOGGER.info("Physics Model RESET to defaults.")
-        # Trigger update to reflect changes
-        self.async_set_updated_data(self.data) 
+        _LOGGER.info(
+            "[%s] Physics Model RESET to '%s' defaults (mass=%.1f, loss=%.1f, deadtime=%.1f).",
+            self.device_name, profile_key,
+            self.physics.mass_factor, self.physics.loss_factor, self.physics.deadtime,
+        )
+        # Recompute so entities show the reset values (re-publishing self.data would show stale ones)
+        await self.async_refresh()
 
     async def recompute(self) -> None:
         """Force immediate recomputation."""

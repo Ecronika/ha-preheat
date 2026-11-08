@@ -1,3 +1,10 @@
+## Unreleased
+
+### 🐛 Bug Fixes
+* **Reset Thermal Model**: The "Reset thermal model" button and the `preheat.reset_model` service crashed with an `AttributeError` because `ThermalPhysics.reset()` did not exist. Added `ThermalPhysics.reset(profile_data)`, which restores mass factor, loss factor and deadtime to the defaults of the currently configured heating profile (including its mass bounds) and clears sample count and average error. The service now also awaits the reset, skips the "Preheat System" entry, and the entities refresh immediately with the reset values.
+
+---
+
 ## v2.11.3 (2026-06-14) - Hardening & Bugfixes 🔧
 **Patch Release**
 

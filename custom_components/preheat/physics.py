@@ -57,6 +57,7 @@ class ThermalPhysics:
                  learning_rate: float = DEFAULT_LEARNING_RATE) -> None:
         """Initialize with existing data or defaults."""
         self.learning_rate = learning_rate
+        self._profile_data = profile_data
         
         # Load Defaults from Profile or Constants
         self.min_mass = 1.0
@@ -92,6 +93,20 @@ class ThermalPhysics:
             self.sample_count = 0
             self.avg_error = 0.0
             self.deadtime = initial_deadtime
+
+    def reset(self, profile_data: dict | None = None) -> None:
+        """Reset learned parameters to the (given or initial) heating profile defaults."""
+        if profile_data is not None:
+            self._profile_data = profile_data
+        profile = self._profile_data or {}
+
+        self.min_mass = profile.get("mass_factor_min", 1.0)
+        self.max_mass = profile.get("mass_factor_max", 120.0)
+        self.mass_factor = profile.get("default_mass", DEFAULT_MASS_FACTOR)
+        self.loss_factor = profile.get("default_loss", DEFAULT_LOSS_FACTOR)
+        self.deadtime = profile.get("deadtime", 0.0)
+        self.sample_count = 0
+        self.avg_error = 0.0
 
     def calculate_duration(self, delta_t_internal: float, delta_t_external: float) -> float:
         """
