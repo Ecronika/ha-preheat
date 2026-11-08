@@ -481,7 +481,19 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     await self._async_save_data()
                 else:
                     self.extra_store_data["physics_version"] = physics_version
-            
+            else:
+                # Fresh install (no stored data): start from the heating profile defaults,
+                # not the generic placeholder model created in __init__.
+                profile_key = self._get_conf(CONF_HEATING_PROFILE, PROFILE_RADIATOR_NEW)
+                profile_data = HEATING_PROFILES.get(profile_key, HEATING_PROFILES[PROFILE_RADIATOR_NEW])
+                self.physics = ThermalPhysics(
+                    profile_data=profile_data,
+                    learning_rate=self._get_conf(CONF_EMA_ALPHA, 0.1),
+                )
+                self.cooling_analyzer.learned_tau = profile_data.get("default_coast", 4.0)
+                self.cooling_analyzer.confidence = 0.0
+                self.tau_revalidated = True
+
             # Load Enable State (Default True)
             self.enable_active = data.get("enable_active", True)
             

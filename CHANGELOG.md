@@ -2,6 +2,7 @@
 
 ### 🐛 Bug Fixes
 * **Reset Thermal Model**: The "Reset thermal model" button and the `preheat.reset_model` service crashed with an `AttributeError` because `ThermalPhysics.reset()` did not exist. Added `ThermalPhysics.reset(profile_data)`, which restores mass factor, loss factor and deadtime to the defaults of the currently configured heating profile (including its mass bounds) and clears sample count and average error. The service now also awaits the reset, skips the "Preheat System" entry, and the entities refresh immediately with the reset values.
+* **Fresh Install Uses Heating Profile**: Without stored data, the thermal model started from generic defaults (mass 10 min/K, deadtime 0, bounds 1–120) regardless of the selected heating profile. New zones now start from the profile's mass, deadtime, mass bounds and default coast time.
 
 ---
 

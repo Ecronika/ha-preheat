@@ -166,3 +166,36 @@ class TestResetModelService(unittest.IsolatedAsyncioTestCase):
             await registered["reset_model"](MagicMock())
 
         zone_coord.reset_model.assert_awaited_once()
+
+
+class TestFreshInstallUsesProfile(unittest.IsolatedAsyncioTestCase):
+    """Without stored data the model must start from the heating profile, not generic defaults."""
+
+    async def test_fresh_install_applies_profile_defaults(self):
+        hass = MagicMock()
+        hass.loop.call_later = MagicMock()  # bootstrap scan scheduling
+        entry = MagicMock()
+        entry.entry_id = "zone_new"
+        entry.title = "Bath"
+        entry.options = {CONF_HEATING_PROFILE: PROFILE_FLOOR_CONCRETE}
+        entry.data = {}
+        with patch.object(PreheatingCoordinator, "_setup_listeners"):
+            coord = PreheatingCoordinator(hass, entry)
+        coord._store = MagicMock()
+        coord._store.async_load = AsyncMock(return_value=None)
+        coord._store.async_save = AsyncMock()
+
+        await coord.async_load_data()
+
+        profile = HEATING_PROFILES[PROFILE_FLOOR_CONCRETE]
+        self.assertEqual(coord.physics.mass_factor, profile["default_mass"])
+        self.assertEqual(coord.physics.deadtime, profile["deadtime"])
+        self.assertEqual(coord.physics.min_mass, profile["mass_factor_min"])
+        self.assertEqual(coord.physics.max_mass, profile["mass_factor_max"])
+        self.assertEqual(coord.physics.sample_count, 0)
+        self.assertEqual(coord.cooling_analyzer.learned_tau, profile["default_coast"])
+
+        # The reset button must also know the profile on a fresh install
+        coord.physics.mass_factor = 999.0
+        coord.physics.reset()
+        self.assertEqual(coord.physics.mass_factor, profile["default_mass"])
