@@ -30,56 +30,96 @@ async def async_setup_services(hass: HomeAssistant):
     
     async def handle_recompute(call):
         """Force recompute."""
-        for entry_id in await _get_target_entries(hass, call):
+        for entry_id in _get_target_entries(hass, call):
             if entry := hass.config_entries.async_get_entry(entry_id):
-                 if hasattr(entry, "runtime_data"):
-                     await entry.runtime_data.async_refresh()
+                 # The system entry's runtime_data is the house collector (no coordinator)
+                 runtime = getattr(entry, "runtime_data", None)
+                 if hasattr(runtime, "async_refresh"):
+                     await runtime.async_refresh()
 
     async def handle_reset_model(call):
         """Reset thermal model."""
-        for entry_id in await _get_target_entries(hass, call):
+        for entry_id in _get_target_entries(hass, call):
              if entry := hass.config_entries.async_get_entry(entry_id):
                  # The system entry's runtime_data is the house collector (no thermal model)
-                 if hasattr(entry, "runtime_data") and hasattr(entry.runtime_data, "reset_model"):
-                     await entry.runtime_data.reset_model()
+                 runtime = getattr(entry, "runtime_data", None)
+                 if hasattr(runtime, "reset_model"):
+                     await runtime.reset_model()
 
     hass.services.async_register(DOMAIN, "recompute", handle_recompute)
     hass.services.async_register(DOMAIN, "reset_model", handle_reset_model)
 
-async def _get_target_entries(hass: HomeAssistant, call) -> list[str]:
-    """Helper to resolve targets."""
-    from homeassistant.helpers import service, entity_registry
+
+_TARGET_KEYS = ("entity_id", "device_id", "area_id", "floor_id", "label_id")
+
+
+def _has_target(data) -> bool:
+    """True if the call names any target (entity/device/area/floor/label)."""
+    for key in _TARGET_KEYS:
+        value = data.get(key)
+        if value in (None, "", [], "none"):
+            continue
+        return True
+    return False
+
+
+def _extract_target_entity_ids(hass: HomeAssistant, call) -> set[str]:
+    """Entity IDs referenced by the call's target, directly or via device/area/floor/label.
+
+    Both HA helpers used here are synchronous (@callback); they must not be awaited.
+    `homeassistant.helpers.target` is the current API; the `service` variant is
+    deprecated (removed in HA 2026.8) and only used as fallback for older cores.
+    """
+    try:
+        from homeassistant.helpers import target as target_helpers
+
+        selected = target_helpers.async_extract_referenced_entity_ids(
+            hass, target_helpers.TargetSelection(call.data)
+        )
+    except (ImportError, AttributeError):
+        from homeassistant.helpers import service
+
+        selected = service.async_extract_referenced_entity_ids(hass, call)
+    return set(selected.referenced) | set(getattr(selected, "indirectly_referenced", set()))
+
+
+def _get_target_entries(hass: HomeAssistant, call) -> list[str]:
+    """Resolve the config entries a service call targets.
+
+    - explicit `config_entry_id` (str or list)
+    - targeted preheat entities, also via device/area/floor/label
+    - no target at all -> every preheat entry
+    A target that resolves to no preheat entity selects nothing (never "all").
+    """
+    from homeassistant.helpers import entity_registry
     
-    entries = set()
+    entries: set[str] = set()
     
-    # 1. Check for explicit config_entry_id
-    if "config_entry_id" in call.data:
-        ce_ids = call.data["config_entry_id"]
-        if isinstance(ce_ids, str):
-            entries.add(ce_ids)
-        elif isinstance(ce_ids, list):
-            entries.update(ce_ids)
-            
-    # 2. Check for entities
-    referenced = await service.async_extract_referenced_entity_ids(hass, call)
-    if referenced.referenced:
+    # 1. Explicit config_entry_id
+    ce_ids = call.data.get("config_entry_id")
+    if isinstance(ce_ids, str):
+        entries.add(ce_ids)
+    elif isinstance(ce_ids, list):
+        entries.update(ce_ids)
+
+    has_target = _has_target(call.data)
+
+    # 2. Targeted entities
+    if call.data.get("entity_id") == "all":
+        entries.update(e.entry_id for e in hass.config_entries.async_entries(DOMAIN))
+    elif has_target:
         ent_reg = entity_registry.async_get(hass)
-        for eid in referenced.referenced:
-            if ent := ent_reg.async_get(eid):
-                if ent.platform == DOMAIN and ent.config_entry_id:
-                     entries.add(ent.config_entry_id)
-                     
-    # 3. Fallback: If NO target specified at all
-    # We only check for referenced entities (resolved from devices/areas) to determine if target was provided.
-    # Accessing .devices/.areas directly on the result of async_extract_referenced_entity_ids is risky/incorrect.
-    has_targets = bool(entries or referenced.referenced)
-    
-    if not has_targets and "config_entry_id" not in call.data:
-         for entry in hass.config_entries.async_entries(DOMAIN):
-            entries.add(entry.entry_id)
+        for eid in _extract_target_entity_ids(hass, call):
+            if (ent := ent_reg.async_get(eid)) and ent.platform == DOMAIN and ent.config_entry_id:
+                entries.add(ent.config_entry_id)
+        if not entries:
+            _LOGGER.warning("%s.%s: target matched no Preheat zone, nothing to do", DOMAIN, call.service)
+
+    # 3. No target and no config_entry_id -> all entries
+    if not has_target and ce_ids is None:
+        entries.update(e.entry_id for e in hass.config_entries.async_entries(DOMAIN))
 
     return list(entries)
-
 
 async def async_setup_entry(hass: HomeAssistant, entry: PreheatConfigEntry) -> bool:
     """Set up Preheat from a config entry."""

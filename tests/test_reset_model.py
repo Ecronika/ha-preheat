@@ -162,7 +162,7 @@ class TestResetModelService(unittest.IsolatedAsyncioTestCase):
 
         await integration.async_setup_services(hass)
         with patch.object(integration, "_get_target_entries",
-                          AsyncMock(return_value=["zone", "system"])):
+                          MagicMock(return_value=["zone", "system"])):
             await registered["reset_model"](MagicMock())
 
         zone_coord.reset_model.assert_awaited_once()
