@@ -487,7 +487,7 @@ class TestSafetyFeatures(unittest.IsolatedAsyncioTestCase):
                   
                   mock_issue.assert_any_call(
                       self.hass, DOMAIN, f"stale_sensor_{self.entry.entry_id}",
-                      is_fixable=False, is_persistent=True, severity=ANY, 
+                      is_fixable=False, is_persistent=False, severity=ANY, 
                       translation_key="stale_sensor", translation_placeholders=ANY
                   )
 
