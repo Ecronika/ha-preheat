@@ -103,6 +103,7 @@ class PreheatStatusSensor(PreheatBaseSensor):
             "sample_count": physics.sample_count,
             "window_open": data.window_open,
             "learned_setpoint": data.last_comfort_setpoint,
+            **self.coordinator.comfort_learning_info,
             "deadtime_min": round(data.deadtime, 1),
             "health_score": physics.health_score,
             ATTR_DECISION_TRACE: data.decision_trace,

@@ -97,7 +97,8 @@ Exposed under the **Preheat House** device:
 ### 📊 Zone Data Sensors
 *   **`sensor.<zone>_next_preheat_start`**: Timestamp of next heating cycle start (`next_start`).
 *   **`sensor.<zone>_predicted_duration`**: Estimated heat-up time (minutes).
-*   **`sensor.<zone>_target_temperature`**: The effective target setpoint.
+*   **`sensor.<zone>_target_temperature`**: The effective target setpoint. While the zone is occupied this is the thermostat setpoint; otherwise the higher of the thermostat setpoint and the **learned comfort setpoint**.
+    *   *Learned comfort setpoint* (`learned_setpoint` on the status sensor): the setpoint held **longest** while the zone was occupied (time-weighted median, learned after 15 minutes of occupancy), limited to 19.0–23.5 °C, so short boosts do not become the preheat target. `comfort_tracked_min` and `comfort_session_setpoints` show what the current session is based on. Reset it with the `preheat.reset_comfort_setpoint` service.
 *   **`sensor.<zone>_next_arrival_time`**: Next expected occupancy event.
 *   **`sensor.<zone>_next_session_end`**: When the current session ends (for Optimal Stop).
 
@@ -108,6 +109,7 @@ Exposed under the **Preheat House** device:
 *   **`button.<zone>_recompute`**: Force immediate re-evaluation of all logic.
 *   **`button.<zone>_reset_model`**: Reset physics learning to defaults.
 *   **`button.<zone>_analyze_history`**: Rebuild patterns from recorder history.
+*   Services: `preheat.recompute`, `preheat.reset_model`, `preheat.reset_comfort_setpoint` (target zone entities, devices or areas; no target = all zones).
 
 ---
 

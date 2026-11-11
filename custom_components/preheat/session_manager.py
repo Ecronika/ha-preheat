@@ -104,6 +104,21 @@ class SessionManager:
 
         return is_new_session_event
 
+    def resume_session(self, now: datetime) -> bool:
+        """Continue an occupancy that is already ongoing (e.g. sensor `on` across a restart
+        or after it was unavailable). Starts a session without arrival side effects and
+        cancels a pending departure debounce. Returns True if a session was started."""
+        if self.is_occupied:
+            if self._is_debouncing:
+                _LOGGER.debug("[Session] Occupancy confirmed again, cancelling pending departure.")
+                self._is_debouncing = False
+                self._off_candidate_start = None
+            return False
+        self._session_start_time = now
+        self._is_debouncing = False
+        self._off_candidate_start = None
+        return True
+
     def mark_departure(self, now: datetime) -> None:
          """Manually mark a departure (e.g. initial load or logic trigger)."""
          self._last_departure_time = now

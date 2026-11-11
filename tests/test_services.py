@@ -53,9 +53,10 @@ class TestServices(unittest.TestCase):
         self.zones = {}
         entries = []
         for entry_id in ("office", "bath"):
-            coord = MagicMock(spec=["reset_model", "async_refresh"])
+            coord = MagicMock(spec=["reset_model", "async_refresh", "reset_comfort_setpoint"])
             coord.reset_model = AsyncMock()
             coord.async_refresh = AsyncMock()
+            coord.reset_comfort_setpoint = AsyncMock()
             self.zones[entry_id] = coord
             entries.append(MagicMock(entry_id=entry_id, runtime_data=coord))
         entries.append(MagicMock(entry_id="system", runtime_data=object()))
@@ -130,6 +131,11 @@ class TestServices(unittest.TestCase):
         self.call("recompute")
         self.assertEqual({k: v.async_refresh.await_count for k, v in self.zones.items()},
                          {"office": 1, "bath": 1})
+
+    def test_reset_comfort_setpoint_service(self):
+        self.call("reset_comfort_setpoint", {"entity_id": "sensor.bath_status"})
+        self.assertEqual({k: v.reset_comfort_setpoint.await_count for k, v in self.zones.items()},
+                         {"office": 0, "bath": 1})
 
     def test_fallback_to_deprecated_service_helper(self):
         """Older HA without helpers.target.async_extract_referenced_entity_ids."""

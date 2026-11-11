@@ -46,8 +46,17 @@ async def async_setup_services(hass: HomeAssistant):
                  if hasattr(runtime, "reset_model"):
                      await runtime.reset_model()
 
+    async def handle_reset_comfort_setpoint(call):
+        """Forget the learned comfort setpoint."""
+        for entry_id in _get_target_entries(hass, call):
+             if entry := hass.config_entries.async_get_entry(entry_id):
+                 runtime = getattr(entry, "runtime_data", None)
+                 if hasattr(runtime, "reset_comfort_setpoint"):
+                     await runtime.reset_comfort_setpoint()
+
     hass.services.async_register(DOMAIN, "recompute", handle_recompute)
     hass.services.async_register(DOMAIN, "reset_model", handle_reset_model)
+    hass.services.async_register(DOMAIN, "reset_comfort_setpoint", handle_reset_comfort_setpoint)
 
 
 _TARGET_KEYS = ("entity_id", "device_id", "area_id", "floor_id", "label_id")
