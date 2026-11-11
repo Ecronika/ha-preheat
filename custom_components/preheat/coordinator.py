@@ -49,6 +49,8 @@ from .const import (
     PHYSICS_STANDARD,
     PHYSICS_ADVANCED,
     CONF_COMFORT_MIN,
+    CONF_COMFORT_MAX,
+    DEFAULT_COMFORT_MAX,
     CONF_COMFORT_FALLBACK,
     DEFAULT_COMFORT_MIN,
     DEFAULT_COMFORT_FALLBACK,
@@ -252,6 +254,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._last_opt_active: bool = False # Track edge for events
         self.enable_active: bool = True # Master Switch
         self._last_comfort_setpoint: float | None = None
+        # Comfort learning: seconds each comfort setpoint was held in the current session
+        self._comfort_samples: dict[float, float] = {}
+        self._comfort_last: tuple[datetime, float | None] | None = None
+        # Evaluate the occupancy sensor once after (re)start: a session that is already
+        # running (sensor `on` across the restart) must be resumed, not missed.
+        self._session_restore_pending: bool = True
         
         # Window Detection State
         self._prev_temp: float | None = None
@@ -451,7 +459,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                      # Merge to preserve defaults/types
                      self.diagnostics.load_data(loaded_diag)
                 
-                self._last_comfort_setpoint = data.get("last_comfort_setpoint")
+                self._last_comfort_setpoint = self._clamp_comfort(data.get("last_comfort_setpoint"))
                 
                 # --- Smart Migration v2.7.1 ---
                 # Check Physics Version
@@ -740,20 +748,55 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
     def _handle_occupancy_change(self, event) -> None:
         new_state = event.data.get("new_state")
         old_state = event.data.get("old_state")
-        if not new_state or not old_state: return
-        
+        if not new_state:
+            return
+        self._on_occupancy_state(old_state.state if old_state else None, new_state.state)
+
+    def _on_occupancy_state(self, old: str | None, new: str) -> None:
+        """Apply an occupancy sensor transition to the session state."""
+        if new in ("unavailable", "unknown"):
+            # No information about occupancy (e.g. template reload): keep the session as is
+            return
+
         now = dt_util.utcnow()
-        
-        if old_state.state != STATE_ON and new_state.state == STATE_ON:
-            # ARRIVAL (ON)
+        self._session_restore_pending = False  # the sensor reports a real state now
+
+        if new == STATE_ON:
+            if old == STATE_ON:
+                return
+            if old is None or old in ("unavailable", "unknown"):
+                # Sensor (re)appeared already on: occupancy continues, this is not an arrival
+                if self.session_manager.resume_session(now):
+                    _LOGGER.info("[%s] Occupancy sensor back and on: session resumed (no arrival recorded)", self.device_name)
+                return
+            # ARRIVAL (off -> on)
             is_new_session = self.session_manager.update(True, now)
             if is_new_session:
                  # Feed planner (Learns this as a Start Time)
                  self.hass.async_create_task(self._learn_arrival_event())
-        
-        if old_state.state == STATE_ON and new_state.state != STATE_ON:
-            # DEPARTURE (OFF)
+        else:
+            # DEPARTURE candidate (no-op unless a session is active)
             self.session_manager.update(False, now)
+
+    def _restore_session_if_occupied(self) -> None:
+        """Once after (re)start: resume the session if the occupancy sensor is already on.
+
+        Sessions normally start only on an off -> on transition. When HA restarts while the
+        sensor stays on, no transition happens and the zone would count as unoccupied until
+        the next arrival (frozen comfort learning, missed departure).
+        """
+        if not self._session_restore_pending:
+            return
+        occ_sensor = self._get_conf(CONF_OCCUPANCY)
+        if not occ_sensor:
+            self._session_restore_pending = False
+            return
+        state = self.hass.states.get(occ_sensor)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return  # not restored yet, try again next cycle
+        self._session_restore_pending = False
+        if state.state == STATE_ON and self.session_manager.resume_session(dt_util.utcnow()):
+            _LOGGER.info("[%s] Occupancy sensor already on at startup: session resumed (no arrival recorded)", self.device_name)
 
     async def _learn_arrival_event(self) -> None:
         now = dt_util.now()
@@ -816,34 +859,43 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                      
         return INVALID_TEMP
 
+    def _get_comfort_setpoint(self) -> float | None:
+        """The climate entity's setpoint if it is a comfort value (> comfort_min), else None."""
+        climate = self._get_conf(CONF_CLIMATE)
+        if not climate:
+            return None
+        state = self.hass.states.get(climate)
+        if not state or state.attributes.get("temperature") is None:
+            return None
+        try:
+            value = float(state.attributes["temperature"])
+        except (TypeError, ValueError):
+            return None
+        comfort_min = self._get_conf(CONF_COMFORT_MIN, DEFAULT_COMFORT_MIN)
+        return value if value > comfort_min else None
+
+    def _clamp_comfort(self, value: float | None) -> float | None:
+        """Limit a learned comfort setpoint to [comfort_min, comfort_max]."""
+        if value is None:
+            return None
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        low = self._get_conf(CONF_COMFORT_MIN, DEFAULT_COMFORT_MIN)
+        high = self._get_conf(CONF_COMFORT_MAX, DEFAULT_COMFORT_MAX)
+        return max(low, min(high, value))
+
     async def _get_target_setpoint(self) -> float:
         # Determine Target Temperature Hierarchy:
         # 1. Climate Entity Current Setpoint (if valid and >= comfort min)
         # 2. Last Learned Comfort Setpoint (from previous sessions)
         # 3. Configured Fallback Temperature
+        # Side-effect free: learning happens only in _update_comfort_learning().
+        climate_temp = self._get_comfort_setpoint()
         
-        # Check Climate
-        climate = self._get_conf(CONF_CLIMATE)
-        climate_temp = None
-        if climate:
-             state = self.hass.states.get(climate)
-             if state and state.attributes.get("temperature"):
-                 try: 
-                     climate_temp = float(state.attributes["temperature"])
-                 except ValueError: pass
-
-        comfort_min = self._get_conf(CONF_COMFORT_MIN, DEFAULT_COMFORT_MIN)
-        
-        if climate_temp and climate_temp > comfort_min:
-             # v2.9.2: Learned Comfort Persistence
-             # If room is Occupied (and temp is valid comfort), save it.
+        if climate_temp is not None:
              if self.session_manager.is_occupied:
-                 if self._last_comfort_setpoint != climate_temp:
-                      self._last_comfort_setpoint = climate_temp
-                      # Ideally trigger save on change, but lazy save is fine or triggered elsewhere.
-                      # We won't force save here to avoid I/O spam on every adjustment, 
-                      # rely on next major event or periodic save. 
-                      # Actually, to be safe across restarts, let's allow the next save cycle to pick it up.
                  return climate_temp
             
              # If Unoccupied (Eco Mode?), allow using the stored Comfort Setpoint if it's higher.
@@ -1054,6 +1106,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
              ))
 
         # Occupancy
+        self._restore_session_if_occupied()
         occ_sensor = self._get_conf(CONF_OCCUPANCY)
         is_occupied = False
         if occ_sensor and self.hass.states.is_state(occ_sensor, STATE_ON):
@@ -1155,7 +1208,6 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
     async def _run_physics_simulation(self, ctx: Context) -> Prediction:
         """Run thermal physics simulation."""
-        if self._last_comfort_setpoint is None: self._last_comfort_setpoint = ctx["target_setpoint"]
         
         # Define early for closure access
         delta_in = ctx["target_setpoint"] - ctx["operative_temp"]
@@ -1856,21 +1908,70 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         if last is None or (now - last).total_seconds() >= self.OUTDOOR_UNAVAILABLE_SECONDS:
             self.diagnostics._create_issue("outdoor_source_unavailable")
 
-    async def _update_comfort_learning(self, current_setpoint: float, is_occupied: bool) -> None:
-        if self._consecutive_readiness_errors >= NO_TEMP_ERROR_THRESHOLD:
+    COMFORT_MIN_TRACKED_SEC = 15 * 60   # learn only after 15 min of tracked comfort setpoints
+    COMFORT_MAX_SAMPLE_GAP_SEC = 30 * 60  # longer gaps (downtime) are not counted
+
+    async def _update_comfort_learning(self, is_occupied: bool) -> None:
+        """Learn the comfort setpoint as the time-weighted median of the climate setpoint
+        while the zone is occupied, so short boosts or corrections do not dominate.
+        Clamped to [comfort_min, comfort_max]; saved (delayed) whenever it changes."""
+        now = dt_util.utcnow()
+        occupied = (
+            is_occupied
+            and self.session_manager.is_occupied
+            and self._consecutive_readiness_errors < NO_TEMP_ERROR_THRESHOLD
+        )
+        if not occupied:
+            # Session over (or not trustworthy): the next session starts a fresh window
+            self._comfort_samples = {}
+            self._comfort_last = None
             return
-        if not is_occupied or not self.session_manager.is_occupied:
+
+        if self._comfort_last is not None:
+            t0, v0 = self._comfort_last
+            gap = (now - t0).total_seconds()
+            if v0 is not None and 0 < gap <= self.COMFORT_MAX_SAMPLE_GAP_SEC:
+                self._comfort_samples[v0] = self._comfort_samples.get(v0, 0.0) + gap
+        setpoint = self._get_comfort_setpoint()
+        self._comfort_last = (now, round(setpoint, 1) if setpoint is not None else None)
+
+        tracked = sum(self._comfort_samples.values())
+        if tracked < self.COMFORT_MIN_TRACKED_SEC:
             return
-        
-        if not self.session_manager.session_start_time:
-            return
-            
-        duration = (dt_util.utcnow() - self.session_manager.session_start_time).total_seconds() / 60
-        if duration < 15: return
-        
-        if self._last_comfort_setpoint != current_setpoint:
-            self._last_comfort_setpoint = current_setpoint
-            await self._async_save_data()
+
+        half, acc, median = tracked / 2.0, 0.0, None
+        for value in sorted(self._comfort_samples):
+            acc += self._comfort_samples[value]
+            if acc >= half:
+                median = value
+                break
+        learned = self._clamp_comfort(median)
+        if learned is not None and (self._last_comfort_setpoint is None
+                                    or abs(learned - self._last_comfort_setpoint) >= 0.05):
+            _LOGGER.debug("[%s] Learned comfort setpoint %.1f -> %.1f (%.0f min tracked)",
+                          self.device_name, self._last_comfort_setpoint or 0.0, learned, tracked / 60)
+            self._last_comfort_setpoint = learned
+            self._store.async_delay_save(self._get_data_for_storage, 30)
+
+    @property
+    def comfort_learning_info(self) -> dict:
+        """Transparency: what the current session's comfort learning is based on."""
+        tracked = sum(self._comfort_samples.values())
+        return {
+            "comfort_tracked_min": round(tracked / 60, 1),
+            "comfort_session_setpoints": {
+                f"{k:.1f}": round(v / 60, 1) for k, v in sorted(self._comfort_samples.items())
+            },
+        }
+
+    async def reset_comfort_setpoint(self) -> None:
+        """Forget the learned comfort setpoint (and the current session's samples)."""
+        self._last_comfort_setpoint = None
+        self._comfort_samples = {}
+        self._comfort_last = None
+        await self._async_save_data()
+        _LOGGER.info("[%s] Learned comfort setpoint RESET.", self.device_name)
+        await self.async_refresh()
 
     async def force_preheat_on(self) -> None:
         """Manually start preheat."""
@@ -1947,7 +2048,7 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         self._update_polling_interval(decision.get("planned_start"), ctx["is_occupied"])
         
         # 2. Comfort Learning
-        await self._update_comfort_learning(ctx["target_setpoint"], ctx["is_occupied"])
+        await self._update_comfort_learning(ctx["is_occupied"])
         
         # 3. Diagnostics
         # Grace period check to avoid falses during boot

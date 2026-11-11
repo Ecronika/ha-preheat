@@ -10,3 +10,9 @@ reset_model:
   target:
     entity:
       integration: preheat
+reset_comfort_setpoint:
+  name: Reset Learned Comfort Setpoint
+  description: Forgets the learned comfort setpoint (used as preheat target while the thermostat is in setback). It is learned again during the next occupied period.
+  target:
+    entity:
+      integration: preheat

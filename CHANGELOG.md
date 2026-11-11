@@ -1,3 +1,19 @@
+## v2.12.3 (2026-11-11) - Session Restore & Comfort Learning 🛋️
+**Patch Release**
+
+This release keeps an ongoing occupancy session across Home Assistant restarts and makes the learned comfort setpoint robust: it is saved, respects the 15-minute guard, ignores short boosts and stays within limits.
+
+### 🐛 Bug Fixes
+* **Session not restored after restart** ([#9](https://github.com/Ecronika/ha-preheat/issues/9)): Sessions started only on an `off` → `on` transition. After a restart (or reload) with the occupancy sensor already `on`, the zone counted as unoccupied until the next arrival: comfort learning was frozen, the target used the unoccupied branch, and the departure was not recorded. The occupancy sensor is now evaluated once after startup (waiting while it is still `unavailable`), and an ongoing occupancy is resumed **without** recording an arrival. `unavailable`/`unknown` → `on` likewise resumes instead of counting as an arrival, and `on` → `unavailable` no longer starts a departure.
+* **Learned comfort setpoint never saved, guard bypassed** ([#10](https://github.com/Ecronika/ha-preheat/issues/10)): `_get_target_setpoint()` overwrote the learned value in memory on every update, so the save in the learning step never ran (after a restart an outdated value came back) and the 15-minute guard had no effect. Target selection is now side-effect free; learning happens only in the learning step and is saved (delayed) whenever the value changes. The physics step no longer seeds the learned value from the current target.
+* **Short boosts became the preheat target** ([#10](https://github.com/Ecronika/ha-preheat/issues/10)): The learned value was simply the last setpoint seen while occupied. It is now the setpoint held longest during the occupied session (time-weighted median, after 15 minutes of tracked occupancy; gaps over 30 minutes such as downtime are not counted) and is limited to `[comfort_min, comfort_max]` (19.0–23.5 °C; `DEFAULT_COMFORT_MAX` was defined but unused). Stored values are limited on load as well.
+
+### ✨ Improvements
+* **New service `preheat.reset_comfort_setpoint`** to forget a bad learned comfort setpoint without editing `.storage`.
+* Status sensor attributes `comfort_tracked_min` and `comfort_session_setpoints` show what the learned comfort setpoint is based on.
+
+---
+
 ## v2.12.2 (2026-11-08) - Repair Issue Fixes 🩺
 **Patch Release**
 
