@@ -58,7 +58,9 @@ To enable fully autonomous, schedule-free preheating, the **House Arrival Hub** 
 ### The Prediction Model
 Arrival events from the occupancy sensors are processed using a statistical pooling model:
 *   **Time Blocks**: Arrival events are divided into **AM** (morning) and **PM** (evening) blocks.
-*   **Day Groups**: Data is pooled by **workday** vs. **weekend** (using the configured Workday Sensor) to distinguish daily routines.
+*   **Day Groups**: Data is pooled by **workday** vs. **non-workday**. The working days come from the Workday Sensor's `workdays` setting (default Mon–Fri); an arrival on a day the Workday Sensor reported as off (e.g. a public holiday) counts as non-workday, and so does today's prediction while the sensor is off.
+*   **Rolling Window**: Only arrivals of the last **30 days** are used; older ones are removed, so changed habits take over within a month.
+*   **Zone Exclusions**: A zone skips days it does not preheat on (holiday calendar, *Only on Workdays*) for the house prediction too.
 *   **First-Event Filtering**: To prevent noise (e.g. going out briefly to get the mail), the hub only records the **first arrival per block per day**.
 *   **Target Quantile (P25)**: Rather than aiming for the average arrival time (which would leave you cold half of the time), the hub targets an **early quantile (P25)** by default. This "prefer early" approach ensures the house is warm before the typical arrival window begins.
 *   **Graded Confidence**: Instead of an all-or-nothing threshold, arrival confidence is graded dynamically based on the spread (tolerance band) of historical arrivals. If arrivals are highly consistent, confidence is high.

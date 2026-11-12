@@ -1,3 +1,18 @@
+## v2.12.4 (2026-11-12) - House Hub & Options Fixes 🏠
+**Patch Release**
+
+This release makes the House Arrival Hub respect holidays and workdays, keeps its data to a rolling 30-day window, lets single zones opt out of it, and makes optional settings clearable in the options dialog.
+
+### 🐛 Bug Fixes
+* **House prediction ignored holidays and workday settings**: The house prediction used a fixed Saturday/Sunday weekend and none of the zone's exclusions, so zones preheated on public holidays via the House Hub. Zones now pass their excluded days (holiday calendar, *Only on Workdays*) to the house prediction. Arrivals are pooled by workday vs. non-workday using the Workday Sensor's configured `workdays`; an arrival recorded while the sensor was off (e.g. a public holiday) counts as non-workday, and so does today's prediction while it is off.
+* **House arrival history grew forever**: Old habits never aged out although the docs promise a rolling window. Arrivals older than 30 days are now ignored and removed on load, on each new arrival and after the bootstrap.
+* **Optional settings could not be cleared** ([#12](https://github.com/Ecronika/ha-preheat/issues/12)): Emptying an optional entity field (schedule, lock, workday sensor, valve sensor; on the system entry the global presence sensor and evening window) in the options kept the old value, because the frontend omits a cleared field. A missing optional field now clears the option; a value from the initial setup is overridden by an empty option. The House Hub now also honours a cleared option instead of falling back to the setup value.
+
+### ✨ Improvements
+* **Per-zone opt-out of the House prediction**: New zone option *Use House Arrival prediction* (default on, no change for existing setups). Turn it off for zones with their own rhythm (e.g. a bedroom) so they use their own learned arrival pattern instead of the house-wide homecoming prediction.
+
+---
+
 ## v2.12.3 (2026-11-11) - Session Restore & Comfort Learning 🛋️
 **Patch Release**
 

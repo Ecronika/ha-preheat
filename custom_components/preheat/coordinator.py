@@ -49,6 +49,7 @@ from .const import (
     PHYSICS_STANDARD,
     PHYSICS_ADVANCED,
     CONF_COMFORT_MIN,
+    CONF_USE_HOUSE_ARRIVALS,
     CONF_COMFORT_MAX,
     DEFAULT_COMFORT_MAX,
     CONF_COMFORT_FALLBACK,
@@ -1135,9 +1136,10 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         # authoritative plan and takes priority over House/learned predictions, except on days
         # excluded by the holiday calendar / workday settings.
         schedule_next_start = self.schedule_provider.get_next_start(now)
-        if schedule_next_start is not None and self._is_excluded_day(
-            schedule_next_start, now, blocked_dates, allowed_weekdays, search_start_date
-        ):
+        def is_excluded(day: date) -> bool:
+            return self._is_excluded_date(day, blocked_dates, allowed_weekdays, search_start_date)
+
+        if schedule_next_start is not None and is_excluded(schedule_next_start.date()):
             _LOGGER.debug("[%s] Schedule start %s is on an excluded day, ignoring it", self.device_name, schedule_next_start)
             schedule_next_start = None
         
@@ -1145,10 +1147,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         house_conf = 0.0
         house_source = "none"
         if self.house_collector:
-            house_next_event, house_conf, house_source = self.house_collector.get_next_arrival(now)
+            # Same day exclusions as the zone's own prediction (holiday calendar, workdays)
+            house_next_event, house_conf, house_source = self.house_collector.get_next_arrival(
+                now, is_excluded=is_excluded
+            )
             
-        has_confident_house = (house_next_event is not None and house_conf >= 0.7)
-        has_house_fallback = (house_next_event is not None and house_source == "fallback")
+        # Zones can opt out of the house prediction (e.g. a bedroom with its own rhythm);
+        # it is still computed for the decision trace.
+        use_house = bool(self._get_conf(CONF_USE_HOUSE_ARRIVALS, True))
+        has_confident_house = use_house and house_next_event is not None and house_conf >= 0.7
+        has_house_fallback = use_house and house_next_event is not None and house_source == "fallback"
         
         if schedule_next_start is not None:
             next_event = schedule_next_start
@@ -1191,15 +1199,14 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         }
 
     @staticmethod
-    def _is_excluded_day(
-        event: datetime, now: datetime, blocked_dates: set[date],
+    def _is_excluded_date(
+        day: date, blocked_dates: set[date],
         allowed_weekdays: list[int] | None, search_start_date: datetime,
     ) -> bool:
-        """True if the event falls on a day the user excluded from preheating."""
-        day = event.date()
+        """True if the day is excluded from preheating for this zone."""
         if day in blocked_dates:
             return True
-        if allowed_weekdays is not None and event.weekday() not in allowed_weekdays:
+        if allowed_weekdays is not None and day.weekday() not in allowed_weekdays:
             return True
         # Workday sensor reports today as non-workday (holiday) -> search started tomorrow
         if day < search_start_date.date():

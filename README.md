@@ -1,4 +1,4 @@
-# Intelligent Preheating for Home Assistant (v2.12.3)
+# Intelligent Preheating for Home Assistant (v2.12.4)
 
 **Turn your heating into a Predictive Smart System.**
 

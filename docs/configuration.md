@@ -52,6 +52,7 @@ These options are configured on each individual zone entry:
 
 ### 🛑 Optimal Stop
 *   **Enable Optimal Stop**: Activates "Coast-to-Stop" logic to save energy. Turns off the heating early if the room stays warm enough until the schedule ends.
+*   **Use House Arrival prediction** (`use_house_arrivals`, default on): When on, a confident House Arrival Hub prediction (or its evening fallback window) replaces this zone's own learned arrival pattern. Turn it off for zones with their own rhythm (e.g. a bedroom); the zone then uses its own pattern.
 *   **Schedule Entity**: A `schedule` helper defining your comfort periods. While it is **off**, its next ON transition is used as the next preheat target (taking priority over House and learned arrival predictions; days excluded by the holiday calendar or workday settings are skipped). While it is **on**, the end of the current period is used as the session end for Optimal Stop.
 
 ### 🔒 External Control
@@ -120,7 +121,7 @@ The `decision_trace` attribute on `binary_sensor.<zone>_preheat_active` contains
 ### `start_source` values and priority:
 When evaluating when to start preheating, the system arbitrates among available providers in the following strict priority:
 1.  **`schedule`**: Preheating is scheduled via a configured Schedule entity (highest priority).
-2.  **`house`**: Preheating is triggered by a confident (>= 70% confidence) prediction from the House Arrival Hub.
+2.  **`house`**: Preheating is triggered by a confident (>= 70% confidence) prediction from the House Arrival Hub (unless *Use House Arrival prediction* is off for the zone).
 3.  **`house_fallback`**: Preheating is triggered by the global Evening Comfort Window fallback.
 4.  **`learned`**: Preheating is triggered by zone-specific learned patterns (only if no house prediction wins).
 5.  **`none`**: No preheating is needed or no source is available (lowest priority).
