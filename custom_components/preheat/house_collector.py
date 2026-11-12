@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 import logging
 
@@ -14,10 +15,21 @@ from .const import (
     CONF_GLOBAL_PRESENCE,
     CONF_ARRIVAL_COMFORT_BIAS,
     CONF_EVENING_COMFORT_WINDOW,
+    CONF_WORKDAY,
     NO_TEMP_ERROR_THRESHOLD,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Rolling window of house arrivals used for prediction (older habits age out)
+HOUSE_ARRIVAL_MAX_AGE_DAYS = 30
+DEFAULT_WORKDAYS = frozenset(range(5))  # Mon-Fri
+_WEEKDAY_MAP = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
+
+def _entry(item) -> tuple[date, int, bool | None]:
+    """Normalise a history entry: (date, minutes) or (date, minutes, is_workday)."""
+    return item[0], item[1], (item[2] if len(item) > 2 else None)
 
 def get_percentile(sorted_list: list[int], q: float) -> int:
     """Calculate the percentile index and return the value."""
@@ -48,7 +60,9 @@ class HouseArrivalCollector:
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize the house collector."""
         self.hass = hass
-        self.history: dict[int, list[tuple[date, int]]] = defaultdict(list)
+        # weekday -> [(date, minutes, is_workday)]; is_workday is the workday sensor's
+        # verdict when the arrival was recorded live (None if unknown, e.g. bootstrap)
+        self.history: dict[int, list[tuple[date, int, bool | None]]] = defaultdict(list)
         self._store = Store(hass, 1, "preheat.house")
         self.bootstrap_done = False
         self._unsub_listener = None
@@ -89,11 +103,50 @@ class HouseArrivalCollector:
                 try:
                     weekday = int(k)
                     for item in v:
-                        d_str, minutes = item
-                        self.history[weekday].append((date.fromisoformat(d_str), int(minutes)))
+                        d_str, minutes = item[0], item[1]
+                        flag = item[2] if len(item) > 2 and isinstance(item[2], bool) else None
+                        self.history[weekday].append((date.fromisoformat(d_str), int(minutes), flag))
                 except Exception as e:
                     _LOGGER.warning("Failed to parse house history entry for key %s: %s", k, e)
         self.update_config()
+        if self._prune(dt_util.now().date()):
+            await self.async_save()
+
+    def _prune(self, today: date) -> bool:
+        """Drop arrivals older than the rolling window. Returns True if anything was removed."""
+        cutoff = today - timedelta(days=HOUSE_ARRIVAL_MAX_AGE_DAYS)
+        removed = False
+        for weekday in list(self.history):
+            kept = [e for e in self.history[weekday] if e[0] >= cutoff]
+            if len(kept) != len(self.history[weekday]):
+                removed = True
+                self.history[weekday] = kept
+        return removed
+
+    # --- Workday handling -------------------------------------------------------
+    def _workday_entity(self) -> str | None:
+        """Workday sensor: the first one configured on a zone, else HA's default entity."""
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            ws = entry.options[CONF_WORKDAY] if CONF_WORKDAY in entry.options else entry.data.get(CONF_WORKDAY)
+            if ws:
+                return ws
+        default = "binary_sensor.workday_sensor"
+        return default if self.hass.states.get(default) else None
+
+    def _workday_info(self) -> tuple[frozenset[int], bool | None]:
+        """(weekdays that are workdays, is today a workday per the sensor or None)."""
+        entity = self._workday_entity()
+        state = self.hass.states.get(entity) if entity else None
+        if state is None or state.state in ("unavailable", "unknown"):
+            return DEFAULT_WORKDAYS, None
+        days = state.attributes.get("workdays")
+        workdays = DEFAULT_WORKDAYS
+        if isinstance(days, list):
+            parsed = frozenset(_WEEKDAY_MAP[str(d).lower()] for d in days if str(d).lower() in _WEEKDAY_MAP)
+            if parsed:
+                workdays = parsed
+        today = True if state.state == "on" else False if state.state == "off" else None
+        return workdays, today
 
     async def async_save(self) -> None:
         """Save learned data to storage."""
@@ -101,7 +154,10 @@ class HouseArrivalCollector:
         for k, v in self.history.items():
             if not v:
                 continue
-            v3_container[str(k)] = [(d.isoformat(), m) for d, m in v]
+            v3_container[str(k)] = [
+                (d.isoformat(), m) if flag is None else (d.isoformat(), m, flag)
+                for d, m, flag in map(_entry, v)
+            ]
         
         data = {
             "bootstrap_done": self.bootstrap_done,
@@ -122,20 +178,24 @@ class HouseArrivalCollector:
                 system_entry = entry
                 break
                 
+        def conf(entry, key):
+            # Options take precedence over data, including an explicit None (cleared option)
+            return entry.options[key] if key in entry.options else entry.data.get(key)
+
         if system_entry:
-            global_presence = system_entry.options.get(CONF_GLOBAL_PRESENCE) or system_entry.data.get(CONF_GLOBAL_PRESENCE)
-            comfort_bias = system_entry.options.get(CONF_ARRIVAL_COMFORT_BIAS) or system_entry.data.get(CONF_ARRIVAL_COMFORT_BIAS) or "comfort"
-            evening_window_str = system_entry.options.get(CONF_EVENING_COMFORT_WINDOW) or system_entry.data.get(CONF_EVENING_COMFORT_WINDOW)
+            global_presence = conf(system_entry, CONF_GLOBAL_PRESENCE)
+            comfort_bias = conf(system_entry, CONF_ARRIVAL_COMFORT_BIAS) or "comfort"
+            evening_window_str = conf(system_entry, CONF_EVENING_COMFORT_WINDOW)
         else:
             # Fallback to zones for backward compatibility
             for entry in self.hass.config_entries.async_entries(DOMAIN):
-                gp = entry.options.get(CONF_GLOBAL_PRESENCE) or entry.data.get(CONF_GLOBAL_PRESENCE)
+                gp = conf(entry, CONF_GLOBAL_PRESENCE)
                 if gp:
                     global_presence = gp
-                cb = entry.options.get(CONF_ARRIVAL_COMFORT_BIAS) or entry.data.get(CONF_ARRIVAL_COMFORT_BIAS)
+                cb = conf(entry, CONF_ARRIVAL_COMFORT_BIAS)
                 if cb:
                     comfort_bias = cb
-                ew = entry.options.get(CONF_EVENING_COMFORT_WINDOW) or entry.data.get(CONF_EVENING_COMFORT_WINDOW)
+                ew = conf(entry, CONF_EVENING_COMFORT_WINDOW)
                 if ew:
                     evening_window_str = ew
                 
@@ -176,44 +236,63 @@ class HouseArrivalCollector:
         today = dt_local.date()
         
         block_am = minutes < 720
-        today_entries = [item for item in self.history[weekday] if item[0] == today]
-        
-        has_same_block = False
-        for d, m in today_entries:
-            m_am = m < 720
-            if m_am == block_am:
-                has_same_block = True
-                break
-                
+        has_same_block = any(
+            d == today and (m < 720) == block_am for d, m, _ in map(_entry, self.history[weekday])
+        )
         if not has_same_block:
-            self.history[weekday].append((today, minutes))
+            is_workday = None
+            if today == dt_util.now().date():
+                _, is_workday = self._workday_info()
+            self.history[weekday].append((today, minutes, is_workday))
+            self._prune(today)
             await self.async_save()
             self.async_update_listeners()
 
-    def get_pooled_arrivals(self, is_weekend: bool) -> tuple[list[int], list[int]]:
-        """Return sorted AM and PM arrival minutes pooled by workday/weekend."""
+    def get_pooled_arrivals(
+        self, is_weekend: bool, today: date | None = None,
+        workdays: frozenset[int] = DEFAULT_WORKDAYS,
+    ) -> tuple[list[int], list[int]]:
+        """Return sorted AM and PM arrival minutes of the rolling window, pooled by
+        workday vs. non-workday (the workday sensor's verdict at recording time where
+        known, e.g. a public holiday counts as non-workday; else the configured workdays)."""
+        cutoff = (today - timedelta(days=HOUSE_ARRIVAL_MAX_AGE_DAYS)) if today else None
         am_list = []
         pm_list = []
         for weekday, events in self.history.items():
-            is_wd_weekend = (weekday >= 5)
-            if is_wd_weekend == is_weekend:
-                for d, m in events:
-                    if m < 720:
-                        am_list.append(m)
-                    else:
-                        pm_list.append(m)
+            for d, m, flag in map(_entry, events):
+                if cutoff and d < cutoff:
+                    continue
+                entry_is_workday = flag if flag is not None else (weekday in workdays)
+                if entry_is_workday == is_weekend:
+                    continue
+                if m < 720:
+                    am_list.append(m)
+                else:
+                    pm_list.append(m)
         return sorted(am_list), sorted(pm_list)
 
-    def get_next_arrival(self, now: datetime) -> tuple[datetime | None, float, str]:
-        """Predict the next expected house arrival time and return (arrival_dt, confidence, source)."""
+    def get_next_arrival(
+        self, now: datetime, is_excluded: Callable[[date], bool] | None = None,
+    ) -> tuple[datetime | None, float, str]:
+        """Predict the next expected house arrival time and return (arrival_dt, confidence, source).
+
+        `is_excluded` lets a zone skip days it does not preheat on (holiday calendar,
+        "only on workdays").
+        """
         now_local = dt_util.as_local(now)
         today_date = now_local.date()
+        workdays, today_is_workday = self._workday_info()
         
         # Look ahead 8 days to find the next future event
         for day_offset in range(8):
             check_date = today_date + timedelta(days=day_offset)
-            is_weekend = (check_date.weekday() >= 5)
-            am_list, pm_list = self.get_pooled_arrivals(is_weekend)
+            if is_excluded is not None and is_excluded(check_date):
+                continue
+            if check_date == today_date and today_is_workday is not None:
+                is_weekend = not today_is_workday
+            else:
+                is_weekend = check_date.weekday() not in workdays
+            am_list, pm_list = self.get_pooled_arrivals(is_weekend, today_date, workdays)
             
             # Check AM block (Morning)
             if len(am_list) >= 2:
@@ -337,10 +416,11 @@ class HouseArrivalCollector:
             am_mins = [m for m in minutes_list if m < 720]
             pm_mins = [m for m in minutes_list if m >= 720]
             if am_mins:
-                self.history[weekday].append((date_obj, min(am_mins)))
+                self.history[weekday].append((date_obj, min(am_mins), None))
             if pm_mins:
-                self.history[weekday].append((date_obj, min(pm_mins)))
+                self.history[weekday].append((date_obj, min(pm_mins), None))
                 
+        self._prune(dt_util.now().date())
         self.bootstrap_done = True
         await self.async_save()
         _LOGGER.info("House Arrival Collector bootstrap complete. Loaded data for %d dates.", len(events_by_date))

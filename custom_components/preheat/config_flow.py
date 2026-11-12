@@ -38,6 +38,7 @@ from .const import (
     CONF_GLOBAL_PRESENCE,
     CONF_ARRIVAL_COMFORT_BIAS,
     CONF_EVENING_COMFORT_WINDOW,
+    CONF_USE_HOUSE_ARRIVALS,
 )
 
 # Centralized Option Definitions (Key -> {selector, default})
@@ -75,6 +76,10 @@ OPTION_SETTINGS = {
     CONF_ENABLE_OPTIMAL_STOP: {
         "selector": selector.BooleanSelector(),
         "default": False
+    },
+    CONF_USE_HOUSE_ARRIVALS: {
+        "selector": selector.BooleanSelector(),
+        "default": True
     },
     CONF_SCHEDULE_ENTITY: {
         "selector": selector.EntitySelector(
@@ -125,6 +130,12 @@ OPTION_SETTINGS = {
         "default": None
     },
 }
+
+# Optional settings without a default: an empty field in the form means "not set".
+# HA's entity selectors reject None/"" and the frontend omits a cleared field from
+# user_input, so a missing key for these must be treated as "cleared".
+CLEARABLE_KEYS = frozenset(k for k, s in OPTION_SETTINGS.items() if s["default"] is None)
+
 
 class PreheatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Preheat."""
@@ -346,15 +357,19 @@ class PreheatingOptionsFlow(config_entries.OptionsFlow):
                     allowed_keys = [k for k in OPTION_SETTINGS.keys() if k not in global_keys]
                 
                 for key in allowed_keys:
-                    if key in user_input:
-                        val = user_input[key]
-                        # Clean "Empty" values (None, "", [], UNDEFINED)
-                        if val in (None, "", [], vol.UNDEFINED):
-                             # Remove key if present (Clean Storage)
-                             new_options.pop(key, None)
+                    val = user_input.get(key, vol.UNDEFINED)
+                    if val not in (None, "", [], vol.UNDEFINED):
+                        new_options[key] = val
+                    elif key in user_input or key in CLEARABLE_KEYS:
+                        # Cleared: an explicitly empty value, or an optional field the
+                        # frontend omitted because it was emptied.
+                        if key in self._config_entry.data:
+                            # Value from the initial setup lives in entry.data: shadow it,
+                            # options take precedence over data everywhere it is read.
+                            new_options[key] = None
                         else:
-                             # Update value
-                             new_options[key] = val
+                            new_options.pop(key, None)
+                    # else: a non-clearable field missing from the input keeps its value
                 
                 return self.async_create_entry(title="", data=new_options)
         

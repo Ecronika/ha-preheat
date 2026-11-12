@@ -80,6 +80,7 @@
           "valve_position_sensor": "Ventil-Position (Optional)",
           "max_preheat_hours": "Max. Vorheizdauer (Stunden)",
           "enable_optimal_stop": "Optimal Stop aktivieren (Coasting)",
+          "use_house_arrivals": "Haus-Ankunftsprognose verwenden",
           "schedule_entity": "Zeitplan-Helfer (Schedule Entity)",
           "stop_tolerance": "Abschalt-Toleranz (K)",
           "max_coast_hours": "Max. Coasting-Dauer (Stunden)"

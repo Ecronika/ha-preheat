@@ -74,6 +74,7 @@
           "valve_position_sensor": "Valve Position (Optional)",
           "max_preheat_hours": "Max Preheat Duration (Hours)",
           "enable_optimal_stop": "Enable Optimal Stop (Coast)",
+          "use_house_arrivals": "Use House Arrival prediction",
           "schedule_entity": "Schedule Helper (used for Optimal Stop)",
           "stop_tolerance": "Stop Tolerance (K)",
           "max_coast_hours": "Max Coast Duration (Hours)",

@@ -140,6 +140,8 @@ RISK_OPTIMISTIC: Final = "optimistic"
 
 # Optimal Stop (V2.5)
 CONF_ENABLE_OPTIMAL_STOP: Final = "enable_optimal_stop"
+# Zone may use the House Arrival Hub prediction instead of its own arrival pattern
+CONF_USE_HOUSE_ARRIVALS: Final = "use_house_arrivals"
 CONF_STOP_TOLERANCE: Final = "stop_tolerance"
 CONF_MAX_COAST_HOURS: Final = "max_coast_hours"
 CONF_SCHEDULE_ENTITY: Final = "schedule_entity"

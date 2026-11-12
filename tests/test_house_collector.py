@@ -451,6 +451,8 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
             async def async_save(self, data):
                 pass
                 
+        # Fixture dates are from June 2026: run "today" inside the 30-day rolling window
+        self.mock_dt.now.side_effect = lambda: datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
         with patch("custom_components.preheat.house_collector.Store", side_effect=MockStoreHelper):
             house = HouseArrivalCollector(self.hass)
             self.assertFalse(house.bootstrap_done)
@@ -462,5 +464,5 @@ class TestHouseCollector(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(mon_events), 2)
             
             sorted_events = sorted(mon_events, key=lambda x: x[1])
-            self.assertEqual(sorted_events[0], (date(2026, 6, 8), 360))
-            self.assertEqual(sorted_events[1], (date(2026, 6, 8), 1080))
+            self.assertEqual(sorted_events[0], (date(2026, 6, 8), 360, None))
+            self.assertEqual(sorted_events[1], (date(2026, 6, 8), 1080, None))

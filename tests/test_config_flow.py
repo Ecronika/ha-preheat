@@ -221,3 +221,61 @@ class TestConfigFlow(unittest.IsolatedAsyncioTestCase):
         result = await options_flow.async_step_init(user_input)
         
         self.assertEqual(result["type"], FlowResultType.CREATE_ENTRY)
+
+
+class TestOptionsFlowClearing(unittest.IsolatedAsyncioTestCase):
+    """#12: optional entity options must be clearable in the options flow."""
+
+    def _flow(self, data=None, options=None, unique_id=None):
+        entry = MagicMock()
+        entry.data = dict(data or {})
+        entry.options = dict(options or {})
+        entry.unique_id = unique_id
+        flow = PreheatingOptionsFlow(entry)
+        flow.async_create_entry = MagicMock(return_value={"type": FlowResultType.CREATE_ENTRY})
+        return flow
+
+    async def _submit(self, flow, user_input):
+        await flow.async_step_init(user_input)
+        return flow.async_create_entry.call_args.kwargs["data"]
+
+    async def test_cleared_entity_option_is_removed(self):
+        """The frontend omits a cleared entity field from user_input."""
+        from custom_components.preheat.const import CONF_LOCK, CONF_VALVE_POSITION, CONF_WORKDAY
+        flow = self._flow(options={CONF_SCHEDULE_ENTITY: "schedule.xyz", CONF_LOCK: "input_boolean.lock",
+                                   CONF_VALVE_POSITION: "sensor.valve", CONF_WORKDAY: "binary_sensor.wd",
+                                   CONF_ENABLE_OPTIMAL_STOP: True})
+        new = await self._submit(flow, {CONF_ENABLE_OPTIMAL_STOP: True})
+        for key in (CONF_SCHEDULE_ENTITY, CONF_LOCK, CONF_VALVE_POSITION, CONF_WORKDAY):
+            self.assertNotIn(key, new)
+        self.assertTrue(new[CONF_ENABLE_OPTIMAL_STOP])
+
+    async def test_value_from_initial_setup_is_shadowed(self):
+        """A value stored in entry.data is overridden by an explicit None in options."""
+        flow = self._flow(data={CONF_SCHEDULE_ENTITY: "schedule.xyz"})
+        new = await self._submit(flow, {})
+        self.assertIn(CONF_SCHEDULE_ENTITY, new)
+        self.assertIsNone(new[CONF_SCHEDULE_ENTITY])
+
+    async def test_kept_and_changed_values(self):
+        from custom_components.preheat.const import CONF_BUFFER_MIN
+        flow = self._flow(options={CONF_SCHEDULE_ENTITY: "schedule.xyz", CONF_BUFFER_MIN: 30})
+        new = await self._submit(flow, {CONF_SCHEDULE_ENTITY: "schedule.abc"})
+        self.assertEqual(new[CONF_SCHEDULE_ENTITY], "schedule.abc")
+        self.assertEqual(new[CONF_BUFFER_MIN], 30)  # non-clearable field missing -> kept
+
+    async def test_explicit_empty_value_clears(self):
+        flow = self._flow(options={CONF_SCHEDULE_ENTITY: "schedule.xyz"})
+        new = await self._submit(flow, {CONF_SCHEDULE_ENTITY: ""})
+        self.assertNotIn(CONF_SCHEDULE_ENTITY, new)
+
+    async def test_system_entry_global_presence_clearable(self):
+        from custom_components.preheat.const import CONF_GLOBAL_PRESENCE, CONF_EVENING_COMFORT_WINDOW
+        flow = self._flow(options={CONF_GLOBAL_PRESENCE: "binary_sensor.home",
+                                   CONF_EVENING_COMFORT_WINDOW: "17:00-22:00",
+                                   CONF_SCHEDULE_ENTITY: "schedule.untouched"},
+                          unique_id="preheat_system")
+        new = await self._submit(flow, {})
+        self.assertNotIn(CONF_GLOBAL_PRESENCE, new)
+        self.assertNotIn(CONF_EVENING_COMFORT_WINDOW, new)
+        self.assertEqual(new[CONF_SCHEDULE_ENTITY], "schedule.untouched")  # not in this form
